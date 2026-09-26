@@ -15,7 +15,28 @@ class SchemaParityTest : FullAppIntegrationTest() {
 
     // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". empty until the
     // controller approves one.
-    private val knownDeviations: Map<String, String> = emptyMap()
+    private val knownDeviations: Map<String, String> =
+        mapOf(
+            "column user_preferences.locale #3 text" to "ADR-031 D18: per-user theme and locale",
+            "column user_preferences.theme #2 text NOT NULL DEFAULT 'system'::text" to
+                "ADR-031 D18: per-user theme and locale",
+            "column user_preferences.updated_at #4 timestamp with time zone NOT NULL DEFAULT now()" to
+                "ADR-031 D18: per-user theme and locale",
+            "column user_preferences.user_id #1 uuid NOT NULL" to "ADR-031 D18: per-user theme and locale",
+            "constraint user_preferences.user_preferences_pkey PRIMARY KEY (user_id)" to
+                "ADR-031 D18: per-user theme and locale",
+            "constraint user_preferences.user_preferences_theme_not_null NOT NULL theme" to
+                "ADR-031 D18: per-user theme and locale",
+            "constraint user_preferences.user_preferences_updated_at_not_null NOT NULL updated_at" to
+                "ADR-031 D18: per-user theme and locale",
+            "constraint user_preferences.user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE" to
+                "ADR-031 D18: per-user theme and locale",
+            "constraint user_preferences.user_preferences_user_id_not_null NOT NULL user_id" to
+                "ADR-031 D18: per-user theme and locale",
+            "index user_preferences.user_preferences_pkey CREATE UNIQUE INDEX user_preferences_pkey ON META.user_preferences USING btree (user_id)" to
+                "ADR-031 D18: per-user theme and locale",
+            "table user_preferences" to "ADR-031 D18: per-user theme and locale"
+        )
 
     @Test
     fun `the fixture is the original's whole schema`() {
