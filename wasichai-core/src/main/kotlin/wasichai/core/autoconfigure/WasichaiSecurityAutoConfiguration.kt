@@ -24,6 +24,9 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.JwtService
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.RoleQueries
+import wasichai.core.identity.UserPreferencesController
+import wasichai.core.identity.UserPreferencesRepository
+import wasichai.core.identity.UserPreferencesService
 import wasichai.core.identity.UserRepository
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.platform.JwtProperties
@@ -159,4 +162,22 @@ class WasichaiSecurityAutoConfiguration {
         authService: AuthService,
         currentUser: CurrentUser
     ): AuthController = AuthController(authService, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun userPreferencesRepository(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): UserPreferencesRepository = UserPreferencesRepository(db, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun userPreferencesService(repository: UserPreferencesRepository): UserPreferencesService = UserPreferencesService(repository)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun userPreferencesController(
+        service: UserPreferencesService,
+        currentUser: CurrentUser
+    ): UserPreferencesController = UserPreferencesController(service, currentUser)
 }
