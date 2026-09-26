@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-09-26 — wasichai-ui v0.1.0 released
+
+The first release of the npm packages is out: release-please tagged `v0.1.0` in wasichai-ui and its `publish.yml`
+pushed the eleven public `@wasichai/*` packages to `npm.pkg.github.com`. Its `"release-as"` pin is gone too.
+
+## 2026-09-26 — v0.1.0 released
+
+The first release of the Maven libraries is out: release-please tagged `v0.1.0` and `publish.yml` pushed the
+libraries to GitHub Packages. The `"release-as": "0.1.0"` pin is gone, so the next version follows the commits.
+`RELEASE_PLEASE_TOKEN` is an organization secret; the organization caps fine-grained PATs at 366 days.
+
 ## 2026-09-26 — Samples and local infrastructure move to their own repositories
 
 Each sample is now a repository of its own in the wasichai organization, holding its server and its web together:
