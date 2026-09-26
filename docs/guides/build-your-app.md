@@ -127,7 +127,7 @@ createRoot(document.getElementById('root')!).render(
 
 `theme.css` ships `light` and `dark`; `<html>` carries `data-theme="<id>"`, and every Tailwind class from
 `@wasichai/ui` (`bg-surface`, `text-ink`, …) resolves against whichever theme is active — no component to rewrite.
-`config.themes: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`) adds your own themes to the two
+`config.themes?: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`) adds your own themes to the two
 built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token, e.g.:
 
 ```css
@@ -148,7 +148,10 @@ boots the app (`wasichai` below is your `storagePrefix`):
   try {
     const stored = localStorage.getItem('wasichai.theme')
     const dark = matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.dataset.theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    const theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    document.documentElement.dataset.theme = theme
+    // an app theme's color-scheme is in its ThemeDefinition: the provider sets it once the bundle loads
+    if (theme === 'light' || theme === 'dark') document.documentElement.style.colorScheme = theme
   } catch {}
 </script>
 ```

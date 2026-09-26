@@ -28,14 +28,16 @@ built-in themes; an app adds its own with a CSS block that sets every token and 
 package. `system` is not a theme itself: it is the user's preference to follow `prefers-color-scheme`, resolved to
 `light` or `dark` at render time.
 
-**The local copy (`<prefix>.theme`) avoids a flash.** wasichai-ui writes the resolved theme to `localStorage` on every
-change; an inline script in the app's `index.html` reads it before the bundle loads and sets `data-theme` immediately,
-so a user who chose dark never sees a light flash on load.
+**The local copy (`<prefix>.theme`) avoids a flash.** wasichai-ui writes the preference (a theme id, or `system`) to
+`localStorage` on every change; an inline script in the app's `index.html` reads it before the bundle loads, resolves
+`system` through `prefers-color-scheme` and sets `data-theme` immediately, so a user who chose dark never sees a light
+flash on load.
 
 ## Consequences
 
-- A new wasichai-ui against an older backend without this endpoint gets `404` on the `GET` and falls back to a
-  browser-only preference: the theme selector keeps working, it just does not follow the user across browsers.
+- A new wasichai-ui against an older backend without this endpoint gets `404` on the `GET` (or on a `PUT` sent before
+  the `GET` settled) and falls back to a browser-only preference: the theme selector and the language button keep
+  working, they just do not follow the user across browsers.
 - A theme that does not set every token leaves some elements in whichever theme's value happens to be inherited;
   adding a theme means setting the whole table, not a difference from `light`.
 - Printed documents stay light regardless of the chosen theme: `PrintableDocumentPage` pins `data-theme="light"` on

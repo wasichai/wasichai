@@ -175,7 +175,7 @@ Tailwind entry point consumes it as:
 
 **Themes.** `<html>` carries `data-theme="<id>"`; `theme.css` defines the tokens for the two built-in themes,
 `light` and `dark`, and every package's Tailwind classes (`bg-surface`, `text-ink`, …) resolve against whichever
-theme is active. `WasichaiConfig.themes: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`, `label`
+theme is active. `WasichaiConfig.themes?: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`, `label`
 an i18n key) adds an app's own themes to the two built-ins; an id that repeats a built-in one throws in
 `resolveConfig`. An app adds a theme with one CSS block that sets every token, e.g.
 `[data-theme='high-contrast'] { --surface: …; /* every token in theme.css */ }`, and one entry in `config.themes` —
@@ -190,7 +190,10 @@ the stored theme before its module script runs (`wasichai` below is `storagePref
   try {
     const stored = localStorage.getItem('wasichai.theme')
     const dark = matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.dataset.theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    const theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    document.documentElement.dataset.theme = theme
+    // an app theme's color-scheme is in its ThemeDefinition: the provider sets it once the bundle loads
+    if (theme === 'light' || theme === 'dark') document.documentElement.style.colorScheme = theme
   } catch {}
 </script>
 ```
