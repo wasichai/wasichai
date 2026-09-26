@@ -38,3 +38,5 @@ supersedes it and says so in its status line.
 - [ADR-032: Rebrand to wasichai and split into two repositories](0032-rebrand-to-wasichai-and-split-repositories.md)
 - [ADR-033: Samples and infrastructure live in their own repositories; the libraries are
   infra-agnostic](0033-samples-and-infrastructure-in-their-own-repositories.md)
+- [ADR-034: A stored resource for user preferences, starting with theme and
+  locale](0034-user-preferences-and-themes.md)

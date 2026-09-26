@@ -173,6 +173,28 @@ Tailwind entry point consumes it as:
 
 `@source` must see every `@wasichai/*` package's class names, not only `@wasichai/ui`'s own.
 
+**Themes.** `<html>` carries `data-theme="<id>"`; `theme.css` defines the tokens for the two built-in themes,
+`light` and `dark`, and every package's Tailwind classes (`bg-surface`, `text-ink`, …) resolve against whichever
+theme is active. `WasichaiConfig.themes: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`, `label`
+an i18n key) adds an app's own themes to the two built-ins; an id that repeats a built-in one throws in
+`resolveConfig`. An app adds a theme with one CSS block that sets every token, e.g.
+`[data-theme='high-contrast'] { --surface: …; /* every token in theme.css */ }`, and one entry in `config.themes` —
+no package needs a change. `useTheme()` returns `{ preference, theme, colorScheme, themes, setPreference }`:
+`preference` is what the user picked, including `system`, which resolves through `prefers-color-scheme`; `theme` is
+what is actually applied. To avoid a flash of the wrong theme before the bundle loads, an app's `index.html` reads
+the stored theme before its module script runs (`wasichai` below is `storagePrefix`):
+
+```html
+<script>
+  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix
+  try {
+    const stored = localStorage.getItem('wasichai.theme')
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.dataset.theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+  } catch {}
+</script>
+```
+
 See [`packages/core` in wasichai-ui](https://github.com/wasichai/wasichai-ui/tree/main/packages/core) and
 [`packages/ui` in wasichai-ui](https://github.com/wasichai/wasichai-ui/tree/main/packages/ui) for the full API.
 

@@ -63,6 +63,13 @@ These are the only intended differences. Anything else that behaves differently 
   container network sets `wasichai.gis.geoserver.datastore.host` (`WASICHAI_GIS_GEOSERVER_DATASTORE_HOST`) to the
   database's host there, e.g. `postgres` with wasichai-infrastructure.
 
+**Because users choose how it looks**
+
+- **D18. Themes and stored preferences.** The original had one light palette and kept the language in the browser.
+  Now the user picks System, Light, Dark or an app's theme, and `GET/PUT /api/auth/me/preferences` stores it with the
+  language ([ADR-034](0034-user-preferences-and-themes.md)). The `user_preferences` table is a known schema-parity
+  deviation. Tested by `UserPreferencesApiTest`, `UserPreferencesIsolationTest` and wasichai-ui's `ThemeProvider` tests.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

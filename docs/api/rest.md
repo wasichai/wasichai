@@ -29,6 +29,8 @@ A route of a module that is not installed answers `404` to an authenticated call
 POST /api/auth/login        { "email": "...", "password": "..." }  →  { token, expiresAt, user }
 GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
+GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
+PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
 
 ```json
@@ -42,6 +44,13 @@ caller cannot read and mark the ones they cannot write `editable: false`.
 
 The answer is for hiding actions a client would be refused, and it grants nothing: every write is
 still checked by the service that performs it (ADR-020).
+
+`GET/PUT /api/auth/me/preferences` stores per-user UI preferences ([ADR-034](../adr/0034-user-preferences-and-themes.md)).
+A field left out of the `PUT` keeps its current value; sending `null` for `locale` clears it back to "the browser's".
+`theme` must match `^[a-z0-9-]{1,40}$` and is never checked against a list of known themes, since themes belong to
+each app, not to the server; `locale` must be a BCP 47 tag. Either failing that shape answers `400`. An unknown field
+in the body is refused with `400` rather than silently ignored. A caller with no stored row yet reads the defaults
+(`{ "theme": "system", "locale": null }`) without a row ever being written for them.
 
 ## Objects (metadata)
 

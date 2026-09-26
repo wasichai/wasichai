@@ -123,6 +123,38 @@ createRoot(document.getElementById('root')!).render(
 @source '../node_modules/@wasichai';
 ```
 
+### Themes
+
+`theme.css` ships `light` and `dark`; `<html>` carries `data-theme="<id>"`, and every Tailwind class from
+`@wasichai/ui` (`bg-surface`, `text-ink`, …) resolves against whichever theme is active — no component to rewrite.
+`config.themes: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`) adds your own themes to the two
+built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token, e.g.:
+
+```css
+[data-theme='high-contrast'] { --surface: oklch(...); --ink: oklch(...); /* every token in theme.css */ }
+```
+
+and one entry in `config.themes`. `useTheme()` (exported from `@wasichai/core`) returns
+`{ preference, theme, colorScheme, themes, setPreference }`: `preference` is what the user picked (including
+`system`), `theme` is what is actually applied. The user footer in `AppShell` already offers System plus your
+configured themes; you rarely call `setPreference` yourself.
+
+To avoid a flash of the wrong theme before the bundle loads, add this to `index.html`, before the module script that
+boots the app (`wasichai` below is your `storagePrefix`):
+
+```html
+<script>
+  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix
+  try {
+    const stored = localStorage.getItem('wasichai.theme')
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.dataset.theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+  } catch {}
+</script>
+```
+
+Without it the app only flashes the light theme for a moment on load; nothing else breaks.
+
 Point your dev server's proxy at the backend: Vite, `server.proxy['/api'] = 'http://localhost:8090'` (or whatever
 `server.port` you set above). `WasichaiApp` needs no extra providers around it — router, query client and i18n are
 built inside it from `config` and `modules`.
