@@ -2,6 +2,11 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-09-26 — wasichai-ui v0.1.0 released
+
+The first release of the npm packages is out: release-please tagged `v0.1.0` in wasichai-ui and its `publish.yml`
+pushed the eleven public `@wasichai/*` packages to `npm.pkg.github.com`. Its `"release-as"` pin is gone too.
+
 ## 2026-09-26 — v0.1.0 released
 
 The first release of the Maven libraries is out: release-please tagged `v0.1.0` and `publish.yml` pushed the
