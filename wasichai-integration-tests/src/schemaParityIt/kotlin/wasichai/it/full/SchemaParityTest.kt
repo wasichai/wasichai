@@ -13,8 +13,8 @@ class SchemaParityTest : FullAppIntegrationTest() {
     @Autowired
     private lateinit var environment: Environment
 
-    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". empty until the
-    // controller approves one.
+    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". today only the
+    // user_preferences table (ADR-031 D18), one entry per catalog line. a new one needs an ADR-031 entry.
     private val knownDeviations: Map<String, String> =
         mapOf(
             "column user_preferences.locale #3 text" to "ADR-031 D18: per-user theme and locale",
