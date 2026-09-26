@@ -12,7 +12,7 @@ dependencies {
     testImplementation(lib("testcontainers-postgresql"))
 }
 
-val integrationTest by tasks.registering(Test::class) {
+tasks.register<Test>("integrationTest") {
     group = "verification"
     description = "Runs tests tagged 'integration' against a PostgreSQL container."
     testClassesDirs = sourceSets["test"].output.classesDirs
