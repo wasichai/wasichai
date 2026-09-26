@@ -1,0 +1,23 @@
+# prettier owns frontend code only. docs, adrs and history keep their hand formatting.
+*.md
+docs/
+# gradle projects at the root: prettier stays out of them
+build-logic/
+wasichai-*/
+starters/
+gradle/
+.idea/
+.superpowers/
+**/dist/
+**/build/
+**/coverage/
+node_modules/
+yarn.lock
+CHANGELOG.md
+.release-please-manifest.json
+
+**/test-results/
+**/playwright-report/
+
+# local harness settings, not part of the repo
+.claude/

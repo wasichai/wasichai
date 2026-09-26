@@ -1,0 +1,19 @@
+{
+    "name": "wasichai-build",
+    "private": true,
+    "version": "0.1.0",
+    "engines": {
+        "node": ">=26"
+    },
+    "scripts": {
+        "prepare": "husky",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devDependencies": {
+        "@commitlint/cli": "19.8.1",
+        "@commitlint/config-conventional": "19.8.1",
+        "husky": "9.1.7",
+        "prettier": "3.8.2"
+    }
+}

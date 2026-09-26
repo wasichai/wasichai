@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+  wasichai.agent.autoconfigure.EmbabelGate

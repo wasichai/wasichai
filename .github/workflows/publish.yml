@@ -1,0 +1,46 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # the guard runs before the upload: a failed guard blocks it, so a release never publishes the wrong set
+  guards:
+    name: Release guard (Maven)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Release guard (Maven)
+        run: |
+          ./gradlew publishToMavenLocal --no-daemon -Pversion="${GITHUB_REF_NAME#v}" -Dmaven.repo.local="$RUNNER_TEMP/m2"
+          .github/scripts/check-maven-publications.sh "$RUNNER_TEMP/m2"
+
+  maven:
+    name: Maven libraries
+    needs: guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      # wasichai.publishing targets maven.pkg.github.com/$GITHUB_REPOSITORY = wasichai/wasichai
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish --no-daemon -Pversion="${GITHUB_REF_NAME#v}"

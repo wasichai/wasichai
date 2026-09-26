@@ -1,0 +1,464 @@
+column audit_log.after_state #8 jsonb
+column audit_log.before_state #7 jsonb
+column audit_log.document_id #10 uuid
+column audit_log.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column audit_log.object_name #4 text NOT NULL
+column audit_log.occurred_at #9 timestamp with time zone NOT NULL DEFAULT now()
+column audit_log.operation #6 text NOT NULL
+column audit_log.organization_id #2 uuid NOT NULL
+column audit_log.record_id #5 uuid
+column audit_log.user_id #3 uuid
+column automation_runs.attempts #12 integer NOT NULL DEFAULT 0
+column automation_runs.automation_id #3 uuid NOT NULL
+column automation_runs.created_at #14 timestamp with time zone NOT NULL DEFAULT now()
+column automation_runs.depth #8 integer NOT NULL DEFAULT 0
+column automation_runs.error #11 text
+column automation_runs.finished_at #16 timestamp with time zone
+column automation_runs.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column automation_runs.object_name #4 text NOT NULL
+column automation_runs.organization_id #2 uuid NOT NULL
+column automation_runs.payload #9 jsonb NOT NULL
+column automation_runs.record_id #5 uuid
+column automation_runs.started_at #15 timestamp with time zone
+column automation_runs.status #7 text NOT NULL
+column automation_runs.steps #10 jsonb
+column automation_runs.trigger_type #6 text NOT NULL
+column automation_runs.user_id #13 uuid
+column automations.created_at #8 timestamp with time zone NOT NULL DEFAULT now()
+column automations.definition #7 jsonb NOT NULL
+column automations.enabled #6 boolean NOT NULL DEFAULT true
+column automations.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column automations.label #5 text NOT NULL
+column automations.name #4 text NOT NULL
+column automations.object_id #3 uuid NOT NULL
+column automations.organization_id #2 uuid NOT NULL
+column automations.updated_at #9 timestamp with time zone NOT NULL DEFAULT now()
+column custom_fields.column_name #6 text NOT NULL
+column custom_fields.created_at #17 timestamp with time zone NOT NULL DEFAULT now()
+column custom_fields.default_value #9 text
+column custom_fields.description #10 text
+column custom_fields.dimension #21 integer
+column custom_fields.editable #16 boolean NOT NULL DEFAULT true
+column custom_fields.enum_options #13 jsonb
+column custom_fields.geometry_type #19 text
+column custom_fields.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column custom_fields.is_unique #8 boolean NOT NULL DEFAULT false
+column custom_fields.label #4 text NOT NULL
+column custom_fields.name #3 text NOT NULL
+column custom_fields.object_id #2 uuid NOT NULL
+column custom_fields.position #11 integer NOT NULL DEFAULT 0
+column custom_fields.relation_target_object_id #14 uuid
+column custom_fields.required #7 boolean NOT NULL DEFAULT false
+column custom_fields.srid #20 integer
+column custom_fields.type #5 text NOT NULL
+column custom_fields.updated_at #18 timestamp with time zone NOT NULL DEFAULT now()
+column custom_fields.validation #12 jsonb
+column custom_fields.visible #15 boolean NOT NULL DEFAULT true
+column custom_objects.created_at #9 timestamp with time zone NOT NULL DEFAULT now()
+column custom_objects.description #6 text
+column custom_objects.enabled #7 boolean NOT NULL DEFAULT true
+column custom_objects.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column custom_objects.label #4 text NOT NULL
+column custom_objects.name #3 text NOT NULL
+column custom_objects.organization_id #2 uuid NOT NULL
+column custom_objects.physical_table #8 text NOT NULL
+column custom_objects.plural_label #5 text NOT NULL
+column custom_objects.updated_at #10 timestamp with time zone NOT NULL DEFAULT now()
+column document_counters.document_type_id #1 uuid NOT NULL
+column document_counters.next #3 integer NOT NULL DEFAULT 1
+column document_counters.year #2 integer NOT NULL
+column document_types.created_at #8 timestamp with time zone NOT NULL DEFAULT now()
+column document_types.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column document_types.label #5 text NOT NULL
+column document_types.name #4 text NOT NULL
+column document_types.object_id #3 uuid NOT NULL
+column document_types.organization_id #2 uuid NOT NULL
+column document_types.prefix #6 text NOT NULL
+column document_types.template #7 jsonb NOT NULL
+column document_types.updated_at #9 timestamp with time zone NOT NULL DEFAULT now()
+column documents.document_type_id #3 uuid NOT NULL
+column documents.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column documents.issued_at #11 timestamp with time zone NOT NULL DEFAULT now()
+column documents.issued_by #12 uuid
+column documents.number #6 text NOT NULL
+column documents.object_id #4 uuid NOT NULL
+column documents.organization_id #2 uuid NOT NULL
+column documents.record_id #5 uuid NOT NULL
+column documents.sequence #8 integer NOT NULL
+column documents.snapshot #10 jsonb NOT NULL
+column documents.status #9 text NOT NULL DEFAULT 'VALID'::text
+column documents.year #7 integer NOT NULL
+column field_permissions.can_read #3 boolean NOT NULL DEFAULT true
+column field_permissions.can_write #4 boolean NOT NULL DEFAULT true
+column field_permissions.field_id #2 uuid NOT NULL
+column field_permissions.role_id #1 uuid NOT NULL
+column forms.created_at #6 timestamp with time zone NOT NULL DEFAULT now()
+column forms.definition #5 jsonb NOT NULL
+column forms.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column forms.label #4 text NOT NULL
+column forms.name #3 text NOT NULL
+column forms.object_id #2 uuid NOT NULL
+column forms.organization_id #8 uuid NOT NULL
+column forms.updated_at #7 timestamp with time zone NOT NULL DEFAULT now()
+column organizations.created_at #4 timestamp with time zone NOT NULL DEFAULT now()
+column organizations.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column organizations.name #2 text NOT NULL
+column organizations.slug #3 text NOT NULL
+column organizations.updated_at #5 timestamp with time zone NOT NULL DEFAULT now()
+column pages.created_at #6 timestamp with time zone NOT NULL DEFAULT now()
+column pages.definition #5 jsonb NOT NULL
+column pages.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column pages.kind #9 text NOT NULL DEFAULT 'RECORD_DETAIL'::text
+column pages.label #4 text NOT NULL
+column pages.name #3 text NOT NULL
+column pages.object_id #2 uuid
+column pages.organization_id #8 uuid NOT NULL
+column pages.template #10 text NOT NULL DEFAULT 'one-region'::text
+column pages.updated_at #7 timestamp with time zone NOT NULL DEFAULT now()
+column permissions.action #4 text NOT NULL
+column permissions.allowed #5 boolean NOT NULL DEFAULT true
+column permissions.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column permissions.object_id #3 uuid
+column permissions.role_id #2 uuid NOT NULL
+column relationships.created_at #10 timestamp with time zone NOT NULL DEFAULT now()
+column relationships.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column relationships.inverse_label #11 text
+column relationships.join_table #9 text
+column relationships.label #4 text NOT NULL
+column relationships.name #3 text NOT NULL
+column relationships.organization_id #2 uuid NOT NULL
+column relationships.relation_field_id #8 uuid
+column relationships.source_object_id #6 uuid NOT NULL
+column relationships.target_object_id #7 uuid NOT NULL
+column relationships.type #5 text NOT NULL
+column roles.created_at #5 timestamp with time zone NOT NULL DEFAULT now()
+column roles.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column roles.label #4 text NOT NULL
+column roles.name #3 text NOT NULL
+column roles.organization_id #2 uuid NOT NULL
+column roles.own_records_only #6 boolean NOT NULL DEFAULT false
+column user_roles.role_id #2 uuid NOT NULL
+column user_roles.user_id #1 uuid NOT NULL
+column users.created_at #7 timestamp with time zone NOT NULL DEFAULT now()
+column users.display_name #5 text NOT NULL
+column users.email #3 text NOT NULL
+column users.enabled #6 boolean NOT NULL DEFAULT true
+column users.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column users.organization_id #2 uuid NOT NULL
+column users.password_hash #4 text NOT NULL
+column users.updated_at #8 timestamp with time zone NOT NULL DEFAULT now()
+column views.created_at #6 timestamp with time zone NOT NULL DEFAULT now()
+column views.definition #5 jsonb NOT NULL
+column views.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column views.is_default #9 boolean NOT NULL DEFAULT false
+column views.label #4 text NOT NULL
+column views.name #3 text NOT NULL
+column views.object_id #2 uuid NOT NULL
+column views.organization_id #8 uuid NOT NULL
+column views.updated_at #7 timestamp with time zone NOT NULL DEFAULT now()
+column workflows.created_at #8 timestamp with time zone NOT NULL DEFAULT now()
+column workflows.definition #7 jsonb NOT NULL
+column workflows.enabled #6 boolean NOT NULL DEFAULT true
+column workflows.id #1 uuid NOT NULL DEFAULT gen_random_uuid()
+column workflows.label #5 text NOT NULL
+column workflows.name #4 text NOT NULL
+column workflows.object_id #3 uuid NOT NULL
+column workflows.organization_id #2 uuid NOT NULL
+column workflows.updated_at #9 timestamp with time zone NOT NULL DEFAULT now()
+constraint audit_log.audit_log_document_id_fkey FOREIGN KEY (document_id) REFERENCES META.documents(id) ON DELETE SET NULL
+constraint audit_log.audit_log_id_not_null NOT NULL id
+constraint audit_log.audit_log_object_name_not_null NOT NULL object_name
+constraint audit_log.audit_log_occurred_at_not_null NOT NULL occurred_at
+constraint audit_log.audit_log_operation_not_null NOT NULL operation
+constraint audit_log.audit_log_operation_valid CHECK ((operation = ANY (ARRAY['CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'ISSUE'::text])))
+constraint audit_log.audit_log_organization_id_not_null NOT NULL organization_id
+constraint audit_log.audit_log_pkey PRIMARY KEY (id)
+constraint automation_runs.automation_runs_attempts_not_null NOT NULL attempts
+constraint automation_runs.automation_runs_automation_id_fkey FOREIGN KEY (automation_id) REFERENCES META.automations(id) ON DELETE CASCADE
+constraint automation_runs.automation_runs_automation_id_not_null NOT NULL automation_id
+constraint automation_runs.automation_runs_created_at_not_null NOT NULL created_at
+constraint automation_runs.automation_runs_depth_not_null NOT NULL depth
+constraint automation_runs.automation_runs_id_not_null NOT NULL id
+constraint automation_runs.automation_runs_object_name_not_null NOT NULL object_name
+constraint automation_runs.automation_runs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint automation_runs.automation_runs_organization_id_not_null NOT NULL organization_id
+constraint automation_runs.automation_runs_payload_not_null NOT NULL payload
+constraint automation_runs.automation_runs_pkey PRIMARY KEY (id)
+constraint automation_runs.automation_runs_status_not_null NOT NULL status
+constraint automation_runs.automation_runs_trigger_type_not_null NOT NULL trigger_type
+constraint automation_runs.automation_runs_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE SET NULL
+constraint automations.automations_created_at_not_null NOT NULL created_at
+constraint automations.automations_definition_not_null NOT NULL definition
+constraint automations.automations_enabled_not_null NOT NULL enabled
+constraint automations.automations_id_not_null NOT NULL id
+constraint automations.automations_label_not_null NOT NULL label
+constraint automations.automations_name_not_null NOT NULL name
+constraint automations.automations_name_unique_per_org UNIQUE (organization_id, name)
+constraint automations.automations_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint automations.automations_object_id_not_null NOT NULL object_id
+constraint automations.automations_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint automations.automations_organization_id_not_null NOT NULL organization_id
+constraint automations.automations_pkey PRIMARY KEY (id)
+constraint automations.automations_updated_at_not_null NOT NULL updated_at
+constraint custom_fields.custom_fields_column_name_not_null NOT NULL column_name
+constraint custom_fields.custom_fields_created_at_not_null NOT NULL created_at
+constraint custom_fields.custom_fields_dimension_valid CHECK (((dimension IS NULL) OR (dimension = ANY (ARRAY[2, 3]))))
+constraint custom_fields.custom_fields_editable_not_null NOT NULL editable
+constraint custom_fields.custom_fields_enum_has_options CHECK (((type <> 'ENUM'::text) OR (enum_options IS NOT NULL)))
+constraint custom_fields.custom_fields_geometry_has_type CHECK (((type <> 'GEOMETRY'::text) OR ((geometry_type IS NOT NULL) AND (srid IS NOT NULL) AND (dimension IS NOT NULL))))
+constraint custom_fields.custom_fields_geometry_type_valid CHECK (((geometry_type IS NULL) OR (geometry_type = ANY (ARRAY['POINT'::text, 'LINESTRING'::text, 'POLYGON'::text, 'MULTIPOINT'::text, 'MULTILINESTRING'::text, 'MULTIPOLYGON'::text]))))
+constraint custom_fields.custom_fields_id_not_null NOT NULL id
+constraint custom_fields.custom_fields_is_unique_not_null NOT NULL is_unique
+constraint custom_fields.custom_fields_label_not_null NOT NULL label
+constraint custom_fields.custom_fields_name_not_null NOT NULL name
+constraint custom_fields.custom_fields_name_unique_per_object UNIQUE (object_id, name)
+constraint custom_fields.custom_fields_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint custom_fields.custom_fields_object_id_not_null NOT NULL object_id
+constraint custom_fields.custom_fields_pkey PRIMARY KEY (id)
+constraint custom_fields.custom_fields_position_not_null NOT NULL "position"
+constraint custom_fields.custom_fields_relation_has_target CHECK (((type <> 'RELATION'::text) OR (relation_target_object_id IS NOT NULL)))
+constraint custom_fields.custom_fields_relation_target_object_id_fkey FOREIGN KEY (relation_target_object_id) REFERENCES META.custom_objects(id) ON DELETE RESTRICT
+constraint custom_fields.custom_fields_required_not_null NOT NULL required
+constraint custom_fields.custom_fields_type_not_null NOT NULL type
+constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY['TEXT'::text, 'LONG_TEXT'::text, 'INTEGER'::text, 'DECIMAL'::text, 'BOOLEAN'::text, 'DATE'::text, 'DATETIME'::text, 'ENUM'::text, 'EMAIL'::text, 'URL'::text, 'UUID'::text, 'RELATION'::text, 'GEOMETRY'::text])))
+constraint custom_fields.custom_fields_updated_at_not_null NOT NULL updated_at
+constraint custom_fields.custom_fields_visible_not_null NOT NULL visible
+constraint custom_objects.custom_objects_created_at_not_null NOT NULL created_at
+constraint custom_objects.custom_objects_enabled_not_null NOT NULL enabled
+constraint custom_objects.custom_objects_id_not_null NOT NULL id
+constraint custom_objects.custom_objects_label_not_null NOT NULL label
+constraint custom_objects.custom_objects_name_not_null NOT NULL name
+constraint custom_objects.custom_objects_name_unique_per_org UNIQUE (organization_id, name)
+constraint custom_objects.custom_objects_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint custom_objects.custom_objects_organization_id_not_null NOT NULL organization_id
+constraint custom_objects.custom_objects_physical_table_not_null NOT NULL physical_table
+constraint custom_objects.custom_objects_physical_table_unique UNIQUE (physical_table)
+constraint custom_objects.custom_objects_pkey PRIMARY KEY (id)
+constraint custom_objects.custom_objects_plural_label_not_null NOT NULL plural_label
+constraint custom_objects.custom_objects_updated_at_not_null NOT NULL updated_at
+constraint document_counters.document_counters_document_type_id_fkey FOREIGN KEY (document_type_id) REFERENCES META.document_types(id) ON DELETE CASCADE
+constraint document_counters.document_counters_document_type_id_not_null NOT NULL document_type_id
+constraint document_counters.document_counters_next_not_null NOT NULL next
+constraint document_counters.document_counters_pkey PRIMARY KEY (document_type_id, year)
+constraint document_counters.document_counters_year_not_null NOT NULL year
+constraint document_types.document_types_created_at_not_null NOT NULL created_at
+constraint document_types.document_types_id_not_null NOT NULL id
+constraint document_types.document_types_label_not_null NOT NULL label
+constraint document_types.document_types_name_not_null NOT NULL name
+constraint document_types.document_types_name_unique_per_object UNIQUE (object_id, name)
+constraint document_types.document_types_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint document_types.document_types_object_id_not_null NOT NULL object_id
+constraint document_types.document_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint document_types.document_types_organization_id_not_null NOT NULL organization_id
+constraint document_types.document_types_pkey PRIMARY KEY (id)
+constraint document_types.document_types_prefix_not_null NOT NULL prefix
+constraint document_types.document_types_prefix_unique_per_org UNIQUE (organization_id, prefix)
+constraint document_types.document_types_template_not_null NOT NULL template
+constraint document_types.document_types_updated_at_not_null NOT NULL updated_at
+constraint documents.documents_document_type_id_fkey FOREIGN KEY (document_type_id) REFERENCES META.document_types(id) ON DELETE RESTRICT
+constraint documents.documents_document_type_id_not_null NOT NULL document_type_id
+constraint documents.documents_id_not_null NOT NULL id
+constraint documents.documents_issued_at_not_null NOT NULL issued_at
+constraint documents.documents_issued_by_fkey FOREIGN KEY (issued_by) REFERENCES META.users(id) ON DELETE SET NULL
+constraint documents.documents_number_not_null NOT NULL number
+constraint documents.documents_number_unique_per_org UNIQUE (organization_id, number)
+constraint documents.documents_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint documents.documents_object_id_not_null NOT NULL object_id
+constraint documents.documents_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint documents.documents_organization_id_not_null NOT NULL organization_id
+constraint documents.documents_pkey PRIMARY KEY (id)
+constraint documents.documents_record_id_not_null NOT NULL record_id
+constraint documents.documents_sequence_not_null NOT NULL sequence
+constraint documents.documents_snapshot_not_null NOT NULL snapshot
+constraint documents.documents_status_not_null NOT NULL status
+constraint documents.documents_status_valid CHECK ((status = ANY (ARRAY['VALID'::text, 'ARCHIVED'::text])))
+constraint documents.documents_year_not_null NOT NULL year
+constraint field_permissions.field_permissions_can_read_not_null NOT NULL can_read
+constraint field_permissions.field_permissions_can_write_not_null NOT NULL can_write
+constraint field_permissions.field_permissions_field_id_fkey FOREIGN KEY (field_id) REFERENCES META.custom_fields(id) ON DELETE CASCADE
+constraint field_permissions.field_permissions_field_id_not_null NOT NULL field_id
+constraint field_permissions.field_permissions_pkey PRIMARY KEY (role_id, field_id)
+constraint field_permissions.field_permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES META.roles(id) ON DELETE CASCADE
+constraint field_permissions.field_permissions_role_id_not_null NOT NULL role_id
+constraint forms.forms_created_at_not_null NOT NULL created_at
+constraint forms.forms_definition_not_null NOT NULL definition
+constraint forms.forms_id_not_null NOT NULL id
+constraint forms.forms_label_not_null NOT NULL label
+constraint forms.forms_name_not_null NOT NULL name
+constraint forms.forms_name_unique_per_object UNIQUE (object_id, name)
+constraint forms.forms_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint forms.forms_object_id_not_null NOT NULL object_id
+constraint forms.forms_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint forms.forms_organization_id_not_null NOT NULL organization_id
+constraint forms.forms_pkey PRIMARY KEY (id)
+constraint forms.forms_updated_at_not_null NOT NULL updated_at
+constraint organizations.organizations_created_at_not_null NOT NULL created_at
+constraint organizations.organizations_id_not_null NOT NULL id
+constraint organizations.organizations_name_not_null NOT NULL name
+constraint organizations.organizations_pkey PRIMARY KEY (id)
+constraint organizations.organizations_slug_key UNIQUE (slug)
+constraint organizations.organizations_slug_not_null NOT NULL slug
+constraint organizations.organizations_updated_at_not_null NOT NULL updated_at
+constraint pages.pages_created_at_not_null NOT NULL created_at
+constraint pages.pages_definition_not_null NOT NULL definition
+constraint pages.pages_id_not_null NOT NULL id
+constraint pages.pages_kind_not_null NOT NULL kind
+constraint pages.pages_kind_unique_per_object UNIQUE (object_id, kind)
+constraint pages.pages_kind_valid CHECK ((kind = 'RECORD_DETAIL'::text))
+constraint pages.pages_label_not_null NOT NULL label
+constraint pages.pages_name_not_null NOT NULL name
+constraint pages.pages_name_unique_per_org UNIQUE (organization_id, name)
+constraint pages.pages_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint pages.pages_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint pages.pages_organization_id_not_null NOT NULL organization_id
+constraint pages.pages_pkey PRIMARY KEY (id)
+constraint pages.pages_template_not_null NOT NULL template
+constraint pages.pages_updated_at_not_null NOT NULL updated_at
+constraint permissions.permissions_action_not_null NOT NULL action
+constraint permissions.permissions_action_valid CHECK ((action = ANY (ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, 'MANAGE_ORGANIZATION'::text])))
+constraint permissions.permissions_allowed_not_null NOT NULL allowed
+constraint permissions.permissions_id_not_null NOT NULL id
+constraint permissions.permissions_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint permissions.permissions_pkey PRIMARY KEY (id)
+constraint permissions.permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES META.roles(id) ON DELETE CASCADE
+constraint permissions.permissions_role_id_not_null NOT NULL role_id
+constraint permissions.permissions_unique UNIQUE NULLS NOT DISTINCT (role_id, object_id, action)
+constraint relationships.relationships_created_at_not_null NOT NULL created_at
+constraint relationships.relationships_id_not_null NOT NULL id
+constraint relationships.relationships_label_not_null NOT NULL label
+constraint relationships.relationships_name_not_null NOT NULL name
+constraint relationships.relationships_name_unique_per_org UNIQUE (organization_id, name)
+constraint relationships.relationships_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint relationships.relationships_organization_id_not_null NOT NULL organization_id
+constraint relationships.relationships_pkey PRIMARY KEY (id)
+constraint relationships.relationships_source_field_id_fkey FOREIGN KEY (relation_field_id) REFERENCES META.custom_fields(id) ON DELETE SET NULL
+constraint relationships.relationships_source_object_id_fkey FOREIGN KEY (source_object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint relationships.relationships_source_object_id_not_null NOT NULL source_object_id
+constraint relationships.relationships_target_object_id_fkey FOREIGN KEY (target_object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint relationships.relationships_target_object_id_not_null NOT NULL target_object_id
+constraint relationships.relationships_type_not_null NOT NULL type
+constraint relationships.relationships_type_valid CHECK ((type = ANY (ARRAY['ONE_TO_ONE'::text, 'ONE_TO_MANY'::text, 'MANY_TO_ONE'::text, 'MANY_TO_MANY'::text])))
+constraint roles.roles_created_at_not_null NOT NULL created_at
+constraint roles.roles_id_not_null NOT NULL id
+constraint roles.roles_label_not_null NOT NULL label
+constraint roles.roles_name_not_null NOT NULL name
+constraint roles.roles_name_unique_per_org UNIQUE (organization_id, name)
+constraint roles.roles_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint roles.roles_organization_id_not_null NOT NULL organization_id
+constraint roles.roles_own_records_only_not_null NOT NULL own_records_only
+constraint roles.roles_pkey PRIMARY KEY (id)
+constraint user_roles.user_roles_pkey PRIMARY KEY (user_id, role_id)
+constraint user_roles.user_roles_role_id_fkey FOREIGN KEY (role_id) REFERENCES META.roles(id) ON DELETE CASCADE
+constraint user_roles.user_roles_role_id_not_null NOT NULL role_id
+constraint user_roles.user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE
+constraint user_roles.user_roles_user_id_not_null NOT NULL user_id
+constraint users.users_created_at_not_null NOT NULL created_at
+constraint users.users_display_name_not_null NOT NULL display_name
+constraint users.users_email_not_null NOT NULL email
+constraint users.users_email_unique_per_org UNIQUE (organization_id, email)
+constraint users.users_enabled_not_null NOT NULL enabled
+constraint users.users_id_not_null NOT NULL id
+constraint users.users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint users.users_organization_id_not_null NOT NULL organization_id
+constraint users.users_password_hash_not_null NOT NULL password_hash
+constraint users.users_pkey PRIMARY KEY (id)
+constraint users.users_updated_at_not_null NOT NULL updated_at
+constraint views.views_created_at_not_null NOT NULL created_at
+constraint views.views_definition_not_null NOT NULL definition
+constraint views.views_id_not_null NOT NULL id
+constraint views.views_is_default_not_null NOT NULL is_default
+constraint views.views_label_not_null NOT NULL label
+constraint views.views_name_not_null NOT NULL name
+constraint views.views_name_unique_per_object UNIQUE (object_id, name)
+constraint views.views_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint views.views_object_id_not_null NOT NULL object_id
+constraint views.views_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint views.views_organization_id_not_null NOT NULL organization_id
+constraint views.views_pkey PRIMARY KEY (id)
+constraint views.views_updated_at_not_null NOT NULL updated_at
+constraint workflows.workflows_created_at_not_null NOT NULL created_at
+constraint workflows.workflows_definition_not_null NOT NULL definition
+constraint workflows.workflows_enabled_not_null NOT NULL enabled
+constraint workflows.workflows_id_not_null NOT NULL id
+constraint workflows.workflows_label_not_null NOT NULL label
+constraint workflows.workflows_name_not_null NOT NULL name
+constraint workflows.workflows_name_unique_per_org UNIQUE (organization_id, name)
+constraint workflows.workflows_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE
+constraint workflows.workflows_object_id_not_null NOT NULL object_id
+constraint workflows.workflows_one_per_object UNIQUE (object_id)
+constraint workflows.workflows_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE
+constraint workflows.workflows_organization_id_not_null NOT NULL organization_id
+constraint workflows.workflows_pkey PRIMARY KEY (id)
+constraint workflows.workflows_updated_at_not_null NOT NULL updated_at
+index audit_log.audit_log_org_time_idx CREATE INDEX audit_log_org_time_idx ON META.audit_log USING btree (organization_id, occurred_at DESC)
+index audit_log.audit_log_pkey CREATE UNIQUE INDEX audit_log_pkey ON META.audit_log USING btree (id)
+index audit_log.audit_log_record_idx CREATE INDEX audit_log_record_idx ON META.audit_log USING btree (object_name, record_id)
+index automation_runs.automation_runs_automation_idx CREATE INDEX automation_runs_automation_idx ON META.automation_runs USING btree (automation_id, created_at DESC)
+index automation_runs.automation_runs_log_idx CREATE INDEX automation_runs_log_idx ON META.automation_runs USING btree (organization_id, created_at DESC)
+index automation_runs.automation_runs_pending_idx CREATE INDEX automation_runs_pending_idx ON META.automation_runs USING btree (created_at) WHERE (status = 'PENDING'::text)
+index automation_runs.automation_runs_pkey CREATE UNIQUE INDEX automation_runs_pkey ON META.automation_runs USING btree (id)
+index automations.automations_name_unique_per_org CREATE UNIQUE INDEX automations_name_unique_per_org ON META.automations USING btree (organization_id, name)
+index automations.automations_object_idx CREATE INDEX automations_object_idx ON META.automations USING btree (organization_id, object_id)
+index automations.automations_pkey CREATE UNIQUE INDEX automations_pkey ON META.automations USING btree (id)
+index custom_fields.custom_fields_name_unique_per_object CREATE UNIQUE INDEX custom_fields_name_unique_per_object ON META.custom_fields USING btree (object_id, name)
+index custom_fields.custom_fields_object_idx CREATE INDEX custom_fields_object_idx ON META.custom_fields USING btree (object_id, "position")
+index custom_fields.custom_fields_pkey CREATE UNIQUE INDEX custom_fields_pkey ON META.custom_fields USING btree (id)
+index custom_objects.custom_objects_name_unique_per_org CREATE UNIQUE INDEX custom_objects_name_unique_per_org ON META.custom_objects USING btree (organization_id, name)
+index custom_objects.custom_objects_physical_table_unique CREATE UNIQUE INDEX custom_objects_physical_table_unique ON META.custom_objects USING btree (physical_table)
+index custom_objects.custom_objects_pkey CREATE UNIQUE INDEX custom_objects_pkey ON META.custom_objects USING btree (id)
+index document_counters.document_counters_pkey CREATE UNIQUE INDEX document_counters_pkey ON META.document_counters USING btree (document_type_id, year)
+index document_types.document_types_name_unique_per_object CREATE UNIQUE INDEX document_types_name_unique_per_object ON META.document_types USING btree (object_id, name)
+index document_types.document_types_object_idx CREATE INDEX document_types_object_idx ON META.document_types USING btree (organization_id, object_id)
+index document_types.document_types_pkey CREATE UNIQUE INDEX document_types_pkey ON META.document_types USING btree (id)
+index document_types.document_types_prefix_unique_per_org CREATE UNIQUE INDEX document_types_prefix_unique_per_org ON META.document_types USING btree (organization_id, prefix)
+index documents.documents_number_unique_per_org CREATE UNIQUE INDEX documents_number_unique_per_org ON META.documents USING btree (organization_id, number)
+index documents.documents_one_valid_per_record CREATE UNIQUE INDEX documents_one_valid_per_record ON META.documents USING btree (document_type_id, record_id) WHERE (status = 'VALID'::text)
+index documents.documents_pkey CREATE UNIQUE INDEX documents_pkey ON META.documents USING btree (id)
+index documents.documents_record_idx CREATE INDEX documents_record_idx ON META.documents USING btree (organization_id, object_id, record_id, issued_at DESC)
+index field_permissions.field_permissions_field_idx CREATE INDEX field_permissions_field_idx ON META.field_permissions USING btree (field_id)
+index field_permissions.field_permissions_pkey CREATE UNIQUE INDEX field_permissions_pkey ON META.field_permissions USING btree (role_id, field_id)
+index forms.forms_name_unique_per_object CREATE UNIQUE INDEX forms_name_unique_per_object ON META.forms USING btree (object_id, name)
+index forms.forms_pkey CREATE UNIQUE INDEX forms_pkey ON META.forms USING btree (id)
+index organizations.organizations_pkey CREATE UNIQUE INDEX organizations_pkey ON META.organizations USING btree (id)
+index organizations.organizations_slug_key CREATE UNIQUE INDEX organizations_slug_key ON META.organizations USING btree (slug)
+index pages.pages_kind_unique_per_object CREATE UNIQUE INDEX pages_kind_unique_per_object ON META.pages USING btree (object_id, kind)
+index pages.pages_name_unique_per_org CREATE UNIQUE INDEX pages_name_unique_per_org ON META.pages USING btree (organization_id, name)
+index pages.pages_pkey CREATE UNIQUE INDEX pages_pkey ON META.pages USING btree (id)
+index permissions.permissions_pkey CREATE UNIQUE INDEX permissions_pkey ON META.permissions USING btree (id)
+index permissions.permissions_unique CREATE UNIQUE INDEX permissions_unique ON META.permissions USING btree (role_id, object_id, action) NULLS NOT DISTINCT
+index relationships.relationships_name_unique_per_org CREATE UNIQUE INDEX relationships_name_unique_per_org ON META.relationships USING btree (organization_id, name)
+index relationships.relationships_pkey CREATE UNIQUE INDEX relationships_pkey ON META.relationships USING btree (id)
+index relationships.relationships_source_idx CREATE INDEX relationships_source_idx ON META.relationships USING btree (source_object_id)
+index relationships.relationships_target_idx CREATE INDEX relationships_target_idx ON META.relationships USING btree (target_object_id)
+index roles.roles_name_unique_per_org CREATE UNIQUE INDEX roles_name_unique_per_org ON META.roles USING btree (organization_id, name)
+index roles.roles_pkey CREATE UNIQUE INDEX roles_pkey ON META.roles USING btree (id)
+index user_roles.user_roles_pkey CREATE UNIQUE INDEX user_roles_pkey ON META.user_roles USING btree (user_id, role_id)
+index users.users_email_idx CREATE INDEX users_email_idx ON META.users USING btree (lower(email))
+index users.users_email_unique_per_org CREATE UNIQUE INDEX users_email_unique_per_org ON META.users USING btree (organization_id, email)
+index users.users_pkey CREATE UNIQUE INDEX users_pkey ON META.users USING btree (id)
+index views.views_name_unique_per_object CREATE UNIQUE INDEX views_name_unique_per_object ON META.views USING btree (object_id, name)
+index views.views_one_default_per_object CREATE UNIQUE INDEX views_one_default_per_object ON META.views USING btree (object_id) WHERE is_default
+index views.views_pkey CREATE UNIQUE INDEX views_pkey ON META.views USING btree (id)
+index workflows.workflows_name_unique_per_org CREATE UNIQUE INDEX workflows_name_unique_per_org ON META.workflows USING btree (organization_id, name)
+index workflows.workflows_one_per_object CREATE UNIQUE INDEX workflows_one_per_object ON META.workflows USING btree (object_id)
+index workflows.workflows_org_idx CREATE INDEX workflows_org_idx ON META.workflows USING btree (organization_id)
+index workflows.workflows_pkey CREATE UNIQUE INDEX workflows_pkey ON META.workflows USING btree (id)
+table audit_log
+table automation_runs
+table automations
+table custom_fields
+table custom_objects
+table document_counters
+table document_types
+table documents
+table field_permissions
+table forms
+table organizations
+table pages
+table permissions
+table relationships
+table roles
+table user_roles
+table users
+table views
+table workflows

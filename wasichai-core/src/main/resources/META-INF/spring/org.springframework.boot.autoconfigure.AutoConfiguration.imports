@@ -1,0 +1,5 @@
+wasichai.core.autoconfigure.WasichaiPlatformAutoConfiguration
+wasichai.core.autoconfigure.WasichaiSecurityAutoConfiguration
+wasichai.core.autoconfigure.WasichaiMetadataAutoConfiguration
+wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
+wasichai.core.autoconfigure.WasichaiAdminAutoConfiguration
