@@ -40,13 +40,5 @@ shot-*.png
 # Kotlin build metadata
 .kotlin/
 
-# Python
-__pycache__/
-*.pyc
-
 # local IT env (points at the test db tunnel)
 wasichai-integration-tests/it-env.sh
-
-# Playwright
-test-results/
-playwright-report/

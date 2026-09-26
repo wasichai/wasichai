@@ -1,6 +1,7 @@
 # ADR-009: Docker Compose for development, Pulumi/k3s deferred
 
-**Status**: accepted · 2026-09-17
+**Status**: accepted · 2026-09-17 · superseded for this repository by
+[ADR-033](0033-samples-and-infrastructure-in-their-own-repositories.md)
 
 > Imported from sapgis on 2026-09-25. Identifiers renamed sapgis → chawpi; the decision is unchanged. See [sapgis origin](../sapgis-origin.md).
 

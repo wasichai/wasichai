@@ -85,7 +85,7 @@ class WasichaiGisAutoConfigurationTest {
     }
 
     // infra-agnostic (ADR-031 D17): geoserver reaches postgres at localhost unless the app says otherwise.
-    // a container network (compose's "postgres") is the app's setting, not the library's default
+    // a container network's host name (e.g. "postgres") is the app's setting, not the library's default
     @Test
     fun `the geoserver datastore defaults name no container network`() {
         runner.run { context ->

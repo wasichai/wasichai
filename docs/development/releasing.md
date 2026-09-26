@@ -21,13 +21,18 @@ This repository releases the Maven libraries. The npm packages are released from
 |---|---|---|---|
 | `RELEASE_PLEASE_TOKEN` | `wasichai/wasichai` | a release that runs `publish.yml` | on this repo: Contents and Pull requests read/write |
 | `RELEASE_PLEASE_TOKEN` | `wasichai/wasichai-ui` | the same, for the npm release | on wasichai-ui: the same |
-| `WASICHAI_REPO_TOKEN` | `wasichai/wasichai-ui` | the UI `e2e` job's checkout of this repository | on `wasichai/wasichai`: Contents read |
 
 A release made with the workflow's `GITHUB_TOKEN` triggers no other workflow, hence the PAT.
 
 Settings → Secrets and variables → Actions → New repository secret. `release-please.yml` falls back to
 `GITHUB_TOKEN` when `RELEASE_PLEASE_TOKEN` is absent: releases still happen, but nothing is published until the
 secret exists. Publishing itself uses the workflow's `GITHUB_TOKEN` (`packages: write`).
+
+**After the first publish (once per package):** Organization → Packages → each `wasichai-*` package → Package
+settings → "Manage Actions access" → add `simple-sample`, `documents-sample`, `gis-sample` and `full-sample` with
+the Read role. The alternative is a `WASICHAI_PACKAGES_TOKEN` secret, a classic PAT with `read:packages`, in each
+sample repository. The organization must allow members' workflows to publish packages (Organization settings →
+Packages).
 
 ## First release is pinned
 

@@ -1,7 +1,8 @@
 # ADR-032: Rebrand to wasichai and split into two repositories
 
 **Status**: accepted · 2026-09-26 · amends [ADR-029](0029-polyglot-monorepo-and-publishing.md), supersedes the names in
-[ADR-030](0030-rebrand-sapgis-to-chawpi.md)
+[ADR-030](0030-rebrand-sapgis-to-chawpi.md) · amended by
+[ADR-033](0033-samples-and-infrastructure-in-their-own-repositories.md)
 
 ## Context
 
