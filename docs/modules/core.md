@@ -177,23 +177,31 @@ Tailwind entry point consumes it as:
 `light` and `dark`, and every package's Tailwind classes (`bg-surface`, `text-ink`, …) resolve against whichever
 theme is active. `WasichaiConfig.themes?: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`, `label`
 an i18n key) adds an app's own themes to the two built-ins; an id that repeats a built-in one throws in
-`resolveConfig`. An app adds a theme with one CSS block that sets every token, e.g.
+`resolveConfig`. An app adds a theme with one CSS block that sets every token (all 28, the ten extension tokens
+`success-soft` to `map-selected` included; `--font-sans` and the radii may be set too), e.g.
 `[data-theme='high-contrast'] { --surface: …; /* every token in theme.css */ }`, and one entry in `config.themes` —
-no package needs a change. `useTheme()` returns `{ preference, theme, colorScheme, themes, setPreference }`:
-`preference` is what the user picked, including `system`, which resolves through `prefers-color-scheme`; `theme` is
-what is actually applied. To avoid a flash of the wrong theme before the bundle loads, an app's `index.html` reads
-the stored theme before its module script runs (`wasichai` below is `storagePrefix`):
+no package needs a change. The primitives carry `data-slot` hooks (`button` with `data-variant` and `data-size`,
+`input`, `select-trigger`, `table-cell`, `tabs-trigger`, …) that a theme's CSS can style and light and dark leave
+alone ([ADR-035](../adr/0035-theme-extension-tokens-slots-and-optional-sheets.md)). The library ships one optional
+theme, never built in: an app that wants it imports `@wasichai/ui/themes/portal-tributario.css` right after
+`@wasichai/ui/theme.css` and adds `PORTAL_TRIBUTARIO_THEME` from `@wasichai/core` to `config.themes`. `useTheme()`
+returns `{ preference, theme, colorScheme, themes, setPreference }`: `preference` is what the user picked, including
+`system`, which resolves through `prefers-color-scheme`; `theme` is what is actually applied. To avoid a flash of the
+wrong theme before the bundle loads, an app's `index.html` reads the stored theme before its module script runs
+(`wasichai` below is `storagePrefix`); `schemes` lists every theme id the app offers, with its color scheme:
 
 ```html
 <script>
-  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix
+  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix.
+  // every theme the app offers, id -> color scheme: light, dark and each config.themes entry.
+  // system and an unknown id (an old build, another app's theme) follow the os, as core's resolveTheme does
   try {
+    const schemes = { light: 'light', dark: 'dark', 'portal-tributario': 'light' }
     const stored = localStorage.getItem('wasichai.theme')
     const dark = matchMedia('(prefers-color-scheme: dark)').matches
-    const theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    const theme = stored && Object.hasOwn(schemes, stored) ? stored : dark ? 'dark' : 'light'
     document.documentElement.dataset.theme = theme
-    // an app theme's color-scheme is in its ThemeDefinition: the provider sets it once the bundle loads
-    if (theme === 'light' || theme === 'dark') document.documentElement.style.colorScheme = theme
+    document.documentElement.style.colorScheme = schemes[theme]
   } catch {}
 </script>
 ```

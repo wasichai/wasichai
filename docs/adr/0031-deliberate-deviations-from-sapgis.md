@@ -69,6 +69,11 @@ These are the only intended differences. Anything else that behaves differently 
   Now the user picks System, Light, Dark or an app's theme, and `GET/PUT /api/auth/me/preferences` stores it with the
   language ([ADR-034](0034-user-preferences-and-themes.md)). The `user_preferences` table is a known schema-parity
   deviation. Tested by `UserPreferencesApiTest`, `UserPreferencesIsolationTest` and wasichai-ui's `ThemeProvider` tests.
+- **D19. The error message of the documents panel and of document types.** Its `bg-danger-soft` background named a
+  token no theme defined, so it drew nothing and the error was plain red text. Now the token exists and the message
+  sits on a soft red, `text-danger` at 4.7:1 in light
+  ([ADR-035](0035-theme-extension-tokens-slots-and-optional-sheets.md)). Tested by wasichai-ui's `theme.test.ts` and
+  `theme.tailwind.test.ts`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

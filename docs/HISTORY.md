@@ -2,6 +2,24 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-09-27 — Themes get extension tokens, data-slot hooks and an optional portal-tributario sheet
+
+srtm-ui's `portal-tributario` theme, the look of an online municipal tax portal that it built on ADR-034 without
+forking `@wasichai/ui`, moves into the library with wasichai-ui's next release (cut by release-please). `theme.css`
+gains ten extension tokens, set in light and in dark: alert backgrounds and a fourth alert tone (`success-soft`,
+`danger-soft`, `notice`, `notice-soft`), `link`, `focus`, `table-head`, `table-stripe`, `line` and `map-selected`,
+so a theme now sets 28 tokens; an app theme written before inherits light's values for the new ten until it sets
+them. `--radius` becomes a theme variable, so `rounded` follows a theme as `--font-sans` and the other radii do.
+`Button`, `Input`, `Textarea`, `SelectTrigger`, `Table`, `Th`, `Td`, `Badge` and `Tabs` carry `data-slot` hooks with
+shadcn's names (`Button` also `data-variant` and `data-size`), a styling contract that light and dark leave alone.
+The theme is optional: an app imports `@wasichai/ui/themes/portal-tributario.css` after `theme.css` and lists
+`PORTAL_TRIBUTARIO_THEME` from `@wasichai/core` in `config.themes`. The sheet styles only the library's own
+components; the brand bar, the tree menu, the chevron steps and the title band stay in srtm-ui. The `index.html`
+boot script now maps every theme id the app offers to its color scheme. In light and dark the one visible change
+is a soft red behind `@wasichai/documents`' error messages, whose `bg-danger-soft` generated nothing until now
+(ADR-031 D19). Light success text on its soft background stays below AA, a tested exception left to a follow-up.
+ADR-035 records the decision and amends ADR-034.
+
 ## 2026-09-26 — wasichai-ui v0.1.0 released
 
 The first release of the npm packages is out: release-please tagged `v0.1.0` in wasichai-ui and its `publish.yml`

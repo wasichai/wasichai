@@ -128,30 +128,41 @@ createRoot(document.getElementById('root')!).render(
 `theme.css` ships `light` and `dark`; `<html>` carries `data-theme="<id>"`, and every Tailwind class from
 `@wasichai/ui` (`bg-surface`, `text-ink`, …) resolves against whichever theme is active — no component to rewrite.
 `config.themes?: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`) adds your own themes to the two
-built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token, e.g.:
+built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token (all 28, including
+the ten extension tokens such as `danger-soft`, `link` and `table-stripe`; `--font-sans` and the radii are yours to
+set too), e.g.:
 
 ```css
 [data-theme='high-contrast'] { --surface: oklch(...); --ink: oklch(...); /* every token in theme.css */ }
 ```
 
-and one entry in `config.themes`. `useTheme()` (exported from `@wasichai/core`) returns
+and one entry in `config.themes`. Beyond the tokens, the primitives carry `data-slot` hooks (`button` with
+`data-variant` and `data-size`, `input`, `select-trigger`, `table-cell`, `tabs-trigger`, …) that your theme's CSS
+can style while light and dark leave them alone
+([ADR-035](../adr/0035-theme-extension-tokens-slots-and-optional-sheets.md)). One ready-made theme ships with the
+library, optional and never built in: to offer it, import `@wasichai/ui/themes/portal-tributario.css` right after
+`@wasichai/ui/theme.css` in `src/index.css` and add `PORTAL_TRIBUTARIO_THEME` (from `@wasichai/core`) to
+`config.themes`. `useTheme()` (exported from `@wasichai/core`) returns
 `{ preference, theme, colorScheme, themes, setPreference }`: `preference` is what the user picked (including
 `system`), `theme` is what is actually applied. The user footer in `AppShell` already offers System plus your
 configured themes; you rarely call `setPreference` yourself.
 
 To avoid a flash of the wrong theme before the bundle loads, add this to `index.html`, before the module script that
-boots the app (`wasichai` below is your `storagePrefix`):
+boots the app (`wasichai` below is your `storagePrefix`), and list in `schemes` every theme id your app offers, with
+its color scheme:
 
 ```html
 <script>
-  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix
+  // before the bundle: apply the stored theme so a dark user never sees a light flash. `wasichai` = storagePrefix.
+  // every theme the app offers, id -> color scheme: light, dark and each config.themes entry.
+  // system and an unknown id (an old build, another app's theme) follow the os, as core's resolveTheme does
   try {
+    const schemes = { light: 'light', dark: 'dark', 'portal-tributario': 'light' }
     const stored = localStorage.getItem('wasichai.theme')
     const dark = matchMedia('(prefers-color-scheme: dark)').matches
-    const theme = stored && stored !== 'system' ? stored : dark ? 'dark' : 'light'
+    const theme = stored && Object.hasOwn(schemes, stored) ? stored : dark ? 'dark' : 'light'
     document.documentElement.dataset.theme = theme
-    // an app theme's color-scheme is in its ThemeDefinition: the provider sets it once the bundle loads
-    if (theme === 'light' || theme === 'dark') document.documentElement.style.colorScheme = theme
+    document.documentElement.style.colorScheme = schemes[theme]
   } catch {}
 </script>
 ```

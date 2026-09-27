@@ -40,3 +40,5 @@ supersedes it and says so in its status line.
   infra-agnostic](0033-samples-and-infrastructure-in-their-own-repositories.md)
 - [ADR-034: A stored resource for user preferences, starting with theme and
   locale](0034-user-preferences-and-themes.md)
+- [ADR-035: Themes get extension tokens and data-slot hooks, and the library ships themes as optional
+  sheets](0035-theme-extension-tokens-slots-and-optional-sheets.md)
