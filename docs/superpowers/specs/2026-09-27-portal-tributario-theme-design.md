@@ -77,6 +77,7 @@ Fixed names, as shadcn has them, set before `{...props}` so a caller can overrid
 | Component | Hooks |
 |---|---|
 | `Button` | `data-slot="button"`, `data-variant` (default `primary`), `data-size` (default `md`); on the child with `asChild` |
+| `Card` | `data-slot="card"`: the box whose tabs step aside under the theme |
 | `Input`, `Textarea` | `data-slot="input"`, `data-slot="textarea"` |
 | `SelectTrigger` | `data-slot="select-trigger"`: only the trigger, the one part the theme paints |
 | `Table`, `Th`, `Td` | `data-slot="table"` on the `<table>`, `"table-head"`, `"table-cell"` |
@@ -94,9 +95,16 @@ it as `@wasichai/ui/themes/portal-tributario.css`.
   ring in `focus`.
 - The partials keep only the rules for the library's own components, moved from `data-ui` to `data-slot`: `button`
   to `button`, `input`/`textarea`/`select` to `input`/`textarea`/`select-trigger`, `table` to `table`, and
-  `ficha-tabs`/`ficha-tab`/`ficha-panel` to `tabs`/`tabs-list`/`tabs-trigger`/`tabs-content`. Radios and checkboxes
-  move as they are. Every rule is unlayered, so it beats a Tailwind utility whatever its specificity, and starts with
-  `[data-theme='portal-tributario'] `, so light and dark never change. The sheet has no `data-ui`.
+  `ficha-tabs`/`ficha-tab`/`ficha-panel` to `tabs`/`tabs-list`/`tabs-trigger`/`tabs-content`, and the box that holds
+  the tabs to a `Card` (`data-slot="card"`). Each partial sits in
+  `@scope ([data-theme='portal-tributario']) to ([data-theme]:not([data-theme='portal-tributario']))`, so light, dark
+  and a subtree pinned to another theme never change. The sheet has no `data-ui`.
+- The partials set as little as they can, because an unlayered rule beats a caller's classes as surely as the
+  primitive's own and, with `data-slot` on every primitive, reaches every screen of the admin: no rule repeats a fill
+  or a radius the tokens already give the classes, `ghost` keeps the classes' colors (the shell's sign-out on the blue
+  shell), fields keep their sides (a search box's room for its icon), and the zebra and total rows go in `@layer base`
+  so a selected or hovered row keeps its class. Radios, checkboxes and links in cells stay in srtm-ui: they are no
+  library hook.
 - Stay in srtm-ui, because they paint components that exist only there: `alerts.css`, `nav.css`, `pasos.css`,
   `banda.css` and `shell.css`; `ficha-kv`, `ficha-seccion` and `paginador` from `tables.css`; `record-*` and
   `workspace-*` from `tabs.css`; the round icon button and `NativeSelect` from `controls.css`; `data-numeric`. So do

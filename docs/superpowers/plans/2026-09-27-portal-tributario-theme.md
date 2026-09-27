@@ -25,8 +25,8 @@ testing-library, WCAG contrast from `oklch()` and hex.
   `table-head` aliases `surface-muted`, `line` aliases `border`, `map-selected` is `#e8590c`; the rest are literal
   `oklch()`.
 - `data-slot` names are shadcn's and are set before `{...props}`. Classes and visible markup do not change.
-- The sheet styles only the library's own components, unlayered, under `[data-theme='portal-tributario'] `, with no
-  `data-ui`. `PORTAL_TRIBUTARIO_THEME` is never in `BUILT_IN_THEMES`.
+- The sheet styles only the library's own components through `data-slot`, in the theme's `@scope`, setting only what
+  the tokens cannot, with no `data-ui`. `PORTAL_TRIBUTARIO_THEME` is never in `BUILT_IN_THEMES`.
 - Light and dark do not change, except `bg-danger-soft`. Light `success` on `success-soft` is a tested exception.
 - `.editorconfig` is law, max 160 columns. Conventional Commits. Comments in English, caveman style, say why.
 
@@ -134,6 +134,21 @@ testing-library, WCAG contrast from `oklch()` and hex.
   sheet paints.
 - [ ] **Step 4: Run** `yarn workspace @wasichai/ui test` → PASS. **Commit**
   `feat(ui): optional portal-tributario theme sheet`.
+
+## Task 4b: Review follow-ups (after the code review)
+
+The review ran the sheet against the admin: with `data-slot` on every primitive, the unlayered partials reached every
+control and beat callers' classes. Fixed in `fix(ui): keep the portal-tributario sheet off callers' classes and pinned
+subtrees`:
+
+- [x] No `ghost` rule (the shell's sign-out turned link blue on the blue shell, 1.14:1; the template editor's pressed
+  marks lost their background); no fill or radius rule the classes already draw; `sm` sets only its top and bottom.
+- [x] Fields set no padding (the record list's search box keeps `pl-8` around its icon).
+- [x] Zebra and total rows in `@layer base` (a selected row's `bg-brand-soft` and the row hover win).
+- [x] Every partial in `@scope (…) to ([data-theme]:not(…))`: the printed sheet pinned to light keeps its look.
+- [x] Only a `Card` (new `data-slot="card"`) that holds tabs steps aside, not any box (the page builder's palette).
+- [x] Radios, checkboxes and `td a` back to srtm-ui; `Button` names no variant or size for `null`, and reads cva's
+  defaults from one constant; the theme tests share their token lists and one CSS reader.
 
 ## Task 5: Docs in wasichai
 

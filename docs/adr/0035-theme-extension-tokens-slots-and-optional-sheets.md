@@ -64,6 +64,7 @@ dark look as before, except where a class already asked for a token that did not
 | Component | Hooks |
 |---|---|
 | `Button` | `data-slot="button"`, `data-variant` (default `primary`), `data-size` (default `md`); on the child with `asChild` |
+| `Card` | `data-slot="card"` |
 | `Input`, `Textarea` | `data-slot="input"`, `data-slot="textarea"` |
 | `SelectTrigger` | `data-slot="select-trigger"` |
 | `Table`, `Th`, `Td` | `data-slot="table"` on the `<table>`, `"table-head"`, `"table-cell"` |
@@ -78,10 +79,20 @@ and markup do not change, and light and dark do not style the hooks.
 (`{ id: 'portal-tributario', label: 'theme.portalTributario', colorScheme: 'light' }`, labels in core's i18n). An app
 that wants it imports the sheet after `theme.css` and lists the definition in `config.themes`; it is never in
 `BUILT_IN_THEMES`, so an app that does not ask for it neither ships its CSS nor offers it. A library sheet sets every
-token, the font and the radii, and styles only the library's own components, through `data-slot`, in rules that are
-unlayered (an unlayered rule beats any Tailwind utility, whatever its specificity) and scoped under
-`[data-theme='<id>']` (so light and dark never change). Its body size and focus ring go in `@layer base`, like the
-defaults they replace.
+token, the font and the radii, and styles only the library's own components, through `data-slot`. Its partials sit in
+`@scope ([data-theme='<id>']) to ([data-theme]:not([data-theme='<id>']))`, so light and dark never change and neither
+does a subtree pinned to another theme (the printed document sheet). Its body size and focus ring go in `@layer base`,
+like the defaults they replace.
+
+**A sheet sets as little as it can.** An unlayered rule beats any Tailwind utility, whatever its specificity, so it
+can restyle a primitive; but the primitive's default classes and a caller's own classes are both utilities, and the
+rule beats those too. With `data-slot` on every primitive, a sheet reaches every control of every screen, the admin's
+included. So a rule sets only what the theme's tokens cannot: no rule repeats a fill or a radius the classes already
+draw from the tokens, no rule recolors a variant a caller commonly restyles (`ghost` on the shell), no rule sets the
+sides of a field (a search box keeps its room for its icon). What only fills a gap the classes leave, such as zebra
+rows and a total row, goes in `@layer base`, so a row's own class (a selection, a hover) still wins. Moving the
+primitives' defaults to a lower layer would let a sheet sit between them and a caller's classes; that is a change to
+every primitive, left for when a second sheet needs it.
 
 **A theme with its own layout stays in the app.** srtm-ui's brand bar, tree menu, chevron steps and title band,
 drawn only under its theme through `useVarianteTema()`, stay in srtm-ui with the partials that paint them. The library
@@ -108,6 +119,15 @@ older build's, another app's) and `system` follow the operating system, as core'
 - An app theme written before this must now set the ten extension tokens. Until it does, it inherits light's values
   from `:root`.
 - A `data-slot` name is public API: renaming or dropping one breaks an app's stylesheet as surely as a prop would.
+- Under `portal-tributario`, a caller's classes lose to the sheet where both set the same property: an `h-8 text-xs`
+  select trigger is 38px and 14.5px like every field, a `font-mono text-xs` cell is 14.5px. That is the theme's look,
+  and it breaks no control: the rules leave alone the properties where a caller's class carries meaning (the shell's
+  colors, a selected row, the room for a search icon).
+- A subtree pinned to another theme gets that theme's tokens and none of the partials, but the enclosing theme's font
+  and radii still reach it: they are Tailwind theme variables, not tokens. The printed sheet under `portal-tributario`
+  prints in Arial with 3px corners.
+- The partials need `@scope` (Chromium and Safari since 2023–2024, Firefox since late 2025). A browser without it
+  drops them and keeps the tokens: the theme's colors, font and radii, on the library's own shapes.
 - srtm-ui adopts the release: it deletes its `extensions.css` and the partials that moved, renames its `data-ui`
   hooks to `data-slot` where one exists, retires its `controles.tsx` wrappers except what the library lacks (the
   round icon button and `NativeSelect`), and registers `PORTAL_TRIBUTARIO_THEME`. `navTree.ts`, `instrucciones.ts`,
