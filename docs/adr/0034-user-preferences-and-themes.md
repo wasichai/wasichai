@@ -1,6 +1,6 @@
 # ADR-034: A stored resource for user preferences, starting with theme and locale
 
-**Status**: accepted · 2026-09-26
+**Status**: accepted · 2026-09-26 · amended by [ADR-035](0035-theme-extension-tokens-slots-and-optional-sheets.md)
 
 ## Context
 
