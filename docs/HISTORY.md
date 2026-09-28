@@ -2,6 +2,12 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-09-28 — Success text passes AA in light
+
+Light `success` goes from `oklch(58% 0.13 155)` to `oklch(52% 0.13 155)` with wasichai-ui's next release, so success
+text, badges and icons reach WCAG AA: 5.0:1 on `surface` and 4.6:1 on `success-soft`, the pair ADR-035 left as a
+tested exception. Every green in light is a little darker; dark is unchanged. ADR-031 D20 records it.
+
 ## 2026-09-27 — Themes get extension tokens, data-slot hooks and an optional portal-tributario sheet
 
 srtm-ui's `portal-tributario` theme, the look of an online municipal tax portal that it built on ADR-034 without

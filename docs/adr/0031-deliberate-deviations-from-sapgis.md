@@ -74,6 +74,9 @@ These are the only intended differences. Anything else that behaves differently 
   sits on a soft red, `text-danger` at 4.7:1 in light
   ([ADR-035](0035-theme-extension-tokens-slots-and-optional-sheets.md)). Tested by wasichai-ui's `theme.test.ts` and
   `theme.tailwind.test.ts`.
+- **D20. Success text in light.** Was `oklch(58% 0.13 155)`, 3.9:1 on the page and below WCAG AA. Now
+  `oklch(52% 0.13 155)`: every success text, badge and icon in light is a little darker, 5.0:1 on `surface` and 4.6:1
+  on `success-soft`. Dark is unchanged. Tested by wasichai-ui's `theme.test.ts`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

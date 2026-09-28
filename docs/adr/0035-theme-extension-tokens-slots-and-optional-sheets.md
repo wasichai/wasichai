@@ -114,7 +114,8 @@ older build's, another app's) and `system` follow the operating system, as core'
 - Light `text-success` on `bg-success-soft` stays below AA, at about 3.6:1. Light `success` is already 3.9:1 on
   `surface` and 4.0:1 on white, so fixing it means darkening `success`, a visible change to every success text in
   light. It is an explicit, tested exception, left to a follow-up: the test asserts the pair still fails, so it
-  speaks up when the fix lands. Every other pair passes, in light and in dark: `success`, `danger`, `warning` and
+  speaks up when the fix lands. Fixed on 2026-09-28: light `success` is `oklch(52% 0.13 155)`
+  ([ADR-031](0031-deliberate-deviations-from-sapgis.md) D20). Every other pair passes, in light and in dark: `success`, `danger`, `warning` and
   `notice` on their soft backgrounds at 4.5:1, `link` on `surface` at 4.5:1, `focus` on `surface` at 3:1.
 - An app theme written before this must now set the ten extension tokens. Until it does, it inherits light's values
   from `:root`.
