@@ -2,6 +2,32 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-09-29 — Shared primitives go up to wasichai-ui, and a dev line to release them
+
+Five components srtm-ui wrote for its portal move into wasichai-ui, so caja-ui does not write them again: `ConfirmDialog`,
+`Pagination` (server paging), `PageSizePagination` (client paging with a rows picker) and `PdfDialog` in `@wasichai/ui`,
+and `QueryState` with `LoadingState`, `EmptyState` and `ErrorState` in `@wasichai/core`. The reason is wasichai-ui's rule 6:
+an abstraction needs a concrete second user, and caja-ui, being rewritten on wasichai-ui the way srtm-ui is, is the
+second user of all five. Markup and behaviour are srtm-ui's; what changes is that they are domain-free. The words moved
+to core's `common` bundle (`es` and `en`; `@wasichai/ui` still imports nothing from core), Spanish plurals carry a
+`_many` twin because i18next resolves `many` for multiples of 1,000,000, and counts go through i18next's `number` format
+(`{{count, number}}`) so an app can swap the formatter. Each carries a `data-slot` hook for themes (`pagination` with
+`data-mode` `server` or `client`, `native-select`, `confirm-dialog`, `pdf-dialog`, `query-state` with `data-state`).
+`DataTable` does not change.
+
+The primitives ride a new `dev` line in wasichai-ui: a branch that is a clone of `main` and never merges back, so
+nothing of this work reaches `main` before the design is settled. It publishes pre-releases `X.Y.0-dev.N`, the next
+minor of the release-please manifest plus a counter (`0.4.0-dev.N` while wasichai-ui is at 0.3.x), under the npm
+dist-tag `dev`, so `latest` stays where release-please left it, and a publish that moves it anyway gets it put back.
+A pre-release is published by pushing a tag `vX.Y.0-dev.N` on a `dev` commit (`node tooling/dev-release.mjs next` gives
+the number), not by `workflow_dispatch`: that trigger needs the workflow file on the default branch, which this line never
+touches. The workflow refuses a commit that is not on `origin/dev`, uploads every public package, skipping versions
+already up so a re-run finishes a partial upload, and then creates the GitHub prerelease. The first, `0.4.0-dev.0`, is
+cut once both wasichai-ui branches are merged into `dev`; srtm-ui adopts it. Design and plans:
+[the spec](superpowers/specs/2026-09-29-metadata-ui-design.md),
+[wasichai-ui phase 1](superpowers/plans/2026-09-29-metadata-ui-f1-wasichai-ui.md) and
+[srtm-ui phase 1](superpowers/plans/2026-09-29-metadata-ui-f1-srtm-ui.md).
+
 ## 2026-09-28 — Success text passes AA in light
 
 Light `success` goes from `oklch(58% 0.13 155)` to `oklch(52% 0.13 155)` with wasichai-ui's next release, so success

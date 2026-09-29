@@ -8,13 +8,43 @@
 domain-free primitives srtm-ui and caja-ui share: `ConfirmDialog`, `Pagination`, `PageSizePagination`, `PdfDialog`
 (`@wasichai/ui`) and `QueryState` (`@wasichai/core`).
 
-**Architecture:** Part A adds `tooling/dev-release.mjs` (next dev version, dist-tag of a version), a `release-dev.yml`
-dispatch that calls `publish.yml` as a reusable workflow, then tags a GitHub prerelease. Part B generalises srtm-ui's
-components: markup and behaviour kept, strings moved to core's `common` bundle (en, es), `data-slot` hooks for themes.
+**Architecture:** Part A adds `tooling/dev-release.mjs` (next dev version, a tag's version, dist-tag of a version),
+`tooling/publish-packages.mjs` (the upload, once per version) and a `release-dev.yml` started by pushing a `vX.Y.0-dev.N`
+tag, which calls `publish.yml` as a reusable workflow, then creates the GitHub prerelease (amendments 1 and 2). Part B
+generalises srtm-ui's components: markup and behaviour kept, strings moved to core's `common` bundle (en, es), `data-slot`
+hooks for themes.
 
 **Tech Stack:** React 19.3, react-i18next, Radix dialog, vitest + testing-library, node:test for tooling, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-09-29-metadata-ui-design.md` (wasichai repository)
+
+## Amendments (2026-09-29)
+
+Made while the plan ran, on the controller's ruling and the reviews. The tasks below carry the amended text and mark it
+(*amended*, with the number); what each replaced is said here.
+
+1. **A tag starts the release, not a dispatch (Task A2, Integration).** The plan had *Release dev* as a
+   `workflow_dispatch` run on `dev`. GitHub offers a manual dispatch only for a workflow file on the default branch, and
+   nothing of `dev` may reach `main`, so the trigger would never appear. The workflow is now `on: push: tags: ['v*-dev.*']`:
+   a tag push runs the workflow file of the tagged commit, which lives on `dev`. It checks the tag is `vX.Y.Z-dev.N`
+   (`dev-release.mjs version-of <tag>`, a third CLI command beside `next` and `dist-tag`) and that the commit is on
+   `origin/dev` (anyone can tag any commit), publishes through the reusable `publish.yml`, and only then creates the
+   GitHub prerelease for that tag (`gh release create <tag> --verify-tag --prerelease`). The tag exists before the upload,
+   so a failed upload leaves a tag and no release: fix the cause and re-run the tag's workflow. The human computes the tag
+   with `node tooling/dev-release.mjs next`.
+2. **`tooling/publish-packages.mjs` (Task A2).** The publish loop left `publish.yml`'s shell for a script with tests. It
+   skips a version already on the registry, so re-running the tag's workflow completes a partial upload instead of failing
+   with E409 on the packages already up. Under any dist-tag but `latest` it reads each package's `latest` before and after
+   `npm publish`; if the registry moved it (it does on a package's first publish) it puts it back with `npm dist-tag add`
+   and fails the run so it is noticed. It also refuses to start if a package's version differs from the one asked for.
+3. **Spanish plurals need a `_many` twin (Task B1).** `Intl.PluralRules('es')` answers `many` for multiples of 1,000,000,
+   and i18next then looks for `records_many` and `range_many`; without them it prints the raw key. The `es` bundle carries
+   both, with the text of `_other`, and `sharedPrimitives.test.tsx` renders a million records.
+4. **`bg-surface` behind the `PdfDialog` iframe (Task B3).** srtm-ui's iframe had `bg-white`, but the ui theme test forbids
+   fixed palette classes (they ignore the theme), so the iframe backdrop is the theme's own `bg-surface`, over the
+   `bg-surface-muted` box.
+5. **`QueryState` carries `data-state` (Task B4).** `data-slot="query-state"` alone cannot tell the loading, empty and error
+   markup apart for a theme sheet, so each part also sets `data-state` (`loading`, `empty`, `error`).
 
 ## Global Constraints
 
@@ -34,7 +64,7 @@ components: markup and behaviour kept, strings moved to core's `common` bundle (
 1. **A dev release never moves `latest`:** `distTagFor('0.4.0-dev.0')` is `dev`, `distTagFor('0.4.0')` is `latest`,
    anything else throws (Task A1).
 2. **No version is published twice:** the next dev number comes from the existing `v*-dev.*` tags, and a gap
-   (`dev.0`, `dev.2`) continues after the highest (Task A1).
+   (`dev.0`, `dev.2`) continues after the highest (Task A1); a version already on the registry is skipped (amendment 2).
 3. **Empty and single-page lists:** `PageSizePagination` with `total = 0` shows `0 a 0 de 0 registros` and disables both
    arrows; `Pagination` with one page hides the arrows (Task B1).
 4. **A confirmation while busy:** confirm disabled while `busy`; Escape and the overlay call `onCancel`; the error has
@@ -57,6 +87,7 @@ export function nextDevVersion(baseVersion, tags) // ('0.3.1', ['v0.3.1', 'v0.4.
 export function distTagFor(version) // '0.4.0-dev.3' -> 'dev', '0.4.0' -> 'latest', else throws
 // CLI: `node tooling/dev-release.mjs next` prints the next version (manifest + `git tag --list 'v*-dev.*'`)
 //      `node tooling/dev-release.mjs dist-tag <version>` prints its dist-tag
+//      `node tooling/dev-release.mjs version-of <tag>` prints the version of a `vX.Y.Z-dev.N` tag, else fails (amendment 1)
 ```
 
 - [ ] **Step 1: failing tests** (`node:test`, `assert/strict`, same style as `set-version.test.mjs`):
@@ -95,55 +126,60 @@ export function distTagFor(version) {
 
 ### Task A2: workflows and docs
 
-**Files:** Modify `.github/workflows/publish.yml`; create `.github/workflows/release-dev.yml`; modify `README.md`.
+**Files:** Modify `.github/workflows/publish.yml`; create `.github/workflows/release-dev.yml`, `tooling/publish-packages.mjs`,
+`tooling/publish-packages.test.mjs`; modify `README.md`.
+
+> **Amended (1, 2).** The steps below are the amended ones. The plan had `release-dev.yml` on `workflow_dispatch` (guarded by
+> `if: github.ref == 'refs/heads/dev'`), the next version computed in its first job, the GitHub release created with
+> `--target "$GITHUB_SHA"`, and the publish loop inline in `publish.yml`.
 
 - [ ] **Step 1: `publish.yml`.**
   - Add `workflow_call: { inputs: { version: { type: string, required: true } } }` next to `release`.
   - Both jobs: `if: github.event_name != 'release' || !github.event.release.prerelease`. A dev prerelease was already
     published by the call.
-  - Version: `version="${{ inputs.version }}"; [ -n "$version" ] || version="${GITHUB_REF_NAME#v}"` in both jobs.
-  - Publish: `(cd "$dir" && npm publish --tag "$(node ../../tooling/dev-release.mjs dist-tag "$version")")`.
-- [ ] **Step 2: `release-dev.yml`.**
+  - Version: an input of the call, `INPUT_VERSION`; a `release` event takes it from its tag (`${GITHUB_REF_NAME#v}`). A call
+    without a version fails: a caller's ref name is no release tag.
+  - Publish: `tag="$(node tooling/dev-release.mjs dist-tag "$VERSION")"`, `node tooling/set-version.mjs "$VERSION"`, then
+    `node tooling/publish-packages.mjs "$VERSION" "$tag"` (amendment 2).
+- [ ] **Step 2: `tooling/publish-packages.mjs`** and its test (`node:test`, `npm` faked): it uploads every public package at
+  one version under one dist-tag, skips a package whose version is already on the registry, and for a dist-tag other than
+  `latest` puts `latest` back when the publish moved it (amendment 2).
+- [ ] **Step 3: `release-dev.yml`** (amendment 1), in outline:
 
 ```yaml
 name: Release dev
-on: workflow_dispatch
-permissions:
-  contents: write
-  packages: write
+on:
+  push:
+    tags: ['v*-dev.*']
+concurrency: # one dev release at a time
+  group: release-dev
+  cancel-in-progress: false
 jobs:
-  version:
-    # only dev builds dev versions
-    if: github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.next.outputs.version }}
+  version: # contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - id: next
-        run: echo "version=$(node tooling/dev-release.mjs next)" >> "$GITHUB_OUTPUT"
-  publish:
+      - checkout with fetch-depth: 0
+      - version="$(node tooling/dev-release.mjs version-of "$GITHUB_REF_NAME")" # refuses anything but vX.Y.Z-dev.N
+      - git fetch origin +refs/heads/dev:refs/remotes/origin/dev
+      - git merge-base --is-ancestor "$GITHUB_SHA" origin/dev # else fail: only commits on dev ship
+      - echo "version=$version" >> "$GITHUB_OUTPUT"
+  publish: # contents: read, packages: write
     needs: version
     uses: ./.github/workflows/publish.yml
     with:
       version: ${{ needs.version.outputs.version }}
-  release:
-    # tagged after the upload: a failed publish leaves no tag behind
+  release: # contents: write
+    # only after every package is up: the prerelease says this dev build is complete
     needs: [version, publish]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - run: gh release create "v${{ needs.version.outputs.version }}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --generate-notes
+      - gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --generate-notes
 ```
 
-- [ ] **Step 3: README.** A "Dev pre-releases" section: `dev` is a clone of `main` that never merges back; run
-  *Release dev* on `dev`; consumers pin the exact `X.Y.0-dev.N` (`yarn add -E @wasichai/core@0.4.0-dev.0`);
+- [ ] **Step 4: README.** A "Dev pre-releases" section: `dev` is a clone of `main` that never merges back; the human runs
+  `node tooling/dev-release.mjs next`, tags that `v…` on a `dev` commit and pushes the tag; a failed upload is finished by
+  re-running the tag's workflow; consumers pin the exact `X.Y.0-dev.N` (`yarn add -E @wasichai/core@0.4.0-dev.0`);
   `npm view @wasichai/ui dist-tags`.
-- [ ] **Step 4:** `yarn format:check && yarn test:tooling && node tooling/check-release.mjs --pack 0.4.0-dev.0` → green.
-- [ ] **Step 5: commit** `ci(release): publish dev pre-releases from the dev branch under the dev dist-tag`.
+- [ ] **Step 5:** `yarn format:check && yarn test:tooling && node tooling/check-release.mjs --pack 0.4.0-dev.0` → green.
+- [ ] **Step 6: commit** `ci(release): publish dev pre-releases from the dev branch under the dev dist-tag`.
 
 ---
 
@@ -179,6 +215,7 @@ Strings: `common.records_one` / `records_other` (`{{count, number}} registro(s)`
 `common.rows` (`Filas` / `Rows`), `common.range_one` / `range_other` (`{{from, number}} a {{to, number}} de {{count,
 number}} registro(s)` / `{{from, number}}–{{to, number}} of {{count, number}} record(s)`; `count` = total),
 `common.previousPage` (`Página anterior` / `Previous page`), `common.nextPage` (`Página siguiente` / `Next page`).
+*Amended (3):* the `es` bundle also has `records_many` and `range_many`, worded like `_other`.
 
 - [ ] **Step 1: failing tests.**
   - ui: the root has `data-slot="pagination"` and `data-mode` (`server` / `client`).
@@ -188,6 +225,7 @@ number}} registro(s)` / `{{from, number}}–{{to, number}} of {{count, number}} 
   - ui: changing the picker calls `onSize(25)`.
   - core: `1 a 10 de 47 registros`, `1 registro`, `Página 2 de 5`, `Filas`, and the aria labels `Página anterior` /
     `Página siguiente`.
+  - core *(amended, 3)*: a million records renders as the plural, not as the raw key `common.records_many`.
 - [ ] **Step 2:** `yarn workspace @wasichai/ui test` and `yarn workspace @wasichai/core test` → FAIL.
 - [ ] **Step 3: implement.**
   - Markup is srtm-ui's `src/portal/components/Pagination.tsx` and `Paginador.tsx`, verbatim, including the `secondary`
@@ -278,6 +316,7 @@ Strings: `common.print`, `common.download`, `common.generating` (`Generando…`)
 - [ ] **Step 3: implement.** srtm-ui's `src/portal/components/PdfDialog.tsx` with its states kept: loading, ready, error.
   - The `rentas.blob` call becomes `load(source)`, and `RentasError` becomes `unknown`.
   - `data-slot="pdf-dialog"` on the content.
+  - *Amended (4):* the iframe has `bg-surface`, not a fixed palette class, over the box's `bg-surface-muted`.
 - [ ] **Step 4:** → PASS. **Step 5: commit** `feat(ui): PdfDialog`.
 
 ### Task B4: `QueryState` in core
@@ -303,7 +342,7 @@ Strings: `common.notFound` (`No se encontró el registro`), `common.forbidden` (
   - A 404 `ApiError` shows `No se encontró el registro` without Reintentar; a 403 behaves the same.
   - A plain `Error` shows `No se pudo cargar`, its message and Reintentar, which calls `refetch`.
   - Success renders `children(data)`.
-  - The markup carries `data-slot="query-state"`.
+  - The markup carries `data-slot="query-state"` and, *amended (5)*, `data-state` (`loading`, `empty`, `error`).
 - [ ] **Step 2:** → FAIL. **Step 3: implement** srtm-ui's `src/portal/components/QueryState.tsx` with strings via `t()`.
 - [ ] **Step 4:** `yarn test` (all workspaces) and `yarn lint` → PASS. **Step 5: commit** `feat(core): QueryState`.
 
@@ -320,7 +359,8 @@ Strings: `common.notFound` (`No se encontró el registro`), `common.forbidden` (
 
 1. Open PRs A and B against `dev`, and the wasichai docs PR against wasichai's `dev`. CI must be green.
 2. **Ask the user** before merging A and B into `dev`.
-3. **Ask the user** before dispatching *Release dev* on `dev`.
+3. **Ask the user** before pushing the tag `v0.4.0-dev.0` on the `dev` commit that holds A and B (*amended, 1*: it was
+   dispatching *Release dev*). The number comes from `node tooling/dev-release.mjs next`.
 
 ## Verification
 
@@ -328,4 +368,6 @@ Strings: `common.notFound` (`No se encontró el registro`), `common.forbidden` (
 - `node tooling/check-release.mjs --pack 0.4.0-dev.0` prints no problem.
 - After the release, `npm view @wasichai/ui dist-tags --registry https://npm.pkg.github.com` shows `dev: 0.4.0-dev.0`
   and `latest: 0.3.1`. The GitHub release `v0.4.0-dev.0` is marked prerelease.
+- A tag on a commit that is not on `origin/dev`, or one that is not `vX.Y.Z-dev.N`, fails the *version* job before anything
+  builds (amendment 1).
 - `git log origin/main..origin/dev` lists only this work, and `origin/main` has not moved.

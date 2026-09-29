@@ -159,11 +159,13 @@ with several schemas in one database the extension resolves from whichever schem
 `storagePrefix` `wasichai`, `defaultLoginEmail` `''`, plus `languages`, `appTagline` and `basename`), the registry
 types (`WasichaiModule` and its contribution types), `createRegistry`, `useWasichaiLinks` (route building, `to()`/`has()`
 for module routes, and typed helpers for every core screen) and `useAuth`. i18n namespace `core`; core's own strings
-are always reachable through `fallbackNS`.
+are always reachable through `fallbackNS`. `QueryState` draws a react-query result as loading, an error (with a retry
+that refetches) or its data; `LoadingState`, `EmptyState` and `ErrorState` (a 404 or 403 shows no retry) are its
+parts, usable on their own.
 
 `@wasichai/ui`: the shared primitives (`Button`, `Card*`, `Dialog*`, `Input`, `Textarea`, `Label`, `Select*`,
-`Table`/`Th`/`Td`/`Badge`, `Tabs`), the `cn()` class merger, and the Tailwind 4 theme (`theme.css`). An app's
-Tailwind entry point consumes it as:
+`Table`/`Th`/`Td`/`Badge`, `Tabs`, `ConfirmDialog`, `Pagination`/`PageSizePagination`, `PdfDialog`), the `cn()` class
+merger, and the Tailwind 4 theme (`theme.css`). An app's Tailwind entry point consumes it as:
 
 ```css
 @import 'tailwindcss';

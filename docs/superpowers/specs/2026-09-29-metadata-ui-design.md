@@ -15,7 +15,7 @@ Decisions taken with the user:
 - **Second concrete user (wasichai-ui rule 6):** caja-ui, rewritten on wasichai-ui the way srtm-ui is.
 - **Branches:** every change lives on branches off a `dev` branch (a clone of `main`) in each repository; PRs target `dev`;
   nothing is merged into any `main`. Releases, when needed, are `next-minor-dev.N` pre-releases from `dev` under the npm
-  dist-tag `dev` (wasichai-ui `0.4.0-dev.N`, wasichai `0.3.0-dev.N`).
+  dist-tag `dev` (wasichai-ui `0.4.0-dev.N`, wasichai `0.3.0-dev.N`), published by pushing a `vX.Y.0-dev.N` tag on `dev`.
 
 ## What there is today
 
