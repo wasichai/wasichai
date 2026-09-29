@@ -30,13 +30,18 @@ Made while the plan ran, on the controller's ruling and the reviews. The tasks b
    (`dev-release.mjs version-of <tag>`, a third CLI command beside `next` and `dist-tag`) and that the commit is on
    `origin/dev` (anyone can tag any commit), publishes through the reusable `publish.yml`, and only then creates the
    GitHub prerelease for that tag (`gh release create <tag> --verify-tag --prerelease`). The tag exists before the upload,
-   so a failed upload leaves a tag and no release: fix the cause and re-run the tag's workflow. The human computes the tag
-   with `node tooling/dev-release.mjs next`.
+   so a failed upload leaves a tag and no release: fix the cause (token, package access, registry) and re-run the failed
+   jobs of the tag's run, which skips the packages already up. A re-run reuses the tagged commit, so a cause that needs a
+   code change gets a new commit on `dev` and the next `N`; the incomplete `dev.N` is never used. The human runs
+   `git fetch --tags && node tooling/dev-release.mjs next`, which prints a version (e.g. `0.4.0-dev.0`); the tag is `v` plus
+   that. The fetch lets the counter see the tags already pushed.
 2. **`tooling/publish-packages.mjs` (Task A2).** The publish loop left `publish.yml`'s shell for a script with tests. It
    skips a version already on the registry, so re-running the tag's workflow completes a partial upload instead of failing
    with E409 on the packages already up. Under any dist-tag but `latest` it reads each package's `latest` before and after
-   `npm publish`; if the registry moved it (it does on a package's first publish) it puts it back with `npm dist-tag add`
-   and fails the run so it is noticed. It also refuses to start if a package's version differs from the one asked for.
+   `npm publish`. If the registry moved it and the package had an earlier `latest`, it puts that one back with
+   `npm dist-tag add` and fails the run so it is noticed. On a package's first publish there is no earlier `latest` to
+   restore (the registry sets it anyway): the run fails saying so, and `latest` stays until the next release. It also
+   refuses to start if a package's version differs from the one asked for.
 3. **Spanish plurals need a `_many` twin (Task B1).** `Intl.PluralRules('es')` answers `many` for multiples of 1,000,000,
    and i18next then looks for `records_many` and `range_many`; without them it prints the raw key. The `es` bundle carries
    both, with the text of `_other`, and `sharedPrimitives.test.tsx` renders a million records.
@@ -143,7 +148,7 @@ export function distTagFor(version) {
     `node tooling/publish-packages.mjs "$VERSION" "$tag"` (amendment 2).
 - [ ] **Step 2: `tooling/publish-packages.mjs`** and its test (`node:test`, `npm` faked): it uploads every public package at
   one version under one dist-tag, skips a package whose version is already on the registry, and for a dist-tag other than
-  `latest` puts `latest` back when the publish moved it (amendment 2).
+  `latest` fails the run when the publish moved `latest`, restoring the earlier one when there was one (amendment 2).
 - [ ] **Step 3: `release-dev.yml`** (amendment 1), in outline:
 
 ```yaml
@@ -175,9 +180,10 @@ jobs:
 ```
 
 - [ ] **Step 4: README.** A "Dev pre-releases" section: `dev` is a clone of `main` that never merges back; the human runs
-  `node tooling/dev-release.mjs next`, tags that `v…` on a `dev` commit and pushes the tag; a failed upload is finished by
-  re-running the tag's workflow; consumers pin the exact `X.Y.0-dev.N` (`yarn add -E @wasichai/core@0.4.0-dev.0`);
-  `npm view @wasichai/ui dist-tags`.
+  `git fetch --tags && node tooling/dev-release.mjs next`, tags `v` plus the version it prints on a `dev` commit and pushes
+  the tag; a failed upload is finished by re-running the failed jobs of that tag's run (skipping the packages already up),
+  and a cause that needs a code change gets a new commit and the next `N`; consumers pin the exact `X.Y.0-dev.N`
+  (`yarn add -E @wasichai/core@0.4.0-dev.0`); `npm view @wasichai/ui dist-tags`.
 - [ ] **Step 5:** `yarn format:check && yarn test:tooling && node tooling/check-release.mjs --pack 0.4.0-dev.0` → green.
 - [ ] **Step 6: commit** `ci(release): publish dev pre-releases from the dev branch under the dev dist-tag`.
 
@@ -360,7 +366,8 @@ Strings: `common.notFound` (`No se encontró el registro`), `common.forbidden` (
 1. Open PRs A and B against `dev`, and the wasichai docs PR against wasichai's `dev`. CI must be green.
 2. **Ask the user** before merging A and B into `dev`.
 3. **Ask the user** before pushing the tag `v0.4.0-dev.0` on the `dev` commit that holds A and B (*amended, 1*: it was
-   dispatching *Release dev*). The number comes from `node tooling/dev-release.mjs next`.
+   dispatching *Release dev*). The version comes from `git fetch --tags && node tooling/dev-release.mjs next`; the tag is `v`
+   plus that.
 
 ## Verification
 

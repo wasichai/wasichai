@@ -18,12 +18,15 @@ to core's `common` bundle (`es` and `en`; `@wasichai/ui` still imports nothing f
 The primitives ride a new `dev` line in wasichai-ui: a branch that is a clone of `main` and never merges back, so
 nothing of this work reaches `main` before the design is settled. It publishes pre-releases `X.Y.0-dev.N`, the next
 minor of the release-please manifest plus a counter (`0.4.0-dev.N` while wasichai-ui is at 0.3.x), under the npm
-dist-tag `dev`, so `latest` stays where release-please left it, and a publish that moves it anyway gets it put back.
-A pre-release is published by pushing a tag `vX.Y.0-dev.N` on a `dev` commit (`node tooling/dev-release.mjs next` gives
-the number), not by `workflow_dispatch`: that trigger needs the workflow file on the default branch, which this line never
-touches. The workflow refuses a commit that is not on `origin/dev`, uploads every public package, skipping versions
-already up so a re-run finishes a partial upload, and then creates the GitHub prerelease. The first, `0.4.0-dev.0`, is
-cut once both wasichai-ui branches are merged into `dev`; srtm-ui adopts it. Design and plans:
+dist-tag `dev`, so `latest` stays where release-please left it. The upload script reads each package's `latest` before and
+after publishing: if it moved, the run fails, and `latest` is put back when the package had an earlier one; on a package's
+first publish there is none to restore, so the run fails saying so and `latest` stays until the next release.
+A pre-release is published by pushing a tag `vX.Y.0-dev.N` on a `dev` commit (`git fetch --tags && node tooling/dev-release.mjs next`
+prints the version; the tag is a `v` before it), not by `workflow_dispatch`: that trigger needs the workflow file on the
+default branch, which this line never touches. The workflow refuses a commit that is not on `origin/dev`, uploads every
+public package, skipping versions already up so a re-run of the failed jobs finishes a partial upload, and then creates the
+GitHub prerelease. The first, `0.4.0-dev.0`, is cut once both wasichai-ui branches are merged into `dev`; srtm-ui adopts it.
+Design and plans:
 [the spec](superpowers/specs/2026-09-29-metadata-ui-design.md),
 [wasichai-ui phase 1](superpowers/plans/2026-09-29-metadata-ui-f1-wasichai-ui.md) and
 [srtm-ui phase 1](superpowers/plans/2026-09-29-metadata-ui-f1-srtm-ui.md).
