@@ -50,6 +50,10 @@ Made while the plan ran, on the controller's ruling and the reviews. The tasks b
    `bg-surface-muted` box.
 5. **`QueryState` carries `data-state` (Task B4).** `data-slot="query-state"` alone cannot tell the loading, empty and error
    markup apart for a theme sheet, so each part also sets `data-state` (`loading`, `empty`, `error`).
+6. **Pagination hooks (final review): `data-mode` names what the footer shows.** `Pagination` renders
+   `data-mode="pages"` (shows "Página x de y" / record count); `PageSizePagination` renders
+   `data-mode="range"` (a range footer "a–b de n" with a rows picker, for client slices or a server page).
+   Task B1's `server`/`client` values are superseded.
 
 ## Global Constraints
 

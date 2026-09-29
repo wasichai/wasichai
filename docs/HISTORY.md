@@ -5,14 +5,17 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 ## 2026-09-29 — Shared primitives go up to wasichai-ui, and a dev line to release them
 
 Five components srtm-ui wrote for its portal move into wasichai-ui, so caja-ui does not write them again: `ConfirmDialog`,
-`Pagination` (server paging), `PageSizePagination` (client paging with a rows picker) and `PdfDialog` in `@wasichai/ui`,
+`Pagination` (renders `data-slot="pagination" data-mode="pages"`, shows "Página x de y" / the
+record count), `PageSizePagination` (renders `data-slot="pagination" data-mode="range"`, a range
+footer "a–b de n" with a rows picker, for any paging where the caller knows the total) and `PdfDialog` in
+`@wasichai/ui`,
 and `QueryState` with `LoadingState`, `EmptyState` and `ErrorState` in `@wasichai/core`. The reason is wasichai-ui's rule 6:
 an abstraction needs a concrete second user, and caja-ui, being rewritten on wasichai-ui the way srtm-ui is, is the
 second user of all five. Markup and behaviour are srtm-ui's; what changes is that they are domain-free. The words moved
 to core's `common` bundle (`es` and `en`; `@wasichai/ui` still imports nothing from core), Spanish plurals carry a
 `_many` twin because i18next resolves `many` for multiples of 1,000,000, and counts go through i18next's `number` format
-(`{{count, number}}`) so an app can swap the formatter. Each carries a `data-slot` hook for themes (`pagination` with
-`data-mode` `server` or `client`, `native-select`, `confirm-dialog`, `pdf-dialog`, `query-state` with `data-state`).
+(`{{count, number}}`) so an app can swap the formatter. Each carries a `data-slot` hook for themes (`pagination` with `data-mode` `pages` or `range`,
+`native-select`, `confirm-dialog`, `pdf-dialog`, `query-state` with `data-state`).
 `DataTable` does not change.
 
 The primitives ride a new `dev` line in wasichai-ui: a branch that is a clone of `main` and never merges back, so
