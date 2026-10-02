@@ -268,6 +268,8 @@ Core is always installed.
   write (ADR-040).
 - D25: an optional change reason on every record write, stored in the audit log, and `requiresReason` objects that
   answer `400` without one (ADR-041).
+- D26: objects declare actions beyond CRUD, granted per role like any other, a new `object_actions` table and a
+  `permissions` column (ADR-042).
 
 ## Known limitations
 
