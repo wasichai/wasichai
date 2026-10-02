@@ -163,8 +163,9 @@ class FieldTypeRegistry(
                 "indexed"
             )
 
-        // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`
-        private val CORE_OBJECT_KEYS =
+        // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`.
+        // internal: FieldTypeRegistryTest matches it to them, so a new object key cannot be forgotten here
+        internal val CORE_OBJECT_KEYS =
             setOf(
                 "id",
                 "name",
@@ -178,7 +179,8 @@ class FieldTypeRegistry(
                 "indexes",
                 "uniqueConstraints",
                 "appendOnly",
-                "apiOnly"
+                "apiOnly",
+                "requiresReason"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata
