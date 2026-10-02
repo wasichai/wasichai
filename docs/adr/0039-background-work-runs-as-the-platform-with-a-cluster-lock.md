@@ -53,9 +53,12 @@ everything else.
 **A request never becomes the platform.** No filter, header or claim reaches the key. On top of that, `asPlatform`
 throws `IllegalStateException` when the Reactor context carries Spring Security's `SecurityContext` key, which its
 `ReactorContextWebFilter` puts on every request that goes through a security chain: with a token, and anonymous too
-(an `OPTIONS` request, a public path). So an app cannot call it while serving a request, not even by mistake in a
-service a controller reaches; it hands the work to a background job instead. Should a user's security context appear
-inside the block anyway, the user wins: never the wider caller. Relaxing this is a new ADR.
+(an `OPTIONS` request, a public path). This check is a tripwire, not a boundary: it catches a direct call while
+serving a request, including one in a service a controller reaches. It cannot see work that the request launches
+somewhere else without its context (another `CoroutineScope`, `@Async`, a Reactor chain subscribed elsewhere), and that
+work would run as the platform. The boundary is the key, which nothing a request carries can set; the check exists to
+make the mistake loud. Background work belongs in a job. Should a user's security context appear inside the block
+anyway, the user wins: never the wider caller. Relaxing this is a new ADR.
 `PlatformRecordServiceTest` pins both requests (with a token and without one) and the writes.
 
 **`RecordStore.insert` and `update` take `userId: UUID?`.** Null is the platform. An app with its own `RecordStore`
@@ -79,9 +82,16 @@ clusterLock.withXactLock("caja.turno.$cajaId") { turnos.open(cajaId) }
 
 - **`tryLock(key): Lease?`** takes a session lock without waiting (`pg_try_advisory_lock`), null when another session
   holds it. The lease holds a connection of its own, taken under the pool (an r2dbc `Wrapped` factory is unwrapped), so
-  releasing it closes the connection and the lock goes with the session: a lock can never return to the pool still
-  held. `Lease.release()` is idempotent; `Lease.use { }` releases when the block ends, throws or is cancelled. A lease
-  never released keeps its connection and its lock until the app stops.
+  a lock can never return to the pool still held. Releasing it runs `pg_advisory_unlock` and then closes the
+  connection: the driver closes without waiting for the backend to exit, so the explicit unlock is what makes the key
+  free when `release()` returns. If the unlock fails, the close still frees the lock once the session ends.
+  `Lease.release()` is idempotent; `Lease.use { }` releases when the block ends, throws or is cancelled. A lease never
+  released keeps its connection and its lock until the app stops.
+- Every `tryLock` opens a new physical connection outside the pool, so a tick every few seconds costs a connection
+  setup each time; take the lock once and hold it if the work runs that often.
+- A lease on an idle connection can be lost without a word: a database restart, an idle-TCP timeout on the network
+  or PgBouncer in transaction mode ends the session, and with it the lock, while the app still holds its `Lease`. Hold
+  a lease for one run of the work, not for the life of the app.
 - **`withXactLock(key) { }`** takes a transaction lock, waiting for it (`pg_advisory_xact_lock`), and runs the block in
   a `TransactionalOperator` with the default propagation: it joins the caller's transaction (ADR-038), so the lock
   lasts until that one commits or rolls back, or opens one of its own. The transaction manager is looked up on first
@@ -103,6 +113,6 @@ a coroutine the app owns; none of these has a user yet (rule 10). `DocumentRepos
   see it.
 - Platform writes cannot be told apart from each other in the audit log: one platform, no job name. An app that needs
   that writes it into the record itself.
-- `asPlatform` cannot be used inside a request. That is the price of "a request never becomes the platform", and the
-  reason it is a hard error instead of a convention.
+- `asPlatform` cannot be called directly inside a request: a hard error makes that mistake loud. It is a tripwire, not
+  a boundary; work a request detaches from its context escapes it.
 - Each held lease is one PostgreSQL connection outside the pool's limit.

@@ -14,10 +14,12 @@ no permission check (like `ADMIN`) and no user: `created_by`, `updated_by`, the 
 under a key only core can name, so it composes with `TransactionalOperator` either way round (ADR-038), and it throws
 inside a request, with a token or anonymous, so a request never becomes the platform. `ClusterLock` (a
 `@ConditionalOnMissingBean` bean) wraps PostgreSQL advisory locks: `tryLock(key)` returns a lease or null without
-waiting, held on an unpooled connection whose close frees it, and `withXactLock(key) { }` waits and holds the lock
-until the transaction ends, joining the caller's. Keys are strings hashed by SHA-256, pinned by a test. Two signatures
-widen: `RecordStore.insert`/`update` take `userId: UUID?` (an app's own `RecordStore` changes two types), and
-`AutomationRunner` now runs a rule triggered by a platform write instead of failing it for lack of an acting user.
+waiting, held on an unpooled connection and released by an explicit unlock before the close, and
+`withXactLock(key) { }` waits and holds the lock until the transaction ends, joining the caller's. Keys are strings
+hashed by SHA-256, pinned by a test. **Breaking for `RecordStore` implementers:** `RecordStore.insert`/`update` now
+take `userId: UUID?`. An app's own `RecordStore` no longer compiles until it changes those two types, and one that is
+not rebuilt gets a `NullPointerException` at runtime on the first platform write. `AutomationRunner` now runs a rule
+triggered by a platform write instead of failing it for lack of an acting user.
 `PlatformRecordServiceTest` and `ClusterLockTest` (wasichai-core) and a new case in `AutomationOnlyApiTest` pin it.
 Requests behave exactly as before; the build-your-app guide has a "Background work" section.
 
