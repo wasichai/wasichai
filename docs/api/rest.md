@@ -188,7 +188,7 @@ GeoServer layer is unpublished first so no layer is left pointing at a table tha
 
 ### Write rules
 
-Two flags, both `false` unless set, both in the create request, in `PUT` and in every object response (`GET
+Three flags, all `false` unless set, all in the create request, in `PUT` and in every object response (`GET
 /api/objects`, `GET /api/objects/{object}`, `GET /api/metadata/objects/{object}`)
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
 
@@ -206,7 +206,6 @@ Two flags, both `false` unless set, both in the create request, in `PUT` and in 
 - `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
   end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
   are unchanged.
-
 - `requiresReason: true` — every write of its records must say why, in the `X-Change-Reason` header (see "Change
   reason" under Records): without one, `POST`, `PUT`, `DELETE`, a link or unlink touching one of its records and a
   workflow transition answer `400` on `reason`, and nothing is stored
