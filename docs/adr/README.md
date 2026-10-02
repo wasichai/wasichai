@@ -46,3 +46,5 @@ supersedes it and says so in its status line.
   reads](0036-declared-indexes-optional-count-and-keyset-reads.md)
 - [ADR-037: Composite unique constraints, and a repeated unique value as a
   409](0037-composite-unique-constraints-and-409-on-repeats.md)
+- [ADR-038: RecordService joins the caller's transaction, and that is supported
+  API](0038-record-service-joins-the-callers-transaction.md)

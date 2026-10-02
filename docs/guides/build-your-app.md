@@ -281,6 +281,22 @@ class SecurityBeans {
 Spring picks up your `@Bean` before the library's auto-configuration runs its own `@ConditionalOnMissingBean`
 method, so the library's `PasswordEncoder` never gets created.
 
+## Write several records atomically
+
+`RecordService` opens no transaction and joins the one you have, the audit row and the listeners' writes included
+([ADR-038](../adr/0038-record-service-joins-the-callers-transaction.md)). Wrap the calls in Spring's
+`TransactionalOperator`; an exception out of the block, from a listener too, undoes all of them:
+
+```kotlin
+transactions.executeAndAwait {
+    val receipt = records.create("receipt", RecordRequest(mapOf("total" to total)))
+    orders.forEach { records.update("order", it, RecordRequest(mapOf("status" to "PAID"))) }
+    records.create("outbox_event", RecordRequest(mapOf("receipt" to receipt.id)))
+}
+```
+
+`CurrentUser.require()` and the permission checks work inside the block.
+
 ## Write your own module
 
 Backend: a library with an `@AutoConfiguration` class registered in
