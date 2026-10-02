@@ -39,10 +39,11 @@ data class RecordQuery(
 
 // port. physical tables today, could be jsonb tomorrow without touching callers. ADR-004.
 interface RecordStore {
+    // userId null = the platform wrote it (ADR-039): created_by/updated_by stay null, like the audit row
     suspend fun insert(
         definition: ObjectDefinition,
         organizationId: UUID,
-        userId: UUID,
+        userId: UUID?,
         attributes: Map<String, Any?>,
         sections: Map<String, Map<String, Any?>>,
         workflow: ObjectWorkflowState = ObjectWorkflowState.NONE
@@ -51,7 +52,7 @@ interface RecordStore {
     suspend fun update(
         definition: ObjectDefinition,
         organizationId: UUID,
-        userId: UUID,
+        userId: UUID?,
         id: UUID,
         attributes: Map<String, Any?>,
         sections: Map<String, Map<String, Any?>>,
