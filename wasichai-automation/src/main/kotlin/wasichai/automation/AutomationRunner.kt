@@ -11,8 +11,6 @@ import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordStore
 import wasichai.core.data.WorkflowStates
 import wasichai.core.metadata.MetadataService
-import wasichai.core.metadata.ObjectDefinition
-import java.util.UUID
 
 // runs claimed work. no user sits behind this, so nothing here asks CurrentUser anything: an
 // automation acts as the platform, inside the organization that owns the record. ADR-016.
@@ -87,7 +85,9 @@ class AutomationRunner(
             store.update(
                 definition,
                 run.organizationId,
-                actingUser(run, definition),
+                // rows carry created_by/updated_by: the triggering user is the honest answer, null when
+                // the platform wrote the record that triggered it (ADR-039). the audit row says platform.
+                run.userId,
                 recordId,
                 current.attributes + (field.name to value),
                 // an action writes a field, so every geometry is left exactly as it was
@@ -136,7 +136,7 @@ class AutomationRunner(
         val attributes = action.values.mapValues { (_, template) -> AutomationRules.render(template, change) }
         val workflow = workflows.stateOf(run.organizationId, target.obj.id)
         val created =
-            store.insert(target, run.organizationId, actingUser(run, target), attributes, emptyMap(), workflow)
+            store.insert(target, run.organizationId, run.userId, attributes, emptyMap(), workflow)
         audit.record(
             organizationId = run.organizationId,
             userId = null,
@@ -193,17 +193,4 @@ class AutomationRunner(
         val number = documents.issue(run.organizationId, run.objectName, recordId, typeName)
         return RunStep(ActionType.GENERATE_DOCUMENT, "issued $number on $recordId")
     }
-
-    // rows carry created_by/updated_by. the triggering user is the honest answer; nobody else
-    // asked for this write. the audit row says platform by leaving user_id null.
-    private fun actingUser(
-        run: AutomationRun,
-        definition: ObjectDefinition
-    ): UUID =
-        run.userId
-            ?: throw ValidationException(
-                "Automation run has no acting user for '${definition.obj.name}'",
-                "userId",
-                "the change that triggered it was anonymous"
-            )
 }
