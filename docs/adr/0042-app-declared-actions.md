@@ -79,6 +79,7 @@ not one per object.
 - An app's own endpoints still call `requirePermission` themselves. The platform knows the verb exists and who holds
   it; what the verb does stays in the app, as every non-CRUD behaviour does.
 - `SchemaParityTest` lists the new table and the `permissions` changes as known deviations under this ADR. They add a
-  feature without changing any behaviour of the original, so they need no ADR-031 entry.
+  feature, but the observable changes above (the violation text, the permissions list, the roles-page hazard) are
+  recorded as [ADR-031](0031-deliberate-deviations-from-sapgis.md) D26.
 - Not done, for want of a user: renaming or relabelling a declared action, tenant-wide declared actions, declared
   actions in the definition response. Each is additive when someone needs it.
