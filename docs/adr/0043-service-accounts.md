@@ -40,9 +40,10 @@ It is in the answer to create and to rotate, and nowhere else; no endpoint retur
 
 **Administration.** `GET/POST /api/service-accounts`, `GET/PUT/DELETE /api/service-accounts/{id}` (`PUT` sets
 `enabled` and replaces `roles`) and `POST /api/service-accounts/{id}/secret` to rotate. All need `MANAGE_ORGANIZATION`,
-like users and roles, and every statement is pinned to the caller's tenant: another tenant's account is `404`, and a
-role name resolves only among the caller's roles. Delete removes the backing user, which cascades to the account and
-its roles.
+like users and roles. Every route first resolves the account within the caller's tenant (another tenant's account is
+`404`), and every statement on `service_accounts` and `users` also filters by that tenant. The `user_roles` rows are
+then replaced by the account's id alone, after that check, and a role name resolves only among the caller's roles.
+Delete removes the backing user, which cascades to the account and its roles.
 
 **The token endpoint.** `POST /api/auth/token` with `{ "clientId", "clientSecret" }`, public like login. JSON rather than
 the form-encoded OAuth2 `grant_type=client_credentials` request, to match `/api/auth/login`; a standards client is not
@@ -51,7 +52,10 @@ a user yet. A known, enabled account whose secret matches gets a JWT with the sa
 `wasichai.security.jwt.service-account-ttl`, 15 minutes by default. Every refusal, an unknown or malformed id, a wrong
 secret, a disabled account, is the same `401 Invalid client credentials`, and every request runs exactly one hash check,
 against a decoy hash when the id is unknown, so neither the answer nor the time it takes separates an unknown id from a
-wrong secret. The comparison is the encoder's own (constant time for BCrypt). An encoder that throws on input it cannot
+wrong secret. The decoy is hashed when the bean is built, so even the first unknown id pays no extra cost. The
+comparison is the encoder's own (constant time for BCrypt), and it runs on `Dispatchers.Default`, off the Netty event
+loop: a public endpoint that hashed on the event loop would let anyone stall every request with a burst of calls.
+Login's password check moves off the event loop the same way. An encoder that throws on input it cannot
 hash (BCrypt past 72 bytes) counts as a mismatch, not a `500`. A malformed id skips the lookup, which tells a caller
 only that its id is not a UUID.
 
@@ -87,8 +91,9 @@ person's lose `userEmail`; an administrator who wants the trail readable disable
 
 - caja gives each origin system a service account and checks the order's origin against `user.serviceAccount`; the
   `SISTEMA_ORIGEN` users and their passwords go.
-- The REST change is additive: new routes, a new public path, and a new nullable field on `GET /api/auth/me` and on
-  audit entries. A person's login, token and every existing answer are unchanged. `GET /api/users` lists the same
+- The REST change is additive: new routes, a new public path, and a `serviceAccount` field on `GET /api/auth/me` and on
+  audit entries that is present only for a service account (`NON_NULL`). A person's login, token and every existing
+  answer are byte for byte unchanged. `GET /api/users` lists the same
   people; the rows it leaves out are only ever created by this feature.
 - The new table is a schema difference from the original, so it is ADR-031 D27, and `SchemaParityTest` lists its
   lines as known deviations under that entry.

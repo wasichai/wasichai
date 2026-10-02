@@ -48,7 +48,8 @@ the request a caller could fill with another system's key.
 
 - **One refusal.** An unknown or malformed id, a wrong secret and a disabled account all get `401 Invalid client
   credentials`, and every request runs one hash check, against a decoy hash when the id is unknown, so the timing does
-  not tell them apart either. The hash comparison is the encoder's (BCrypt's is constant time).
+  not tell them apart either. The decoy is hashed at startup. The hash comparison is the encoder's (BCrypt's is
+  constant time), and it runs off the Netty event loop, as login's password check does.
 - **Revocation is not instant for tokens already issued.** Disabling, rotating or deleting stops new tokens at once;
   a token already issued is a stateless JWT and lives until it expires. That is why its TTL is short.
 - **Never the administrator.** `ADMIN` cannot be given to a service account, `isAdmin` is `false` for one whatever its

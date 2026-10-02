@@ -55,7 +55,7 @@ in the body is refused with `400` rather than silently ignored. A caller with no
 (`{ "theme": "system", "locale": null }`) without a row ever being written for them.
 
 `GET /api/auth/me` carries `serviceAccount`, the account's name, when a [service account](#service-accounts) calls; it
-is never set for a person.
+is never set for a person: the key is left out, so a person's answer is unchanged.
 
 ## Service accounts
 

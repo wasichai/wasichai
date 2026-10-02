@@ -150,8 +150,8 @@ These are the only intended differences. Anything else that behaves differently 
   organization has service accounts that trade a client id and secret at `POST /api/auth/token` for a short-lived token
   naming the account, managed at `/api/service-accounts` ([ADR-043](0043-service-accounts.md)). The
   `service_accounts` table is a known schema-parity deviation. Each account has a backing `users` row that
-  `GET /api/users` leaves out and the user routes answer `404` to; audit entries it makes and `GET /api/auth/me` carry
-  `serviceAccount`. A person's login, token and answers are unchanged. Tested by `ServiceAccountApiTest`,
+  `GET /api/users` leaves out and the user routes answer `404` to; audit entries it makes and its `GET /api/auth/me`
+  carry `serviceAccount`, a key absent for a person. A person's login, token and answers are unchanged. Tested by `ServiceAccountApiTest`,
   `ServiceAccountAutomationTest` and `JwtServiceTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
