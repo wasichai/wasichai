@@ -967,4 +967,4 @@ RFC 7807 `application/problem+json`:
 | 401 | missing or invalid token |
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
-| 409 | duplicate object or field name; a record that repeats a unique value, with `errors[]` naming the constraint's fields; changing or deleting a record of an `appendOnly` object |
+| 409 | duplicate object or field name; a repeated unique value (`errors[]` names the constraint's fields); changing or deleting an `appendOnly` record |
