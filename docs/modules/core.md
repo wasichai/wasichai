@@ -259,6 +259,8 @@ Core is always installed.
   (ADR-036).
 - D23: composite unique constraints, a new metadata column, and a repeated unique value as a `409` naming its fields
   instead of a `500` (ADR-037).
+- D24: append-only and api-only objects, two new metadata columns, and a `RecordWriteGuard` SPI that can veto any record
+  write (ADR-040).
 
 ## Known limitations
 
