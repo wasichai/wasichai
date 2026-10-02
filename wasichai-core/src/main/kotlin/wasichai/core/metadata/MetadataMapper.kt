@@ -24,6 +24,7 @@ class MetadataMapper(
             uniqueConstraints = definition.obj.uniqueConstraints,
             appendOnly = definition.obj.appendOnly,
             apiOnly = definition.obj.apiOnly,
+            requiresReason = definition.obj.requiresReason,
             extensions = types.objectProperties(definition)
         )
 
@@ -43,6 +44,7 @@ class MetadataMapper(
             uniqueConstraints = definition.obj.uniqueConstraints,
             appendOnly = definition.obj.appendOnly,
             apiOnly = definition.obj.apiOnly,
+            requiresReason = definition.obj.requiresReason,
             extensions = types.objectProperties(definition)
         )
 

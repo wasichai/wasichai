@@ -97,7 +97,8 @@ class AutomationRunner(
                 recordId = recordId,
                 kind = RecordChangeKind.UPDATED,
                 before = current.attributes,
-                attributes = attributes
+                attributes = attributes,
+                reason = automation.changeReason()
             )
         )
         val updated =
@@ -120,7 +121,8 @@ class AutomationRunner(
             recordId = recordId,
             operation = AuditOperation.UPDATE,
             before = current.attributes,
-            after = updated.attributes
+            after = updated.attributes,
+            reason = automation.changeReason()
         )
         // the write is a change like any other, one step deeper and marked with its author
         dispatcher.recordChanged(
@@ -163,7 +165,8 @@ class AutomationRunner(
                 objectName = target.obj.name,
                 recordId = null,
                 kind = RecordChangeKind.CREATED,
-                attributes = attributes
+                attributes = attributes,
+                reason = automation.changeReason()
             )
         )
         val created =
@@ -174,7 +177,8 @@ class AutomationRunner(
             objectName = target.obj.name,
             recordId = created.id,
             operation = AuditOperation.CREATE,
-            after = created.attributes
+            after = created.attributes,
+            reason = automation.changeReason()
         )
         dispatcher.recordChanged(
             RecordChange(
@@ -225,3 +229,7 @@ class AutomationRunner(
         return RunStep(ActionType.GENERATE_DOCUMENT, "issued $number on $recordId")
     }
 }
+
+// no user to ask why: the automation is the reason, so its writes pass requiresReason and its audit rows
+// say which one wrote (ADR-041)
+private fun Automation.changeReason(): String = "automation '$name'"

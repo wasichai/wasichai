@@ -9,6 +9,7 @@ import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordChangeListener
@@ -188,7 +189,17 @@ class WorkflowService(
         objectName: String,
         id: UUID,
         transitionName: String
+    ): RecordResponse = apply(objectName, id, transitionName, null)
+
+    // reason: why, stored on the transition's audit row; requiresReason asks for it (ADR-041)
+    @Transactional
+    suspend fun apply(
+        objectName: String,
+        id: UUID,
+        transitionName: String,
+        reason: String?
     ): RecordResponse {
+        val changeReason = ChangeReason.normalize(reason)
         val user = currentUser.require()
         val definition = metadata.loadDefinition(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.UPDATE, definition.obj.id)
@@ -231,7 +242,8 @@ class WorkflowService(
                 recordId = id,
                 kind = RecordChangeKind.TRANSITIONED,
                 before = record.attributes,
-                transition = transition.name
+                transition = transition.name,
+                reason = changeReason
             )
         )
         val moved =
@@ -245,7 +257,8 @@ class WorkflowService(
             recordId = id,
             operation = AuditOperation.UPDATE,
             before = mapOf("state" to transition.from),
-            after = mapOf("state" to transition.to)
+            after = mapOf("state" to transition.to),
+            reason = changeReason
         )
         // read unprojected: an automation must judge the whole record, not the fields this
         // caller may see. the transition itself already happened.

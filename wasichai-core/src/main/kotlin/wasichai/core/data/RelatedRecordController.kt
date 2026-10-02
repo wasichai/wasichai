@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -50,8 +51,9 @@ class RelatedRecordController(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID,
         @PathVariable relationship: String,
-        @RequestBody request: LinkRequest
-    ) = related.link(objectName, id, relationship, UUID.fromString(request.otherId), viaApi = true)
+        @RequestBody request: LinkRequest,
+        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?
+    ) = related.link(objectName, id, relationship, UUID.fromString(request.otherId), ChangeReason.fromHeader(reason), viaApi = true)
 
     @DeleteMapping("/records/{id}/related/{relationship}/{otherId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -59,6 +61,7 @@ class RelatedRecordController(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID,
         @PathVariable relationship: String,
-        @PathVariable otherId: UUID
-    ) = related.unlink(objectName, id, relationship, otherId, viaApi = true)
+        @PathVariable otherId: UUID,
+        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?
+    ) = related.unlink(objectName, id, relationship, otherId, ChangeReason.fromHeader(reason), viaApi = true)
 }

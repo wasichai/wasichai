@@ -7,9 +7,11 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordResponse
 import java.util.UUID
 
@@ -64,6 +66,7 @@ class WorkflowController(
     suspend fun apply(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID,
-        @PathVariable name: String
-    ): RecordResponse = workflows.apply(objectName, id, name)
+        @PathVariable name: String,
+        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?
+    ): RecordResponse = workflows.apply(objectName, id, name, ChangeReason.fromHeader(reason))
 }

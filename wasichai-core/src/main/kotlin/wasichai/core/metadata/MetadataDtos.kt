@@ -40,7 +40,9 @@ data class CreateObjectRequest(
     // write rules (ADR-040): no update or delete of its records, for anyone
     val appendOnly: Boolean = false,
     // the generic record api does not write it; only the app's own code does
-    val apiOnly: Boolean = false
+    val apiOnly: Boolean = false,
+    // every record write must carry a change reason (ADR-041)
+    val requiresReason: Boolean = false
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -71,7 +73,9 @@ data class UpdateObjectRequest(
     val uniqueConstraints: List<List<String>>? = null,
     // null leaves the rule as it is: a client that predates it must not switch it off by saving a label (ADR-040)
     val appendOnly: Boolean? = null,
-    val apiOnly: Boolean? = null
+    val apiOnly: Boolean? = null,
+    // same rule: left out keeps it (ADR-041)
+    val requiresReason: Boolean? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -113,6 +117,7 @@ data class ObjectResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
     val appendOnly: Boolean = false,
     val apiOnly: Boolean = false,
+    val requiresReason: Boolean = false,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -135,6 +140,7 @@ data class ObjectDefinitionResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
     val appendOnly: Boolean = false,
     val apiOnly: Boolean = false,
+    val requiresReason: Boolean = false,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

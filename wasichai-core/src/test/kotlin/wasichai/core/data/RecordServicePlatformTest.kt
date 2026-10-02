@@ -131,7 +131,8 @@ class RecordServicePlatformTest {
                 operation: AuditOperation,
                 before: Any?,
                 after: Any?,
-                documentId: UUID?
+                documentId: UUID?,
+                reason: String?
             ) {
                 audited += Audited(organizationId, userId, operation)
             }

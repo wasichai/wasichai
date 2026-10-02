@@ -2,6 +2,7 @@ package wasichai.core.data
 
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
+import wasichai.core.common.ValidationException
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
@@ -26,7 +27,9 @@ data class RecordWrite(
     val kind: RecordChangeKind,
     val before: Map<String, Any?>? = null,
     val attributes: Map<String, Any?>? = null,
-    val transition: String? = null
+    val transition: String? = null,
+    // why, as the writer says it (ADR-041): normalized, null when none was given
+    val reason: String? = null
 )
 
 /**
@@ -55,13 +58,22 @@ interface RecordWriteGuard {
 class RecordWriteGuards(
     private val guards: List<RecordWriteGuard>
 ) {
-    // appendOnly first: no guard is asked about a write that can never happen
+    // appendOnly first, then requiresReason: no guard is asked about a write that can never happen
     suspend fun beforeWrite(
         definition: ObjectDefinition,
         change: RecordWrite
     ) {
         if (definition.obj.appendOnly && change.kind != RecordChangeKind.CREATED) {
             throw ConflictException("Object '${definition.obj.name}' is append-only: its records are never changed or deleted")
+        }
+        // every caller, the platform included: code can always say why (ADR-041). blank, from a module that
+        // built RecordWrite itself, is no reason either
+        if (definition.obj.requiresReason && change.reason.isNullOrBlank()) {
+            throw ValidationException(
+                "Object '${definition.obj.name}' requires a reason for every change",
+                "reason",
+                "send the ${ChangeReason.HEADER} header"
+            )
         }
         guards.forEach { it.beforeWrite(change) }
     }

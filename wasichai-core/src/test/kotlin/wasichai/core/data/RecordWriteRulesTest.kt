@@ -26,7 +26,8 @@ import java.time.Instant
 import java.util.UUID
 
 // ADR-040: appendOnly refuses UPDATE and DELETE for everyone, a RecordWriteGuard vetoes before the
-// store write, apiOnly closes the generic record api and nothing else.
+// store write, apiOnly closes the generic record api and nothing else. ADR-041: requiresReason refuses
+// a write with no reason before the store write; a reason given lands on the audit row.
 class RecordWriteRulesTest {
     private val codigo = ObjectDefinitionFixtures.field("codigo", FieldType.TEXT)
     private val organizationId = ObjectDefinitionFixtures.obj.organizationId
@@ -35,6 +36,7 @@ class RecordWriteRulesTest {
     private val writes = mutableListOf<String>()
     private val rows = linkedMapOf<UUID, Map<String, Any?>>()
     private val audited = mutableListOf<AuditOperation>()
+    private val reasons = mutableListOf<String?>()
     private val changes = mutableListOf<RecordChange>()
     private val seen = mutableListOf<RecordWrite>()
 
@@ -111,9 +113,11 @@ class RecordWriteRulesTest {
                 operation: AuditOperation,
                 before: Any?,
                 after: Any?,
-                documentId: UUID?
+                documentId: UUID?,
+                reason: String?
             ) {
                 audited += operation
+                reasons += reason
             }
         }
 
@@ -128,9 +132,14 @@ class RecordWriteRulesTest {
 
     private suspend fun service(
         appendOnly: Boolean = false,
-        apiOnly: Boolean = false
+        apiOnly: Boolean = false,
+        requiresReason: Boolean = false
     ): RecordService {
-        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj.copy(appendOnly = appendOnly, apiOnly = apiOnly), listOf(codigo))
+        val definition =
+            ObjectDefinition(
+                ObjectDefinitionFixtures.obj.copy(appendOnly = appendOnly, apiOnly = apiOnly, requiresReason = requiresReason),
+                listOf(codigo)
+            )
         val currentUser = mock(CurrentUser::class.java)
         val metadata = mock(MetadataService::class.java)
         val access = mock(AccessPolicy::class.java)
@@ -254,9 +263,9 @@ class RecordWriteRulesTest {
 
             val refused =
                 listOf(
-                    runCatching { records.create("predio", RecordRequest(mapOf("codigo" to "X")), viaApi = true) },
-                    runCatching { records.update("predio", id, RecordRequest(mapOf("codigo" to "X")), viaApi = true) },
-                    runCatching { records.delete("predio", id, viaApi = true) }
+                    runCatching { records.create("predio", RecordRequest(mapOf("codigo" to "X")), reason = null, viaApi = true) },
+                    runCatching { records.update("predio", id, RecordRequest(mapOf("codigo" to "X")), reason = null, viaApi = true) },
+                    runCatching { records.delete("predio", id, reason = null, viaApi = true) }
                 )
             assertThat(refused).allSatisfy { assertThat(it.exceptionOrNull()).isInstanceOf(ForbiddenException::class.java) }
             assertThat(writes).isEmpty()
@@ -267,5 +276,67 @@ class RecordWriteRulesTest {
             assertThat(writes).containsExactly("insert", "update", "delete")
             // reads are untouched
             assertThat(records.get("predio", UUID.fromString(created.id)).attributes["codigo"]).isEqualTo("IN-2")
+        }
+
+    @Test
+    fun `requires-reason refuses a write with no reason on reason - nothing stored, audited or guarded`() =
+        runTest {
+            val records = service(requiresReason = true)
+            val id = stored("R-0")
+
+            val refused =
+                listOf(
+                    runCatching { records.create("predio", RecordRequest(mapOf("codigo" to "X"))) },
+                    runCatching { records.update("predio", id, RecordRequest(mapOf("codigo" to "X")), "   ") },
+                    runCatching { records.delete("predio", id, null) },
+                    runCatching { records.create("predio", RecordRequest(mapOf("codigo" to "X")), reason = null, viaApi = true) }
+                )
+
+            assertThat(refused).allSatisfy {
+                assertThat(it.exceptionOrNull()).isInstanceOfSatisfying(ValidationException::class.java) { e ->
+                    assertThat(e.violations.single().field).isEqualTo("reason")
+                }
+            }
+            assertThat(writes).isEmpty()
+            assertThat(audited).isEmpty()
+            assertThat(changes).isEmpty()
+            assertThat(seen).isEmpty()
+        }
+
+    @Test
+    fun `requires-reason holds the platform too, and a reason given passes`() =
+        runTest {
+            val records = service(requiresReason = true)
+
+            val refused = records.asPlatform(organizationId) { runCatching { records.create("predio", RecordRequest(mapOf("codigo" to "X"))) } }
+            records.asPlatform(organizationId) { records.create("predio", RecordRequest(mapOf("codigo" to "J")), "cierre nocturno") }
+
+            assertThat(refused.exceptionOrNull()).isInstanceOf(ValidationException::class.java)
+            assertThat(writes).containsExactly("insert")
+            assertThat(reasons).containsExactly("cierre nocturno")
+        }
+
+    @Test
+    fun `a reason is trimmed, handed to the guard and stored on the write's audit row`() =
+        runTest {
+            val records = service(requiresReason = true)
+            val created = UUID.fromString(records.create("predio", RecordRequest(mapOf("codigo" to "A")), "  alta  ").id)
+            records.update("predio", created, RecordRequest(mapOf("codigo" to "B")), "corrección")
+            records.delete("predio", created, "duplicado")
+
+            assertThat(audited).containsExactly(AuditOperation.CREATE, AuditOperation.UPDATE, AuditOperation.DELETE)
+            assertThat(reasons).containsExactly("alta", "corrección", "duplicado")
+            assertThat(seen.map { it.reason }).containsExactly("alta", "corrección", "duplicado")
+        }
+
+    @Test
+    fun `without requires-reason a write needs none, and a reason given is still stored`() =
+        runTest {
+            val records = service()
+            records.create("predio", RecordRequest(mapOf("codigo" to "A")))
+            records.create("predio", RecordRequest(mapOf("codigo" to "B")), "importado")
+
+            assertThat(writes).containsExactly("insert", "insert")
+            assertThat(reasons).containsExactly(null, "importado")
         }
 }
