@@ -16,7 +16,11 @@ off. `apiOnly: true` makes the generic record API (`/records` writes, link and u
 throw aborts it with nothing stored, audited or notified. Both flags are in the create request, `PUT` (left out =
 unchanged) and every object response; migration `V5__object_write_rules` adds the two columns, a schema- and wire-parity
 deviation (ADR-031 D24). `RecordService`, `RelatedRecordService`, `WorkflowService` and `AutomationRunner` take a
-`RecordWriteGuards` constructor argument. Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
+`RecordWriteGuards` constructor argument, and the REST controllers now call `internal` `viaApi` overloads, so an app
+subclass that overrides the public `create`/`update`/`delete` of `RecordService` or `link`/`unlink` of
+`RelatedRecordService` is no longer reached by the REST routes (use a `RecordWriteGuard`). On an append-only end a
+no-op link or unlink answers `409` instead of `204`, and deleting an object that shares a join table with an
+append-only one is refused. Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
 `WriteRulesApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest` pin it.
 
 ## 2026-10-02 — Background work runs RecordService as the platform, and takes a cluster lock

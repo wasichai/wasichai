@@ -31,12 +31,17 @@ These count as an update, and are refused the same way:
 
 - a **workflow transition** (it moves the record's state);
 - a **link or unlink** where either end is append-only (the join row is history on both records, and the audit
-  already writes an `UPDATE` on both);
+  already writes an `UPDATE` on both). The refusal comes before the join table is read, so it is `409` even when the
+  call would change nothing: linking a pair that is already linked, or unlinking one that is not, answers `409` here
+  where it is an idempotent `204` elsewhere;
 - an automation's `UPDATE_FIELD` (the run fails, the triggering write stays committed, as for any failed action).
 
 Metadata deletes that would destroy stored values are refused with 409 too: deleting the object, one of its fields,
-or a relationship whose field or join table sits on it. An admin with `MANAGE_METADATA` switches `appendOnly` off
-first, which is a deliberate, visible step. Adding fields and editing labels stay allowed.
+a relationship whose field or join table sits on it, or another object that shares a `MANY_TO_MANY` join table with
+it (deleting that object drops the join table, links included). An admin with `MANAGE_METADATA` switches
+`appendOnly` off first, which is a deliberate, visible step. Adding fields and editing labels stay allowed. Deleting
+the whole organization (`DELETE /api/organizations/current`) still drops everything: it removes the tenant, not a
+record.
 
 `appendOnly` is not a database grant. Code that writes the physical table through `DatabaseClient` is not stopped;
 that is internal API (ADR-024). An app that needs the database to enforce it adds its own grants.
@@ -95,6 +100,12 @@ The generic record API refuses writes on it with **403** (`ForbiddenException`),
 delete, and link or unlink when either end is api-only. In-process `RecordService` and `RelatedRecordService` calls
 still write, as the calling user or as the platform. Reads are unchanged.
 
+**How the door is told apart.** `RecordController` and `RelatedRecordController` call `internal` overloads,
+`create/update/delete(…, viaApi = true)` and `link/unlink(…, viaApi = true)`. The public methods keep their
+signatures and pass `viaApi = false`. So an app that subclasses `RecordService` or `RelatedRecordService` and
+overrides the public `create`, `update`, `delete`, `link` or `unlink` is no longer reached by the REST routes: they
+go straight to the overloads. An app that needs to intercept every write uses a `RecordWriteGuard` instead.
+
 **403, not 405.** The method exists on the path and works for other objects; 405 also obliges an `Allow` header that
 would differ per object. 403 is "this door is closed to you", which is what it is, and the UI already handles it.
 
@@ -117,5 +128,7 @@ the flags must not switch append-only off by saving a label.
 - A new write path in a module must call `RecordWriteGuards`. The table above is the checklist.
 - `RecordService`, `RelatedRecordService`, `WorkflowService` and `AutomationRunner` take a `RecordWriteGuards`
   constructor argument. Code that builds them by hand (tests) passes `RecordWriteGuards(emptyList())`.
+- The REST routes no longer call the public write methods of `RecordService` and `RelatedRecordService`: an
+  override of those in an app's subclass is skipped by the REST API (see "How the door is told apart").
 - Two columns on `custom_objects`: a schema-parity deviation, [ADR-031](0031-deliberate-deviations-from-sapgis.md)
   D24.
