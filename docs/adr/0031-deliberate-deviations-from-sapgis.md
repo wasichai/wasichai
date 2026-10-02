@@ -104,6 +104,18 @@ These are the only intended differences. Anything else that behaves differently 
   is a `UNIQUE (a, b, …)` on the data table. A field or relationship that one names cannot be deleted
   (`409`). Tested by `CompositeUniqueApiTest`, `FieldApiTest` (core and parity) and `SchemaParityTest`.
 
+**Because some records must never change**
+
+- **D24. Append-only and api-only objects, and a pre-write guard.** The original had neither flag, and nothing
+  could veto a record write before it landed. Now an object may be `appendOnly` (`UPDATE` and `DELETE` of its
+  records answer `409` for everyone, ADMIN, the platform and automations included) or `apiOnly` (the generic record
+  API answers `403` on writes, in-process callers still write), and a `RecordWriteGuard` bean can veto any record
+  write ([ADR-040](0040-append-only-objects-and-a-pre-write-guard.md)). Both flags are off by default, so every
+  existing object behaves as before, but every object response now carries both keys. The
+  `custom_objects.append_only` and `custom_objects.api_only` columns are a known schema-parity deviation, and the two
+  keys a known wire-parity one (`GeometryWireParityTest`). Tested by `RecordWriteRulesTest`, `WriteRulesApiTest`, `WorkflowWriteRulesTest` and
+  `AutomationWriteRulesTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

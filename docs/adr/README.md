@@ -50,3 +50,5 @@ supersedes it and says so in its status line.
   API](0038-record-service-joins-the-callers-transaction.md)
 - [ADR-039: Background work runs RecordService as the platform, and takes a cluster
   lock](0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)
+- [ADR-040: Append-only objects, a pre-write guard SPI, and api-only
+  objects](0040-append-only-objects-and-a-pre-write-guard.md)

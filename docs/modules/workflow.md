@@ -38,6 +38,10 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
   | GET | `/api/objects/{object}/records/{id}/transitions` |
   | POST | `/api/objects/{object}/records/{id}/transitions/{name}` |
 
+  A transition is a record update: on an `appendOnly` object it answers `409`, and every `RecordWriteGuard` sees it
+  (kind `TRANSITIONED`, with its name) before the state moves. `apiOnly` does not refuse it: it runs the workflow's
+  own rules ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)).
+
 - A screen and sidebar entry: the `workflow:builder` route at `<basePath>/workflows` (lazy-loaded), listed under the
   `automation` nav group as "Workflows".
 - Registry slots: the `WORKFLOW` page component (record state and transition buttons, plus a state-pill preview in

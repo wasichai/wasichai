@@ -2,6 +2,23 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Append-only objects, a pre-write guard, and api-only objects
+
+Receipts, annulments and a payment outbox are append-only by rule, for everyone, and the generic record API was a
+second door around an app's own endpoints ([#15](https://github.com/wasichai/wasichai/issues/15)).
+[ADR-040](adr/0040-append-only-objects-and-a-pre-write-guard.md) adds two object flags and an SPI.
+`appendOnly: true` refuses `UPDATE` and `DELETE` of its records with `409` for everyone, `ADMIN`, the platform and
+automations included, and counts a workflow transition and a link or unlink touching one of its records as an update;
+deleting the object, one of its fields or a relationship holding its values is refused too until the flag is switched
+off. `apiOnly: true` makes the generic record API (`/records` writes, link and unlink) answer `403`, while in-process
+`RecordService` calls still write. `RecordWriteGuard` beans run in `@Order` before every record write on every route
+(record API, related records, `RecordService` as a user or the platform, workflow transitions, automation actions); a
+throw aborts it with nothing stored, audited or notified. Both flags are in the create request, `PUT` (left out =
+unchanged) and every object response; migration `V5__object_write_rules` adds the two columns, a schema- and wire-parity
+deviation (ADR-031 D24). `RecordService`, `RelatedRecordService`, `WorkflowService` and `AutomationRunner` take a
+`RecordWriteGuards` constructor argument. Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
+`WriteRulesApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest` pin it.
+
 ## 2026-10-02 — Background work runs RecordService as the platform, and takes a cluster lock
 
 caja-backend publishes its outbox in-process and needs record writes with no user behind them plus one publisher per
