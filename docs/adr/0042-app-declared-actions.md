@@ -36,7 +36,9 @@ today, and a sub-resource keeps "remove one action" a single explicit request in
 
 **Granted through the same endpoint, on its object only.** `PUT /api/roles/{name}/permissions` accepts a declared
 action with the `objectName` that declares it. Without an object, or on an object that does not declare it, it is the
-same `400 Unknown action '…'` as any undeclared name; the action is judged before the object, as it always was. A
+same `400 Unknown action '…'` as any undeclared name; the action is judged before the object, as it always was. The
+message is unchanged; the violation's text now reads "must be one of READ, …, MANAGE_ORGANIZATION or an action the
+object declares". A
 declared action means nothing tenant-wide, because it is the object's verb.
 
 The database holds that rule, not only the service. `permissions` gains a stored generated column,
@@ -67,8 +69,13 @@ not one per object.
 
 - caja can drop `anulacion_recibo`, `reimpresion_recibo` and `reversion_cierre` as permission carriers and declare
   `ANULAR`, `REIMPRIMIR`, `REVERSAR` and `ANULAR_AJENO` on the objects they act on. The role-name check goes.
-- The REST change is additive: a new sub-resource, and new strings in lists that already held strings. A client that
-  only knew the four record actions ignores the rest.
+- The REST change is additive on the wire: a new sub-resource, and new strings in lists that already held strings. It
+  is **not** harmless to every client. wasichai-ui's roles page reads a role's permissions into a matrix typed by a
+  closed `Action` union and drops the rows it does not know; saving then sends the replace-all
+  `PUT /api/roles/{name}/permissions` without them, which deletes the role's declared-action grants. Until wasichai-ui
+  follows up (widen `Action` to `string`, keep and show declared rows, listing them per object from
+  `GET /api/metadata/objects/{object}/actions`), an administrator who saves a role there loses its declared grants.
+  A client that only reads `GET /api/auth/me/permissions` and looks for the four record actions is unaffected.
 - An app's own endpoints still call `requirePermission` themselves. The platform knows the verb exists and who holds
   it; what the verb does stays in the app, as every non-CRUD behaviour does.
 - `SchemaParityTest` lists the new table and the `permissions` changes as known deviations under this ADR. They add a

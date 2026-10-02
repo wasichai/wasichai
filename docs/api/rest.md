@@ -248,6 +248,10 @@ The same entry without `objectName`, or naming an object that does not declare t
 `CurrentUser.requirePermission(user, "ANULAR_AJENO", objectId)`; `ADMIN` holds every declared action. The caller sees
 the ones they hold in `GET /api/auth/me/permissions`. Removing the declaration removes its grants with it.
 
+The permissions `PUT` replaces the role's whole set, so a client must send the declared grants back with the rest. A
+client that drops actions it does not know deletes them on save; wasichai-ui's roles page does this today, until its
+`Action` type is widened and it keeps declared rows (ADR-042).
+
 ## Organizations
 
 ```http
