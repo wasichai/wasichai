@@ -6,16 +6,18 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 
 caja's rule 10 is that every data change carries an observation, and nothing is saved without one; the audit log had
 no place for it ([#19](https://github.com/wasichai/wasichai/issues/19)).
-[ADR-041](adr/0041-a-change-reason-on-record-writes.md) adds an optional `X-Change-Reason` header to every record write
-route (record `POST`/`PUT`/`DELETE`, link and unlink, workflow transitions) and an optional `reason` to
+[ADR-041](adr/0041-a-change-reason-on-record-writes.md) adds an optional `X-Change-Reason` header to every record
+write route (record `POST`/`PUT`/`DELETE`, link and unlink, workflow transitions) and an optional `reason` to
 `RecordService.create`/`update`/`delete`, `RelatedRecordService.link`/`unlink` and `WorkflowService.apply`, as
-overloads beside the old signatures. It is trimmed, blank counts as none, capped at 500 characters, taken as is or in
-the RFC 8187 `UTF-8''` form for text a header cannot carry, and stored on the write's audit row (both rows for a link);
-`GET /api/audit` and the record history return it as `reason`. An object flag `requiresReason` (create, `PUT` with
-left out = unchanged, every object response) refuses a write without a reason with `400` on `reason`, nothing stored;
-the check sits in `RecordWriteGuards`, so it holds on every path, the platform included, and `RecordWrite.reason`
-lets an app's guard judge the text. Automation writes carry `automation '<name>'`. `AuditService.record` gained a
-`reason` parameter (an override must add it). Migration `V6__change_reason` adds `audit_log.reason` and
+overloads beside the old signatures. It is trimmed, blank counts as none, capped at 500 characters, refused with
+control characters other than tab and line breaks, taken as is or in the RFC 8187 `UTF-8''` form (what non-ASCII text
+must use), and stored on the write's audit row (both rows for a link); `GET /api/audit` and the record history return
+it as `reason`. An object flag `requiresReason` (create, `PUT` with left out = unchanged, every object response)
+refuses a write without a reason with `400` on `reason`, nothing stored; the check sits in `RecordWriteGuards`, so it
+holds on every path, the platform included, and `RecordWrite.reason` lets an app's guard judge the text. Automation
+writes carry `automation '<name>'`. `AuditService.record` gained a `reason` parameter (an override must add it), and
+`RecordWrite` a trailing `reason` property: source-compatible, but a binary break of its constructor and `copy` for a
+compiled app or module (recompile). Migration `V6__change_reason` adds `audit_log.reason` and
 `custom_objects.requires_reason`, a schema- and wire-parity deviation (ADR-031 D25). `ChangeReasonTest`,
 `RecordWriteRulesTest`, `ChangeReasonApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest`
 pin it.

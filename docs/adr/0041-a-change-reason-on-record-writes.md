@@ -41,10 +41,13 @@ The methods without it keep their signatures and pass `null`, so callers and moc
 ### What a reason is
 
 Trimmed; blank is no reason; at most **500 characters** (code points), longer is a `400` on `reason`
-(`ChangeReason.MAX_LENGTH`). One observation, not a document. It is stored on the audit row of the write that carried
-it, in the new nullable `audit_log.reason`, and `GET /api/audit` and `GET …/records/{id}/history` return it as
-`reason` on every entry (`null` when none was given). It is shown to whoever may read the entry: it is free text about
-the change, not a field value, so field permissions do not filter it.
+(`ChangeReason.MAX_LENGTH`). Control characters are a `400` on `reason` too, except tab, `\n` and `\r`: PostgreSQL
+`text` cannot hold NUL, and `RecordService` writes the record before the audit row, so a NUL found there would leave a
+stored change with no audit; the rest have no business in an observation, while a line break does. One observation,
+not a document. It is stored on the audit row of the write that carried it, in the new nullable `audit_log.reason`,
+and `GET /api/audit` and `GET …/records/{id}/history` return it as `reason` on every entry (`null` when none was
+given). It is shown to whoever may read the entry: it is free text about the change, not a field value, so field
+permissions do not filter it.
 
 `RecordWrite` carries it too (`reason`), so a `RecordWriteGuard` can judge it (a minimum length, a vocabulary).
 `RecordChange` does not: no listener needs it yet, and the audit row is where history lives.

@@ -787,7 +787,7 @@ write with its own status, `400` or `409` as a rule.
 
 ```http
 PUT /api/objects/recibo/records/{id}
-X-Change-Reason: corrección del monto por error de digitación
+X-Change-Reason: UTF-8''correcci%C3%B3n%20del%20monto%20por%20error%20de%20digitaci%C3%B3n
 ```
 
 Every record write takes an optional `X-Change-Reason` header: `POST`, `PUT` and `DELETE` here, link and unlink
@@ -795,10 +795,14 @@ Every record write takes an optional `X-Change-Reason` header: `POST`, `PUT` and
 on that write's audit entry and comes back as `reason` from the audit API.
 
 - Trimmed; an empty or blank value is no reason. At most **500 characters**; longer is a `400` on `reason`.
-- A plain value is ISO-8859-1, as for any header, so `ñ` and accents travel as they are. For any other character send
-  the RFC 8187 form, `UTF-8''` followed by the percent-encoded UTF-8 text (in JavaScript:
-  `"UTF-8''" + encodeURIComponent(reason)`). A plain value is never percent-decoded. A malformed `UTF-8''` value is a
-  `400` on `reason`.
+- **Send anything beyond ASCII in the RFC 8187 form**: `UTF-8''` followed by the percent-encoded UTF-8 text (in
+  JavaScript: `"UTF-8''" + encodeURIComponent(reason)`), as in the example above. A plain value is read as
+  ISO-8859-1, as for any header: a browser sends `ñ` and accents that way, but a client that writes raw UTF-8 bytes
+  (curl, most HTTP libraries) gets mojibake stored (`correcciÃ³n`). A plain value is never percent-decoded, so
+  `10% de descuento` means what it says. A malformed `UTF-8''` value (anything but `%` and two hex digits, or bytes
+  that are not UTF-8) is a `400` on `reason`.
+- Control characters are a `400` on `reason`, except tab and line breaks (`%09`, `%0A`, `%0D`), which are text: an
+  observation may span lines. In-process the same rule applies to `RecordService`'s `reason`.
 - On a `requiresReason` object a write without a reason is refused before anything is stored:
 
 ```json
