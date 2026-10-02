@@ -96,6 +96,9 @@ as it is, like `appendOnly` and `apiOnly` (ADR-040). The UI reads it to ask for 
 - An app or module that writes through `RecordStore` itself passes its reason in `RecordWrite` when it calls
   `RecordWriteGuards.beforeWrite`, or a `requiresReason` object refuses it.
 - Automation audit rows now carry `automation '<name>'` in `reason`.
+- The platform can pass a reason too (`asPlatform { records.update(…, reason = "outbox: job 42") }`), so a platform
+  write's audit row can name the job behind it: part of what ADR-039 left open ("platform writes cannot be told
+  apart"), with no user still.
 - Two columns: `audit_log.reason` and `custom_objects.requires_reason` (migration `V6__change_reason`), a
   schema-parity deviation, and `requiresReason` on the object json and `reason` on the audit json, wire-parity ones:
   [ADR-031](0031-deliberate-deviations-from-sapgis.md) D25.
