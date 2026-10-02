@@ -50,22 +50,32 @@ class ObjectActionRepository(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas
 ) {
-    suspend fun findByObject(objectId: UUID): List<ObjectAction> =
+    // every statement carries the tenant, even when the object id already came from a tenant lookup
+    private val ownObject = "object_id IN (SELECT id FROM ${schemas.metadata}.custom_objects WHERE organization_id = :organizationId)"
+
+    suspend fun findByObject(
+        organizationId: UUID,
+        objectId: UUID
+    ): List<ObjectAction> =
         db
-            .sql("SELECT object_id, name, label FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId ORDER BY name")
-            .bind("objectId", objectId)
+            .sql(
+                "SELECT object_id, name, label FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId AND $ownObject ORDER BY name"
+            ).bind("objectId", objectId)
+            .bind("organizationId", organizationId)
             .map { row, _ -> ObjectAction(Rows.uuid(row, "object_id"), Rows.string(row, "name"), Rows.string(row, "label")) }
             .all()
             .asFlow()
             .toList()
 
     suspend fun exists(
+        organizationId: UUID,
         objectId: UUID,
         name: String
     ): Boolean =
         db
-            .sql("SELECT true FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId AND name = :name")
+            .sql("SELECT true FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId AND name = :name AND $ownObject")
             .bind("objectId", objectId)
+            .bind("organizationId", organizationId)
             .bind("name", name)
             .map { _, _ -> true }
             .one()
@@ -116,10 +126,20 @@ class ObjectActionRepository(
             .groupBy({ it.first }, { it.second })
     }
 
-    suspend fun insert(action: ObjectAction): ObjectAction {
+    // inserts nothing for an object of another tenant
+    suspend fun insert(
+        organizationId: UUID,
+        action: ObjectAction
+    ): ObjectAction {
         db
-            .sql("INSERT INTO ${schemas.metadata}.object_actions (object_id, name, label) VALUES (:objectId, :name, :label)")
-            .bind("objectId", action.objectId)
+            .sql(
+                """
+                INSERT INTO ${schemas.metadata}.object_actions (object_id, name, label)
+                SELECT id, :name, :label FROM ${schemas.metadata}.custom_objects
+                WHERE id = :objectId AND organization_id = :organizationId
+                """.trimIndent()
+            ).bind("objectId", action.objectId)
+            .bind("organizationId", organizationId)
             .bind("name", action.name)
             .bind("label", action.label)
             .fetch()
@@ -130,12 +150,14 @@ class ObjectActionRepository(
 
     // its grants go with it: the permissions foreign key cascades
     suspend fun delete(
+        organizationId: UUID,
         objectId: UUID,
         name: String
     ): Boolean =
         db
-            .sql("DELETE FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId AND name = :name")
+            .sql("DELETE FROM ${schemas.metadata}.object_actions WHERE object_id = :objectId AND name = :name AND $ownObject")
             .bind("objectId", objectId)
+            .bind("organizationId", organizationId)
             .bind("name", name)
             .fetch()
             .rowsUpdated()
@@ -153,7 +175,7 @@ class ObjectActionService(
         val user = currentUser.require()
         val obj = objectOrFail(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.READ, obj.id)
-        return actions.findByObject(obj.id)
+        return actions.findByObject(user.organizationId, obj.id)
     }
 
     @Transactional
@@ -164,10 +186,10 @@ class ObjectActionService(
         val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
         val obj = objectOrFail(user.organizationId, objectName)
         val name = requireValidName(request.name)
-        if (actions.exists(obj.id, name)) {
+        if (actions.exists(user.organizationId, obj.id, name)) {
             throw ConflictException("Action '$name' already exists on '${obj.name}'")
         }
-        return actions.insert(ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
+        return actions.insert(user.organizationId, ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
     }
 
     @Transactional
@@ -178,7 +200,7 @@ class ObjectActionService(
         val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
         val obj = objectOrFail(user.organizationId, objectName)
         val name = actionName.trim().uppercase()
-        if (!actions.delete(obj.id, name)) {
+        if (!actions.delete(user.organizationId, obj.id, name)) {
             throw NotFoundException("Action '$name' does not exist on '${obj.name}'")
         }
     }

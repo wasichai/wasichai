@@ -517,7 +517,7 @@ class AdminService(
             } catch (ignored: NotFoundException) {
                 return false
             }
-        return actions.exists(objectId, action)
+        return actions.exists(organizationId, objectId, action)
     }
 
     private suspend fun resolveRoles(
