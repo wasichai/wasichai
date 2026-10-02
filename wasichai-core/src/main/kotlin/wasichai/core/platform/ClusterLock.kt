@@ -30,17 +30,17 @@ class ClusterLock(
 
     /**
      * Session lock, without waiting. Null when another session holds [key]. Held on a connection of its
-     * own, outside the pool, until [Lease.release]: closing that connection is what frees it, so a lock
-     * can never go back to the pool still held. Use it as `tryLock("outbox")?.use { publish() }`.
+     * own, outside the pool, until [Lease.release] unlocks and closes it, so a lock can never go back to
+     * the pool still held. Use it as `tryLock("outbox")?.use { publish() }`.
      */
     suspend fun tryLock(key: String): Lease? {
         val id = lockId(key)
         val factory = unpooled(db.connectionFactory)
         val connection = Mono.from(factory.create()).awaitSingle()
+        val session = DatabaseClient.create(SingleConnectionFactory(connection, factory.metadata, true))
         val acquired =
             try {
-                DatabaseClient
-                    .create(SingleConnectionFactory(connection, factory.metadata, true))
+                session
                     .sql("SELECT pg_try_advisory_lock(:id) AS acquired")
                     .bind("id", id)
                     .map { row, _ -> row.get("acquired", java.lang.Boolean::class.java)?.booleanValue() == true }
@@ -54,7 +54,7 @@ class ClusterLock(
             close(connection)
             return null
         }
-        return Lease(key, connection)
+        return Lease(key, id, connection, session)
     }
 
     /**
@@ -80,12 +80,29 @@ class ClusterLock(
     /** A held session lock. Release it once; a second release does nothing. */
     class Lease internal constructor(
         val key: String,
-        private val connection: Connection
+        private val id: Long,
+        private val connection: Connection,
+        private val session: DatabaseClient
     ) {
         private val released = AtomicBoolean(false)
 
+        // unlock first: the driver closes without waiting for the backend to exit, so the lock could
+        // outlive close() for a moment. best effort: close frees it anyway when the unlock fails.
         suspend fun release() {
-            if (released.compareAndSet(false, true)) close(connection)
+            if (!released.compareAndSet(false, true)) return
+            try {
+                withContext(NonCancellable) {
+                    session
+                        .sql("SELECT pg_advisory_unlock(:id)")
+                        .bind("id", id)
+                        .then()
+                        .awaitFirstOrNull()
+                }
+            } catch (_: Exception) {
+                // the session is gone or broken: closing it is what is left
+            } finally {
+                close(connection)
+            }
         }
 
         // releases even when the block throws or is cancelled
