@@ -31,6 +31,11 @@ Moving to OIDC later replaces the decoder and the login endpoint; the permission
 by `organization_id`, and physical tables are per (organization, object). A token from one
 organization cannot name a table in another: object lookup is scoped before any SQL is built.
 
+Background code calls `RecordService.asPlatform(organizationId) { }`: one organization, no user, no permission check
+([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)). Nothing a request carries turns
+it on, and it refuses to run inside a request, authenticated or anonymous: it throws when Spring Security's context is
+present.
+
 ## Authorization
 
 Permissions are `(role, object, action)` with actions `READ`, `CREATE`, `UPDATE`, `DELETE` and
