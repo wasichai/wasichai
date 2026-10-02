@@ -272,6 +272,8 @@ Core is always installed.
   answer `400` without one (ADR-041).
 - D26: objects declare actions beyond CRUD, granted per role like any other, a new `object_actions` table and a
   `permissions` column (ADR-042).
+- D27: service accounts trade a client id and secret for a token at `POST /api/auth/token`, a new `service_accounts`
+  table, and `serviceAccount` on their audit entries and `GET /api/auth/me` (ADR-043).
 
 ## Known limitations
 
