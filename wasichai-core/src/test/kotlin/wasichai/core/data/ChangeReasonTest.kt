@@ -43,4 +43,29 @@ class ChangeReasonTest {
         assertThatThrownBy { ChangeReason.fromHeader("UTF-8''%FF") }
             .isInstanceOfSatisfying(ValidationException::class.java) { assertThat(it.violations.single().field).isEqualTo("reason") }
     }
+
+    @Test
+    fun `a control character is refused on reason, tab and line breaks are text`() {
+        listOf("a\u0000b", "a\u0007b", "a\u001Bb", "a\u007Fb", "a\u0085b").forEach { raw ->
+            assertThatThrownBy { ChangeReason.normalize(raw) }
+                .isInstanceOfSatisfying(ValidationException::class.java) { assertThat(it.violations.single().field).isEqualTo("reason") }
+        }
+        assertThat(ChangeReason.normalize("línea 1\r\nlínea 2\tfin")).isEqualTo("línea 1\r\nlínea 2\tfin")
+    }
+
+    @Test
+    fun `a percent-encoded control character is refused on reason`() {
+        assertThatThrownBy { ChangeReason.fromHeader("UTF-8''a%00b") }
+            .isInstanceOfSatisfying(ValidationException::class.java) { assertThat(it.violations.single().field).isEqualTo("reason") }
+        assertThat(ChangeReason.fromHeader("UTF-8''l%C3%ADnea%0Afin")).isEqualTo("línea\nfin")
+    }
+
+    @Test
+    fun `a percent escape is exactly two hex digits, no sign`() {
+        assertThat(ChangeReason.fromHeader("UTF-8''%4a%4A")).isEqualTo("JJ")
+        listOf("UTF-8''%+1", "UTF-8''%-1", "UTF-8'' %1g", "UTF-8''%4", "UTF-8''%\uFF14\uFF11").forEach { raw ->
+            assertThatThrownBy { ChangeReason.fromHeader(raw) }
+                .isInstanceOfSatisfying(ValidationException::class.java) { assertThat(it.violations.single().field).isEqualTo("reason") }
+        }
+    }
 }

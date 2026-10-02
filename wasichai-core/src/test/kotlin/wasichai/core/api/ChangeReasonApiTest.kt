@@ -136,6 +136,20 @@ class ChangeReasonApiTest : WasichaiIntegrationTest() {
     }
 
     @Test
+    fun `a reason carrying a NUL is refused on reason - nothing stored`() {
+        val name = uniqueName("plain")
+        createObject(name).expectStatus().isCreated
+
+        createRecord(name, "A", "UTF-8''a%00b").expectReasonRefused()
+        val refused =
+            runCatching { runBlocking { records.asPlatform(organizationId) { records.create(name, RecordRequest(mapOf("codigo" to "J")), "a\u0000b") } } }
+
+        assertThat(refused.exceptionOrNull()).hasMessageContaining("control character")
+        listRecords(name).jsonPath("$.totalElements").isEqualTo(0)
+        assertThat(auditOf(name)).isEmpty()
+    }
+
+    @Test
     fun `in-process the platform passes its reason, and is held to requires-reason`() {
         val name = uniqueName("reasoned")
         createObject(name, requiresReason = true).expectStatus().isCreated

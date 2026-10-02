@@ -24,8 +24,15 @@ object ChangeReason {
         if (reason.codePointCount(0, reason.length) > MAX_LENGTH) {
             throw ValidationException("Change reason is too long", "reason", "at most $MAX_LENGTH characters")
         }
+        // postgres text cannot hold NUL, and the audit row is written after the record: refuse here, before
+        // anything lands. tab and line breaks are text, a multi-line observation is fine.
+        if (reason.any { Character.isISOControl(it) && it !in TEXT_CONTROLS }) {
+            throw ValidationException("Change reason has a control character", "reason", "no control characters except tab and line breaks")
+        }
         return reason
     }
+
+    private val TEXT_CONTROLS = setOf('\t', '\n', '\r')
 
     /**
      * A header value: as is, or the RFC 8187 form `UTF-8''<percent-encoded>`. A header carries
@@ -46,9 +53,11 @@ object ChangeReason {
         while (i < encoded.length) {
             val c = encoded[i]
             if (c == '%') {
-                val hex = encoded.substring(i + 1, minOf(i + 3, encoded.length))
-                val byte = hex.takeIf { it.length == 2 }?.toIntOrNull(16) ?: throw malformed()
-                bytes.write(byte)
+                // exactly two ascii hex digits: toIntOrNull takes a sign ("%+1"), Character.digit any script's digits
+                val high = hexDigit(encoded.getOrNull(i + 1))
+                val low = hexDigit(encoded.getOrNull(i + 2))
+                if (high < 0 || low < 0) throw malformed()
+                bytes.write(high * 16 + low)
                 i += 3
             } else {
                 bytes.write(c.toString().toByteArray(StandardCharsets.UTF_8))
@@ -66,6 +75,15 @@ object ChangeReason {
             throw malformed()
         }
     }
+
+    private fun hexDigit(c: Char?): Int =
+        when {
+            c == null -> -1
+            c in '0'..'9' -> c - '0'
+            c in 'a'..'f' -> c - 'a' + 10
+            c in 'A'..'F' -> c - 'A' + 10
+            else -> -1
+        }
 
     private fun malformed() = ValidationException("Change reason is not valid UTF-8''", "reason", "percent-encode it as UTF-8 (RFC 8187)")
 }
