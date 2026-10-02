@@ -28,7 +28,9 @@ data class AuditEntry(
     val changes: List<FieldChange>,
     val documentId: String?,
     // why, as the writer said it (ADR-041). null when none was given.
-    val reason: String? = null
+    val reason: String? = null,
+    // the service account that made the change (ADR-043), null when a person did
+    val serviceAccount: String? = null
 )
 
 // raw row. states stay as maps until we know what the caller may read.
@@ -42,7 +44,8 @@ private data class AuditRow(
     val before: Map<String, Any?>?,
     val after: Map<String, Any?>?,
     val documentId: UUID?,
-    val reason: String?
+    val reason: String?,
+    val serviceAccount: String?
 )
 
 @Service
@@ -93,9 +96,11 @@ class AuditQueryService(
                 .sql(
                     """
                     SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id, a.reason,
-                           a.before_state::text AS before_state, a.after_state::text AS after_state
+                           a.before_state::text AS before_state, a.after_state::text AS after_state,
+                           sa.name AS service_account
                     FROM ${schemas.metadata}.audit_log a
                     LEFT JOIN ${schemas.metadata}.users u ON u.id = a.user_id
+                    LEFT JOIN ${schemas.metadata}.service_accounts sa ON sa.id = a.user_id
                     WHERE a.organization_id = :organizationId
                       AND (:objectName = '' OR a.object_name = :objectName)
                       AND (:operation = '' OR a.operation = :operation)$filters
@@ -119,7 +124,8 @@ class AuditQueryService(
                     before = parse(Rows.stringOrNull(row, "before_state")),
                     after = parse(Rows.stringOrNull(row, "after_state")),
                     documentId = Rows.uuidOrNull(row, "document_id"),
-                    reason = Rows.stringOrNull(row, "reason")
+                    reason = Rows.stringOrNull(row, "reason"),
+                    serviceAccount = Rows.stringOrNull(row, "service_account")
                 )
             }.all()
             .asFlow()
@@ -143,7 +149,8 @@ class AuditQueryService(
                 occurredAt = row.occurredAt,
                 changes = AuditDiff.changes(filter(row.before, allowed), filter(row.after, allowed)),
                 documentId = row.documentId?.toString(),
-                reason = row.reason
+                reason = row.reason,
+                serviceAccount = row.serviceAccount
             )
         }
     }

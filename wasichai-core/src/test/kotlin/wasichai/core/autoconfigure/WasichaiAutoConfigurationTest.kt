@@ -18,10 +18,12 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.web.server.SecurityWebFilterChain
 import tools.jackson.databind.json.JsonMapper
+import wasichai.core.admin.ServiceAccountService
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectWorkflowState
 import wasichai.core.data.RecordService
 import wasichai.core.data.WorkflowStates
+import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldType
@@ -84,6 +86,8 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasSingleBean(RecordService::class.java)
             assertThat(context).hasSingleBean(ClusterLock::class.java)
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
+            assertThat(context).hasSingleBean(ServiceAccountService::class.java)
+            assertThat(context).hasSingleBean(ServiceAccountTokenService::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)
             // order, not just size: core's twelve types, in ScalarFieldTypes.ALL's declared order
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).containsExactly(
