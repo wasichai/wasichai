@@ -227,6 +227,55 @@ class WriteRulesApiTest : WasichaiIntegrationTest() {
     }
 
     @Test
+    fun `append-only keeps its links when the other end, or the relationship, is deleted`() {
+        val receipt = uniqueName("receipt")
+        val tag = uniqueName("tag")
+        createObject(receipt).expectStatus().isCreated
+        createObject(tag).expectStatus().isCreated
+        val relationship = uniqueName("rel").take(30)
+        client
+            .post()
+            .uri("/api/relationships")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("name" to relationship, "label" to "Tags", "type" to "MANY_TO_MANY", "source" to tag, "target" to receipt))
+            .exchange()
+            .expectStatus()
+            .isCreated
+        val r = createRecord(receipt, "R-1").expectStatus().isCreated.idOf()
+        val t = createRecord(tag, "T-1").expectStatus().isCreated.idOf()
+        client
+            .post()
+            .uri("/api/objects/$tag/records/$t/related/$relationship")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("otherId" to r))
+            .exchange()
+            .expectStatus()
+            .isNoContent
+        // linked first, then the receipt becomes append-only: its links are its values now
+        putObject(receipt, mapOf("label" to receipt, "appendOnly" to true)).expectStatus().isOk
+
+        deleteObject(tag).expectStatus().isEqualTo(HttpStatus.CONFLICT)
+        client
+            .delete()
+            .uri("/api/relationships/$relationship")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isEqualTo(HttpStatus.CONFLICT)
+
+        client
+            .get()
+            .uri("/api/objects/$receipt/records/$r/related/$relationship")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.totalElements")
+            .isEqualTo(1)
+    }
+
+    @Test
     fun `a guard veto aborts the write - nothing stored, nothing audited`() {
         val name = uniqueName("guarded")
         createObject(name).expectStatus().isCreated

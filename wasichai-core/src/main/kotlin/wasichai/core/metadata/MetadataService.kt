@@ -322,8 +322,16 @@ class MetadataService(
             throw ConflictException("Object '$name' is referenced by ${owners.joinToString(", ")}. Remove those fields first.")
         }
 
+        // a join table holds links of both ends: an appendOnly other end keeps them (ADR-040)
+        val owned = relationships.findForObject(user.organizationId, obj.id)
+        owned
+            .filter { it.joinTable != null }
+            .map { if (it.sourceObjectId == obj.id) it.targetObjectId else it.sourceObjectId }
+            .mapNotNull { objects.findById(user.organizationId, it) }
+            .forEach { rejectAppendOnly(it, "the links '$name' shares with it") }
+
         // metadata rows cascade, join tables do not: drop them here or they outlive the object
-        relationships.findForObject(user.organizationId, obj.id).forEach { relationship ->
+        owned.forEach { relationship ->
             relationship.joinTable?.let { schema.dropJoinTable(it) }
         }
         removals.forEach { it.objectRemoved(obj) }
