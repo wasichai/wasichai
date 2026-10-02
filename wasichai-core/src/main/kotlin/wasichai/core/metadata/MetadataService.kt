@@ -110,7 +110,7 @@ class MetadataService(
             }
         // the sets name fields, so they are checked once the fields exist (a relation may point at this object)
         val indexes = FieldSets.normalize(INDEXES, request.indexes, storedFields, types)
-        val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types)
+        val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types, minFields = 2)
         if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
         return ObjectDefinition(stored, storedFields)
@@ -271,7 +271,7 @@ class MetadataService(
         val objectFields = fields.findByObject(obj.id)
         val indexes = request.indexes?.let { FieldSets.normalize(INDEXES, it, objectFields, types) } ?: obj.indexes
         val uniques =
-            request.uniqueConstraints?.let { FieldSets.normalize(UNIQUE_CONSTRAINTS, it, objectFields, types) }
+            request.uniqueConstraints?.let { FieldSets.normalize(UNIQUE_CONSTRAINTS, it, objectFields, types, minFields = 2) }
                 ?: obj.uniqueConstraints
         val updated =
             objects.update(

@@ -129,10 +129,10 @@ composite index names is a `409`, and so is deleting the relationship that owns 
 }
 ```
 
-`uniqueConstraints` lists uniqueness over a set of fields, in the same shape as `indexes` and checked the same way:
-one to 32 fields per entry. Each entry is a real `UNIQUE (a, b, …)` on the organization's own table, so two records
+`uniqueConstraints` lists uniqueness over two or more fields, in the same shape as `indexes` and checked the same way:
+two to 32 fields per entry. Each entry is a real `UNIQUE (a, b, …)` on the organization's own table, so two records
 of one organization cannot share the combination and another organization's records never count. A one-field entry
-is accepted, but `unique: true` on the field is the way to make one field unique. As with `unique`, `NULL`s are
+is a `400` naming `uniqueConstraints`: a single field takes `unique: true`. As with `unique`, `NULL`s are
 distinct: a record with an empty field in a set never collides, so `["caja", "cajero", "fecha"]` only stops repeats
 among records that fill all three. Make the fields `required` when that matters.
 `uniqueConstraints` comes back on an object or a definition only when there are some

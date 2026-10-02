@@ -326,7 +326,9 @@ class ObjectSchemaManager(
         type: String
     ) {
         val table = schemas.dataTable(obj.physicalTable)
-        constraintNames(obj.physicalTable, field.columnName, type).forEach { name ->
+        // a declared set is never the field's own, whatever its size
+        val declared = SqlIdentifier.fieldSetName(obj.physicalTable, listOf(field.columnName), DECLARED_UNIQUE)
+        constraintNames(obj.physicalTable, field.columnName, type).filter { it != declared }.forEach { name ->
             execute("ALTER TABLE $table DROP CONSTRAINT ${SqlIdentifier.quote(name)}")
         }
     }

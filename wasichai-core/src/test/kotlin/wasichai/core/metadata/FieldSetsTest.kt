@@ -86,6 +86,19 @@ class FieldSetsTest {
             .isInstanceOf(ValidationException::class.java)
     }
 
+    // issue 14: a unique set is two or more fields; one field is `unique: true`
+    @Test
+    fun `a caller can ask for at least two fields per entry`() {
+        assertThat(FieldSets.normalize("indexes", listOf(listOf("anio")), fields, types)).containsExactly(listOf("anio"))
+        assertThatThrownBy { FieldSets.normalize("uniqueConstraints", listOf(listOf("anio")), fields, types, minFields = 2) }
+            .isInstanceOf(ValidationException::class.java)
+            .extracting { (it as ValidationException).violations.single() }
+            .satisfies({ violation ->
+                assertThat(violation.field).isEqualTo("uniqueConstraints")
+                assertThat(violation.message).contains("unique: true")
+            })
+    }
+
     // a field cannot be dropped from under either list, and the refusal names which list holds it
     @Test
     fun `the set that blocks a delete names its kind and its list`() {

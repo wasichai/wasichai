@@ -14,12 +14,21 @@ object FieldSets {
         property: String,
         sets: List<List<String>>,
         fields: List<CustomField>,
-        types: FieldTypeRegistry
+        types: FieldTypeRegistry,
+        // 2 for uniqueConstraints: one field is `unique: true`, and its constraint is the field's own (ADR-037)
+        minFields: Int = 1
     ): List<List<String>> =
         sets
             .map { raw ->
                 val set = raw.map { it.trim().lowercase() }
                 if (set.isEmpty()) throw ValidationException("An entry of $property is empty", property, "every entry names at least one field")
+                if (set.size < minFields) {
+                    throw ValidationException(
+                        "An entry of $property has ${set.size} field",
+                        property,
+                        "names at least $minFields fields; make a single field unique with unique: true"
+                    )
+                }
                 if (set.size > MAX_FIELDS) {
                     throw ValidationException("An entry of $property has ${set.size} fields", property, "at most $MAX_FIELDS fields per entry")
                 }

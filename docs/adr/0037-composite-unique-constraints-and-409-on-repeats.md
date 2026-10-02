@@ -23,9 +23,10 @@ built for `indexes` rather than a second shape:
 - **Validation is `FieldSets.normalize`**, with the property name `uniqueConstraints`: names trimmed and lower-cased,
   order kept, a repeated set counted once, and a `400` naming the property for an empty entry, an unknown field, a
   field named twice, or a field that cannot be indexed (`LONG_TEXT`, or a type its handler keeps out of filters, such
-  as a geometry). A unique constraint is a btree index, so what cannot be indexed cannot be unique. An entry takes one
-  to 32 fields, like an index. A one-field entry is accepted, as `indexes` accepts one: it adds a constraint of its
-  own beside the field's `unique` flag, which stays the way to make one field unique.
+  as a geometry). A unique constraint is a btree index, so what cannot be indexed cannot be unique. An entry takes two
+  to 32 fields. A one-field entry is a `400` pointing to `unique: true`, unlike `indexes`, which accepts one: two
+  ways to make one field unique would leave two constraints on one column, and toggling the field's `unique` must
+  find only its own (see below).
 - **Storage is a jsonb list on `custom_objects`**: core migration `V4__unique_constraints.sql` adds
   `custom_objects.unique_constraints jsonb NOT NULL DEFAULT '[]'`, next to V3's `indexes`.
 - **The DDL goes through `ObjectSchemaManager` alone.** Each entry is `ALTER TABLE … ADD CONSTRAINT
@@ -52,7 +53,8 @@ built for `indexes` rather than a second shape:
 - A caller who cannot read one of the fields of a set does not see that set in the definition, as with `indexes`.
 - **Toggling a field's `unique` touches only its own constraint.** `setUnique` finds the field's constraint in the
   catalog (PostgreSQL names it) and drops it. It looks only at one-column constraints, so a declared set naming the
-  field is never caught with it. The enum `CHECK` replacement goes through the same lookup.
+  field is never caught with it, and it skips the name a declared set over that one column would have. The enum
+  `CHECK` replacement goes through the same lookup.
 
 **A unique violation on a write is a `409` naming the constraint's fields.** `GlobalExceptionHandler` maps Spring's
 `DuplicateKeyException` (SQLSTATE `23505`) to a `409` problem+json in the shape of every other error, with one

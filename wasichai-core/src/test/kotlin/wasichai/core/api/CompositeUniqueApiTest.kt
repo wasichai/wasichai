@@ -155,7 +155,22 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
             .jsonPath("$.errors[0].field")
             .isEqualTo("uniqueConstraints")
 
-        // two records share a caja: a unique (caja) cannot be added, and nothing moves
+        // one field is `unique: true`, not a set
+        client
+            .put()
+            .uri("/api/objects/$name")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("label" to "Orden", "uniqueConstraints" to listOf(listOf("codigo"))))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("uniqueConstraints")
+            .jsonPath("$.errors[0].message")
+            .value<String> { assertThat(it).contains("unique: true") }
+
+        // two records share sistema_origen and caja: a unique over both cannot be added, and nothing moves
         val caja = createRecord(token, target, mapOf("nombre" to "Caja 1")).expectBody(Map::class.java).returnResult().responseBody!!["id"]
         createRecord(token, name, mapOf("sistema_origen" to "A", "referencia_externa" to "1", "caja" to caja)).expectStatus().isCreated
         createRecord(token, name, mapOf("sistema_origen" to "A", "referencia_externa" to "2", "caja" to caja)).expectStatus().isCreated
@@ -163,7 +178,7 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
             .put()
             .uri("/api/objects/$name")
             .header(HttpHeaders.AUTHORIZATION, token)
-            .bodyValue(mapOf("label" to "Otra", "uniqueConstraints" to listOf(listOf("caja"))))
+            .bodyValue(mapOf("label" to "Otra", "uniqueConstraints" to listOf(listOf("sistema_origen", "caja"))))
             .exchange()
             .expectStatus()
             .isEqualTo(409)
