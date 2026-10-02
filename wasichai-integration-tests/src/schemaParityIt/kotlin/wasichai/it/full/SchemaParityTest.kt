@@ -14,7 +14,7 @@ class SchemaParityTest : FullAppIntegrationTest() {
     private lateinit var environment: Environment
 
     // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>", one entry per catalog line.
-    // the user_preferences table (ADR-031 D18) changes behaviour; app-declared actions (ADR-031 D26) only add a feature.
+    // each entry cites its ADR-031 D-entry.
     private val knownDeviations: Map<String, String> =
         mapOf(
             "column audit_log.reason #11 text" to "ADR-031 D25: change reason on record writes",
