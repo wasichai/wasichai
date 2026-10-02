@@ -2,6 +2,19 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — An object declares its own actions
+
+Permissions were a closed set of six actions, so an app with privileges that are not CRUD either split each one into an
+object of its own, to grant it as a `CREATE` there, or checked it by role name in its own code, where
+`GET /api/auth/me/permissions` could not report it (issue #16). Now an object declares actions as metadata, through
+`GET/POST /api/metadata/objects/{object}/actions` and `DELETE …/actions/{action}`: an upper-snake name that cannot be a
+built-in action, and a label. `PUT /api/roles/{name}/permissions` grants one on the object that declares it; anywhere
+else it is still `400 Unknown action`. `CurrentUser.requirePermission(user, "ANULAR_AJENO", objectId)` checks it with
+no change, `ADMIN` holds them all, and `GET /api/auth/me/permissions` lists the ones the caller holds after the record
+actions. Core migration `V7__object_actions` adds the `object_actions` table and lets `permissions` point at it through
+a generated column and a cascading foreign key, so a grant of an undeclared action cannot be stored and removing a
+declaration removes its grants. Decision: [ADR-042](adr/0042-app-declared-actions.md).
+
 ## 2026-10-02 — A change reason on record writes, required per object
 
 caja's rule 10 is that every data change carries an observation, and nothing is saved without one; the audit log had
