@@ -1,5 +1,6 @@
 package wasichai.core.audit
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import org.springframework.r2dbc.core.DatabaseClient
@@ -29,8 +30,8 @@ data class AuditEntry(
     val documentId: String?,
     // why, as the writer said it (ADR-041). null when none was given.
     val reason: String? = null,
-    // the service account that made the change (ADR-043), null when a person did
-    val serviceAccount: String? = null
+    // the service account that made the change (ADR-043). left out when a person did: their entries stay as they were
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null
 )
 
 // raw row. states stay as maps until we know what the caller may read.

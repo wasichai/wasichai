@@ -1,5 +1,6 @@
 package wasichai.core.identity
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import org.springframework.security.core.context.ReactiveSecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
@@ -16,7 +17,8 @@ data class AuthenticatedUser(
     val organizationId: UUID,
     val email: String,
     val roles: List<String>,
-    val serviceAccount: String? = null
+    // left out for a person, so a person's /api/auth/me is the answer it always was
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null
 ) {
     // a service account is never the administrator, whatever its token says
     val isAdmin: Boolean get() = serviceAccount == null && ADMIN_ROLE in roles

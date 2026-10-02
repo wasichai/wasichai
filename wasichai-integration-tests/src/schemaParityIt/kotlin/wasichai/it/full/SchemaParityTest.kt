@@ -102,12 +102,14 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "constraint service_accounts.service_accounts_name_not_null NOT NULL name",
                 "constraint service_accounts.service_accounts_name_unique_per_org UNIQUE (organization_id, name)",
                 "constraint service_accounts.service_accounts_name_valid CHECK ((name ~ '^[a-z][a-z0-9_-]{1,48}\$'::text))",
-                "constraint service_accounts.service_accounts_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint service_accounts.service_accounts_organization_id_fkey FOREIGN KEY (organization_id) " +
+                    "REFERENCES META.organizations(id) ON DELETE CASCADE",
                 "constraint service_accounts.service_accounts_organization_id_not_null NOT NULL organization_id",
                 "constraint service_accounts.service_accounts_pkey PRIMARY KEY (id)",
                 "constraint service_accounts.service_accounts_secret_hash_not_null NOT NULL secret_hash",
                 "constraint service_accounts.service_accounts_secret_rotated_at_not_null NOT NULL secret_rotated_at",
-                "index service_accounts.service_accounts_name_unique_per_org CREATE UNIQUE INDEX service_accounts_name_unique_per_org ON META.service_accounts USING btree (organization_id, name)",
+                "index service_accounts.service_accounts_name_unique_per_org " +
+                    "CREATE UNIQUE INDEX service_accounts_name_unique_per_org ON META.service_accounts USING btree (organization_id, name)",
                 "index service_accounts.service_accounts_pkey CREATE UNIQUE INDEX service_accounts_pkey ON META.service_accounts USING btree (id)",
                 "table service_accounts"
             ).associateWith { "ADR-031 D27: service accounts" }

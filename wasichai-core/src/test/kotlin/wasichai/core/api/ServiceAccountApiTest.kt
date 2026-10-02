@@ -60,7 +60,7 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .isEqualTo(created.id)
             .jsonPath("$.roles[0]")
             .isEqualTo(role)
-        // a person has none
+        // a person's answer has no such key at all, not even a null: it is the answer it always was
         client
             .get()
             .uri("/api/auth/me")
@@ -70,7 +70,7 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .isOk
             .expectBody()
             .jsonPath("$.serviceAccount")
-            .doesNotExist()
+            .doesNotHaveJsonPath()
 
         val recordId =
             client
@@ -107,6 +107,28 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .isEqualTo("CREATE")
             .jsonPath("$[0].serviceAccount")
             .isEqualTo(name)
+
+        // a person's entry carries no serviceAccount key
+        client
+            .put()
+            .uri("/api/objects/$objectName/records/$recordId")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("numero" to "OC-2")))
+            .exchange()
+            .expectStatus()
+            .isOk
+        client
+            .get()
+            .uri("/api/objects/$objectName/records/$recordId/history")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[0].operation")
+            .isEqualTo("UPDATE")
+            .jsonPath("$[0].serviceAccount")
+            .doesNotHaveJsonPath()
     }
 
     @Test
@@ -139,6 +161,23 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .exchange()
             .expectStatus()
             .isNotFound
+        client
+            .put()
+            .uri("/api/users/${created.id}/roles")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("roles" to listOf("ADMIN")))
+            .exchange()
+            .expectStatus()
+            .isNotFound
+        client
+            .delete()
+            .uri("/api/users/${created.id}")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isNotFound
+        // still there, untouched
+        assertThat(get("/api/service-accounts/${created.id}")).contains("\"enabled\":true")
     }
 
     @Test
@@ -294,6 +333,15 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .uri("/api/service-accounts")
             .header(HttpHeaders.AUTHORIZATION, sa)
             .bodyValue(mapOf("name" to uniqueName("child")))
+            .exchange()
+            .expectStatus()
+            .isForbidden
+        val slug = "sa-" + uniqueName("").take(8)
+        client
+            .post()
+            .uri("/api/organizations")
+            .header(HttpHeaders.AUTHORIZATION, sa)
+            .bodyValue(mapOf("name" to "Rogue", "slug" to slug, "adminEmail" to "$slug@wasichai.local", "adminPassword" to "supersecret"))
             .exchange()
             .expectStatus()
             .isForbidden

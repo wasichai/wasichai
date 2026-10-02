@@ -2,7 +2,9 @@ package wasichai.core.identity
 
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactive.awaitFirstOrNull
+import kotlinx.coroutines.withContext
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -68,8 +70,8 @@ class ServiceAccountTokenService(
         val enabled: Boolean
     )
 
-    // hashed once with the same encoder, so an unknown id pays the same cost as a wrong secret
-    private val decoyHash: String by lazy { passwordEncoder.encode(ServiceAccountSecrets.generate()) as String }
+    // hashed once, at startup, with the same encoder: an unknown id pays what a wrong secret pays, the first one too
+    private val decoyHash: String = passwordEncoder.encode(ServiceAccountSecrets.generate()) as String
 
     suspend fun token(
         clientId: String,
@@ -88,11 +90,12 @@ class ServiceAccountTokenService(
         )
     }
 
-    // an encoder may throw on input it cannot hash (bcrypt past 72 bytes): that is a wrong secret, not a 500
-    private fun secretMatches(
+    // an encoder may throw on input it cannot hash (bcrypt past 72 bytes): that is a wrong secret, not a 500.
+    // off the event loop: a public endpoint that hashes on netty's threads is a cheap way to stall the server.
+    private suspend fun secretMatches(
         secret: String,
         hash: String
-    ): Boolean = runCatching { passwordEncoder.matches(secret, hash) }.getOrDefault(false)
+    ): Boolean = withContext(Dispatchers.Default) { runCatching { passwordEncoder.matches(secret, hash) }.getOrDefault(false) }
 
     // no tenant to filter by yet: the client id is the account's own id, unique across tenants
     private suspend fun find(id: UUID): Credentials? =

@@ -1,5 +1,7 @@
 package wasichai.core.identity
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import wasichai.core.common.UnauthorizedException
@@ -31,7 +33,8 @@ class AuthService(
         password: String
     ): LoginResponse {
         val user = users.findByEmail(email.trim().lowercase()) ?: throw invalidCredentials()
-        if (!user.enabled || !passwordEncoder.matches(password, user.passwordHash)) {
+        // bcrypt is slow on purpose: off the event loop, or a burst of logins stalls every request
+        if (!user.enabled || !withContext(Dispatchers.Default) { passwordEncoder.matches(password, user.passwordHash) }) {
             throw invalidCredentials()
         }
         val roles = roleQueries.roleNamesOf(user.id)
