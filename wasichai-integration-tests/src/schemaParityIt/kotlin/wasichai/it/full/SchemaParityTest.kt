@@ -15,8 +15,6 @@ class SchemaParityTest : FullAppIntegrationTest() {
 
     // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". the
     // user_preferences table (ADR-031 D18), one entry per catalog line. a new one needs an ADR-031 entry.
-    // the declared-index columns are an addition the original has no counterpart for, recorded in
-    // ADR-036 instead.
     private val knownDeviations: Map<String, String> =
         mapOf(
             "column user_preferences.locale #3 text" to "ADR-031 D18: per-user theme and locale",
@@ -40,16 +38,16 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "table user_preferences" to "ADR-031 D18: per-user theme and locale",
             // core's V3 adds a column to custom_fields before gis adds its own, so on a fresh database
             // the three gis columns sit one place later than in the original
-            "column custom_fields.indexed #19 boolean NOT NULL DEFAULT false" to "ADR-036: declared indexes",
-            "constraint custom_fields.custom_fields_indexed_not_null NOT NULL indexed" to "ADR-036: declared indexes",
-            "column custom_objects.indexes #11 jsonb NOT NULL DEFAULT '[]'::jsonb" to "ADR-036: declared indexes",
-            "constraint custom_objects.custom_objects_indexes_not_null NOT NULL indexes" to "ADR-036: declared indexes",
-            "column custom_fields.geometry_type #19 text" to "ADR-036: shifted by custom_fields.indexed",
-            "column custom_fields.srid #20 integer" to "ADR-036: shifted by custom_fields.indexed",
-            "column custom_fields.dimension #21 integer" to "ADR-036: shifted by custom_fields.indexed",
-            "column custom_fields.geometry_type #20 text" to "ADR-036: shifted by custom_fields.indexed",
-            "column custom_fields.srid #21 integer" to "ADR-036: shifted by custom_fields.indexed",
-            "column custom_fields.dimension #22 integer" to "ADR-036: shifted by custom_fields.indexed"
+            "column custom_fields.indexed #19 boolean NOT NULL DEFAULT false" to "ADR-031 D22: declared indexes",
+            "constraint custom_fields.custom_fields_indexed_not_null NOT NULL indexed" to "ADR-031 D22: declared indexes",
+            "column custom_objects.indexes #11 jsonb NOT NULL DEFAULT '[]'::jsonb" to "ADR-031 D22: declared indexes",
+            "constraint custom_objects.custom_objects_indexes_not_null NOT NULL indexes" to "ADR-031 D22: declared indexes",
+            "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.geometry_type #20 text" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.srid #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.dimension #22 integer" to "ADR-031 D22: shifted by custom_fields.indexed"
         )
 
     @Test

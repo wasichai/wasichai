@@ -105,14 +105,15 @@ Create request:
 order. Both are built on the organization's table along with the object, and every `RELATION` column gets an index
 without being asked, because PostgreSQL does not index a foreign key. `indexed` comes back on a field only when it is
 `true`, and `indexes` on an object or a definition only when there are some, so a model that declares none reads
-exactly as before ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)).
+as before ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)).
 
 `PUT /api/objects/{object}` with `indexes` replaces the list: an index no longer listed is dropped and a new one is
 built. Without `indexes`, the list is left as it is, and `[]` drops every composite index. `PUT …/fields/{field}`
 with `indexed` adds or drops the field's own index. Sending what is already declared changes nothing. A `400` names
 `indexes` (or `indexed`) for an empty entry, more than 32 fields, an unknown field, a field named twice, or a field
 that cannot be indexed: `LONG_TEXT`, or a type that cannot be filtered on, such as a geometry. Deleting a field that a
-composite index names is a `409`, so remove it from `indexes` first.
+composite index names is a `409`, and so is deleting the relationship that owns such a field: remove it from
+`indexes` first.
 
 A geometry is a field like any other (ADR-019), so an object has as many as it needs and gains one
 after the fact through `POST …/fields`. `geometryType` is required on one, `srid` defaults to 4326
@@ -195,7 +196,7 @@ letting the administrator find out through a `400`. Each entry is `{ name, type,
 |---|---|---|
 | `ALWAYS` | on every record table | `id`, `organization_id`, `created_at`, `updated_at`, `created_by`, `updated_by` |
 | `WORKFLOW` | only once a workflow is attached (ADR-013) | `workflow_state` |
-| `RESERVED` | refused, but no column exists — `type` is `null` | `version` |
+| `RESERVED` | refused, but no column exists — `type` is `null` | `version`, `count`, `after` |
 
 Every published name is refused as a field name with `400 … is reserved by the platform`, whatever
 the case it is sent in. SQL keywords are refused too but are not published: they are not names anyone
@@ -692,8 +693,9 @@ GET /api/objects/cuota/records?anio=2026&size=200&count=false&after=MQpjcmVhdGVk
 ```
 
 The cursor is opaque. `after` together with a `page` above 0, a cursor issued for another `sort` or `dir`, or a value
-that is not a cursor is a `400` naming `after`. `totalElements`, when counted, is the whole match, not what is left
-after the cursor. Related-record lists take `count` and `after` the same way.
+that is not a cursor, or whose value does not fit the sort key's type, is a `400` naming `after`. `totalElements`,
+when counted, is the whole match, not what is left after the cursor. Related-record lists take `count` and `after` the
+same way.
 
 `geometry` names the geometry field a `bbox` applies to; without it, the object's first. A `bbox` on
 an object with no geometry, or naming one it does not have, is a `400`.

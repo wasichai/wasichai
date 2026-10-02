@@ -145,6 +145,28 @@ class RecordKeysetApiTest : WasichaiIntegrationTest() {
                 .jsonPath("$.errors[0].field")
                 .isEqualTo("after")
         }
+        // decodes fine, but its value is no bigint / no timestamp: still the caller's cursor, still a 400
+        listOf(
+            "sort=monto&after=" +
+                wasichai.core.data
+                    .RecordCursor("monto", false, "abc", UUID.randomUUID())
+                    .encode(),
+            "after=" +
+                wasichai.core.data
+                    .RecordCursor("created_at", false, "not a date", UUID.randomUUID())
+                    .encode()
+        ).forEach { query ->
+            client
+                .get()
+                .uri("/api/objects/$name/records?size=5&$query")
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .exchange()
+                .expectStatus()
+                .isBadRequest
+                .expectBody()
+                .jsonPath("$.errors[0].field")
+                .isEqualTo("after")
+        }
         client
             .get()
             .uri("/api/objects/$name/records?count=maybe")

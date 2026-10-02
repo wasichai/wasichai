@@ -16,10 +16,15 @@ A record list takes `?count=false` (`RecordQuery.count`) to skip the `COUNT(*)`,
 `totalPages` are then `null`. Every page now carries `nextCursor` when another row follows, and `?after=<cursor>`
 (`RecordQuery.after`) resumes strictly after that row's `(sort value, id)`, the pair #20 made unique. Reading a large
 set therefore costs one pass, and every row comes back once, tied ones included. `after` with `page > 0`, or a cursor
-from another sort, is a `400`. With none of this, an object, a field and a page read exactly as before. ADR-036
-records the decisions. Tested by `FieldSetsTest`, `ObjectSchemaManagerTest`, `PhysicalTableRecordStoreTest`,
-`RecordQueryParserTest`, `PageResponseTest`, `RecordServiceTest`, `DeclaredIndexApiTest` (second organization,
-`EXPLAIN`, reconciliation) and `RecordKeysetApiTest`. Closes #21.
+from another sort, or a cursor whose value does not cast back to the key's type, is a `400`. An object or a field that
+declares no index reads as before, but a default page now carries `nextCursor` whenever another row follows. `count`
+and `after` are reserved: they no longer filter a field of that name, and are refused as new field names. A
+relationship whose column a composite index names cannot be deleted (`409`). ADR-036 records the decisions and ADR-031
+D22 the differences from the original. For Kotlin callers, `CustomObjectRepository` takes a `JsonMapper` as a third
+constructor parameter, and `PageResponse.totalElements` and `totalPages` are now nullable (`Long?`, `Int?`). Tested by
+`FieldSetsTest`, `ObjectSchemaManagerTest`, `PhysicalTableRecordStoreTest`, `RecordQueryParserTest`,
+`PageResponseTest`, `RecordServiceTest`, `DeclaredIndexApiTest` (second organization, `EXPLAIN`, reconciliation) and
+`RecordKeysetApiTest`. Closes #21.
 
 ## 2026-10-02 — Record lists page in a stable order
 

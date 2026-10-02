@@ -152,7 +152,7 @@ class FieldApiTest : WasichaiIntegrationTest() {
         // core alone: the six columns every record table has, then the reserved version.
         // a module adds its own (workflow_state) in P2; this app has none.
         assertThat(published.map { it.name })
-            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "version")
+            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "version", "count", "after")
         assertThat(published.first { it.name == "created_at" }).isEqualTo(SystemFieldResponse("created_at", "DATETIME", "ALWAYS"))
         // reserved but never created: no type, because there is no column
         assertThat(published.first { it.name == "version" }).isEqualTo(SystemFieldResponse("version", null, "RESERVED"))

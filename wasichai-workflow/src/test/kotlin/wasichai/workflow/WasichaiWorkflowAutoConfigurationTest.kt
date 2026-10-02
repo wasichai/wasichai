@@ -25,7 +25,7 @@ class WasichaiWorkflowAutoConfigurationTest {
             assertThat(context).hasSingleBean(WorkflowController::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(WorkflowStatesAdapter::class.java)
             assertThat(context.getBean(SystemColumns::class.java).all.map { it.name })
-                .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "workflow_state", "version")
+                .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "workflow_state", "version", "count", "after")
             assertThat(
                 context
                     .getBean(SystemColumns::class.java)

@@ -66,6 +66,11 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.database.data-schema` | `app_data` | schema holding one physical table per custom object (ADR-004) |
 | `wasichai.database.migrate` | `true` | `false` when the app runs migrations another way |
 | `wasichai.metadata.reconcile-indexes` | `true` | at startup, build the declared and relation indexes data tables lack (ADR-036) |
+
+The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
+first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
+Kubernetes startup probe room for it, or switch the reconciliation off and build the indexes another way. Later
+starts find nothing missing and cost one catalog read.
 | `wasichai.security.jwt.secret` | *(none)* | HS256 signing key, at least 32 bytes; required, a library must not ship one that works |
 | `wasichai.web.problem-base-uri` | `https://wasichai.dev/problems` | RFC 7807 `type` base; the full type is this plus `/<status>` |
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
@@ -239,6 +244,8 @@ Core is always installed.
 - D14: the login form's email is empty by default, configurable with `WasichaiApp` `config.defaultLoginEmail`.
 - D16: field type names are trimmed before matching, so `" text "` is `TEXT`.
 - D21: every record list and the audit list end their `ORDER BY` with `id`, so rows tied on the sort key keep a stable order.
+- D22: declared and relation indexes, two new metadata columns, `count`/`after` reserved, `nextCursor` on pages
+  (ADR-036).
 
 ## Known limitations
 

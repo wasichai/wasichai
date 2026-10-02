@@ -249,4 +249,15 @@ class PhysicalTableRecordStoreTest {
             .extracting { (it as ValidationException).violations.single().field }
             .isEqualTo("after")
     }
+
+    // review round 1: a cursor value postgres cannot cast back is the caller's 400, any other failure stays ours
+    @Test
+    fun `only a postgres data exception counts as a bad cursor value`() {
+        val cast = object : io.r2dbc.spi.R2dbcException("invalid input syntax for type bigint", "22P02") {}
+        val grammar = object : io.r2dbc.spi.R2dbcException("syntax error", "42601") {}
+
+        assertThat(store().isDataException(RuntimeException("wrapped", cast))).isTrue()
+        assertThat(store().isDataException(grammar)).isFalse()
+        assertThat(store().isDataException(IllegalStateException("no sqlstate"))).isFalse()
+    }
 }

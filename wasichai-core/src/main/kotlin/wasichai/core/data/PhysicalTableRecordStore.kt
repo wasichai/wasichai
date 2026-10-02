@@ -1,5 +1,6 @@
 package wasichai.core.data
 
+import io.r2dbc.spi.R2dbcException
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
@@ -218,13 +219,20 @@ class PhysicalTableRecordStore(
             )
         (bindings + keysetBindings).forEach { (name, value) -> rowsSpec = rowsSpec.bind(name, value) }
         val rows =
-            rowsSpec
-                .bind("limit", query.page.size + 1)
-                .bind("offset", if (cursor == null) query.page.offset else 0L)
-                .map { row, _ -> mapRow(definition, row, query.withState) to Rows.stringOrNull(row, SORT_VALUE) }
-                .all()
-                .asFlow()
-                .toList()
+            try {
+                rowsSpec
+                    .bind("limit", query.page.size + 1)
+                    .bind("offset", if (cursor == null) query.page.offset else 0L)
+                    .map { row, _ -> mapRow(definition, row, query.withState) to Rows.stringOrNull(row, SORT_VALUE) }
+                    .all()
+                    .asFlow()
+                    .toList()
+            } catch (e: Exception) {
+                // a cursor that decodes but whose value postgres cannot cast back (class 22: data exception) was
+                // not one this list returned: the caller's mistake, not ours
+                if (cursor != null && isDataException(e)) throw invalidCursorValue()
+                throw e
+            }
 
         val content = rows.take(query.page.size)
         val next =
@@ -294,6 +302,9 @@ class PhysicalTableRecordStore(
             else -> "($c < $v OR ($c = $v AND id < :afterId))" to id + ("afterValue" to value)
         }
     }
+
+    internal fun isDataException(e: Throwable): Boolean =
+        generateSequence(e) { it.cause }.any { it is R2dbcException && it.sqlState?.startsWith(DATA_EXCEPTION) == true }
 
     private fun invalidCursorValue() = ValidationException("Invalid cursor", "after", "is not a nextCursor a record list returned")
 
@@ -458,5 +469,8 @@ class PhysicalTableRecordStore(
     companion object {
         // the sort value as text, for the next cursor. a field name starts with a letter, so this alias never collides.
         private const val SORT_VALUE = "__sort_value"
+
+        // sqlstate class 22: invalid_text_representation, invalid_datetime_format, numeric_value_out_of_range…
+        private const val DATA_EXCEPTION = "22"
     }
 }

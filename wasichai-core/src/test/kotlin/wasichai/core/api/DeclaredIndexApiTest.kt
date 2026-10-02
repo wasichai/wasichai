@@ -249,6 +249,34 @@ class DeclaredIndexApiTest : WasichaiIntegrationTest() {
         assertThat(indexColumns(table)).doesNotContain("(mes, anio)")
     }
 
+    // review round 1: a relation column a composite index names cannot go with its relationship either
+    @Test
+    fun `a relationship whose column a composite index names cannot be deleted`() {
+        val name = uniqueName("cuota")
+        val token = bearer()
+        applyModel(token, name, uniqueName("contrib"))
+        val table = physicalTables(name).single()
+        put(token, "/api/objects/$name", mapOf("label" to "Cuota", "indexes" to listOf(listOf("anio", "titular"))))
+
+        client
+            .delete()
+            .uri("/api/relationships/${name}_titular")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isEqualTo(409)
+        assertThat(indexColumns(table)).contains("(anio, titular)", "(titular)")
+
+        put(token, "/api/objects/$name", mapOf("label" to "Cuota", "indexes" to emptyList<List<String>>()))
+        client
+            .delete()
+            .uri("/api/relationships/${name}_titular")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isNoContent
+    }
+
     private fun DeclaredIndexReconciler.reconcileBlocking(): Int = runBlocking { reconcile() }
 
     private fun post(

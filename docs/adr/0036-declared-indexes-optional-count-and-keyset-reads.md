@@ -43,8 +43,8 @@ boolean NOT NULL DEFAULT false` and `custom_objects.indexes jsonb NOT NULL DEFAU
   same way. Names are trimmed and lower-cased, and order is kept. A repeated set counts once. An empty set, more than
   32 fields (PostgreSQL's limit), an unknown field, a field named twice, a `LONG_TEXT` field (a long value can outgrow
   a btree entry and fail a later write) or a type whose handler refuses filter and sort is a `400` naming the property.
-  A field that a composite index names cannot be deleted (`409`): PostgreSQL would drop the index with the column,
-  and the metadata would still list it.
+  A field that a composite index names cannot be deleted (`409`), and neither can the relationship that owns such a
+  field: PostgreSQL would drop the index with the column, and the metadata would still list it.
 - **Every organization, including one provisioned later.** Metadata is per organization, and a new tenant starts with
   no objects, so provisioning itself has nothing to build. The indexes are built when the app applies its model to
   that tenant, exactly as its tables are. In addition, `DeclaredIndexReconciler` runs on `ApplicationReadyEvent`. It
@@ -52,6 +52,12 @@ boolean NOT NULL DEFAULT false` and `custom_objects.indexes jsonb NOT NULL DEFAU
   never drops anything. Failures are logged per object rather than thrown: two instances that start together race on
   the same `CREATE INDEX`, and a missing index means slower reads, which is no reason to refuse to start. It is
   switched off with `wasichai.metadata.reconcile-indexes=false`.
+- **The reconciler reads across organizations on purpose.** `CustomObjectRepository.findAllOrganizations` is the one
+  metadata read with no tenant filter, a deliberate exception to rule 5: it has no caller and no JWT, runs only in the
+  platform's own startup work, and is never reachable from a request.
+- **It holds readiness while it builds.** It runs inside the `ApplicationReadyEvent` listener, so on the first start
+  after an upgrade the app reports ready only once the missing indexes exist. A Kubernetes startup probe has to allow
+  for that on large tables. Later starts find nothing missing and cost one catalog read.
 - **Existing `RELATION` columns get their index from that reconciliation, not from the migration.** A Flyway migration
   would have to walk every organization's tables and generate DDL outside `ObjectSchemaManager` (rule 6), with the
   naming logic duplicated in SQL. The reconciler reuses the one code path. The first start after an upgrade builds the
@@ -73,15 +79,19 @@ starts the next page strictly after that row:
   `(key, id) > (:value, :id)`, which an index on the key serves. A nullable key steps around its nulls the way
   PostgreSQL orders them: last when ascending, first when descending. Sorting by `id` compares `id` alone.
 - `after` with `page > 0`, a cursor issued for another `sort` or `dir`, or a string that is not a cursor is a `400`
-  on `after`. A cursor whose value was tampered with is not detected and fails like any bad SQL value.
+  on `after`. So is a cursor that decodes but whose value PostgreSQL cannot cast back to the key's type: the rows
+  query maps a data exception (SQLSTATE class `22`, such as `22P02`, `22007`, `22008` or `22003`) to the same `400`.
+  A tampered value that does cast is just another position in the order.
 - `totalElements`, when counted, is still the total of the match, not what is left after the cursor.
 - `RecordService.list` and related-record lists take the same `RecordQuery`, so in-process callers and
   `/related/{relationship}` get both options too.
 
-**The wire stays as it was by default.** `indexed` is written only when `true`, `indexes` only when not empty, and
-`nextCursor` only when not null. An object, field or page that uses none of this serializes byte for byte as before,
-which `GeometryWireParityTest` checks. `count` and `after` become reserved query parameters, so they can no longer
-filter a field that happens to be named `count` or `after`.
+**The wire changes only where something is used, and on pages.** `indexed` is written only when `true` and `indexes`
+only when not empty, so an object or field that declares none serializes as before, which `GeometryWireParityTest`
+checks. A page is different: a default list now carries `nextCursor` whenever another row follows, so every page
+but the last has one more key than before. `count` and `after` become reserved query parameters, so they can no
+longer filter a field named `count` or `after`, and both are refused as new field names, like `version`.
+[ADR-031](0031-deliberate-deviations-from-sapgis.md) D22 records these differences.
 
 ## Consequences
 
@@ -94,8 +104,8 @@ filter a field that happens to be named `count` or `after`.
   `created_at`, with ties and nulls in the sort key, in every direction, and sees each row once.
 - The metadata schema gains two columns the original does not have. On a fresh database, `custom_fields.indexed`
   comes before the `wasichai-gis` attribute columns, so those sit one position later than in the original.
-  `SchemaParityTest` lists these lines as known deviations, citing this ADR. They are additions, not a different
-  behaviour, so they get no ADR-031 entry.
+  `SchemaParityTest` lists these lines as known deviations, citing ADR-031 D22, which records them with the other
+  differences from the original.
 - `PageResponse.totalElements` and `totalPages` become nullable in Kotlin. A module that reads them has to handle
   `null` once it passes `count = false`. The ones that do not pass it always get numbers.
 - An index is not built `CONCURRENTLY`: the metadata change and its DDL share one transaction, and `CONCURRENTLY`
