@@ -13,6 +13,7 @@ import wasichai.automation.AutomationRunner
 import wasichai.automation.DocumentIssuer
 import wasichai.core.data.RecordRequest
 import wasichai.core.data.RecordService
+import wasichai.core.identity.JwtService
 import wasichai.it.support.SliceSmokeTest
 import java.util.UUID
 
@@ -60,7 +61,8 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
     @Test
     fun `a rule runs on a record the platform created`() {
         val name = revisionWithRule()
-        val organizationId = runBlocking { UUID.fromString(decoder.decode(admin.removePrefix("Bearer ")).awaitSingle().getClaimAsString("org")) }
+        val organizationId =
+            runBlocking { UUID.fromString(decoder.decode(admin.removePrefix("Bearer ")).awaitSingle().getClaimAsString(JwtService.CLAIM_ORGANIZATION)) }
         val id = runBlocking { records.asPlatform(organizationId) { records.create(name, RecordRequest(mapOf("codigo" to "P-1"))) } }.id
 
         assertThat(runBlocking { runner.drainOnce(50) }).isGreaterThanOrEqualTo(1)

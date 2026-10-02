@@ -38,15 +38,24 @@ class PlatformRecordServiceTest : WasichaiIntegrationTest() {
     class PlatformProbe(
         private val records: RecordService
     ) {
+        // the 500 body is generic on purpose; the test reads the cause here
+        @Volatile
+        var lastFailure: Throwable? = null
+
         // OPTIONS is the one method the security chain lets through without a token: the anonymous case
         @RequestMapping("/platform-probe/{organizationId}/{objectName}", method = [RequestMethod.POST, RequestMethod.OPTIONS])
         suspend fun write(
             @PathVariable organizationId: UUID,
             @PathVariable objectName: String
         ): String =
-            records
-                .asPlatform(organizationId) { records.create(objectName, RecordRequest(mapOf("codigo" to "FROM-A-REQUEST"))) }
-                .id
+            try {
+                records
+                    .asPlatform(organizationId) { records.create(objectName, RecordRequest(mapOf("codigo" to "FROM-A-REQUEST"))) }
+                    .id
+            } catch (e: Exception) {
+                lastFailure = e
+                throw e
+            }
     }
 
     @TestConfiguration
@@ -57,6 +66,9 @@ class PlatformRecordServiceTest : WasichaiIntegrationTest() {
 
     @Autowired
     private lateinit var records: RecordService
+
+    @Autowired
+    private lateinit var probe: PlatformProbe
 
     @Autowired
     private lateinit var transactions: TransactionalOperator
@@ -77,6 +89,7 @@ class PlatformRecordServiceTest : WasichaiIntegrationTest() {
 
     @BeforeEach
     fun setUp() {
+        probe.lastFailure = null
         admin = bearer()
         val slug = "tenant-" + uniqueName("").take(8)
         client
@@ -188,8 +201,15 @@ class PlatformRecordServiceTest : WasichaiIntegrationTest() {
             .header(HttpHeaders.AUTHORIZATION, admin)
             .exchange()
             .expectStatus()
-            .is5xxServerError
+            .isEqualTo(500)
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("Unexpected error")
 
+        // refused by the guard, not by something else on the way
+        assertThat(probe.lastFailure)
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("never becomes the platform")
         assertThat(listCodes(tenant)).isEmpty()
         assertThat(audit()).isEmpty()
     }
@@ -201,8 +221,15 @@ class PlatformRecordServiceTest : WasichaiIntegrationTest() {
             .uri("/platform-probe/$tenantId/$objectName")
             .exchange()
             .expectStatus()
-            .is5xxServerError
+            .isEqualTo(500)
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("Unexpected error")
 
+        // refused by the guard, not by something else on the way
+        assertThat(probe.lastFailure)
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("never becomes the platform")
         assertThat(listCodes(tenant)).isEmpty()
         assertThat(audit()).isEmpty()
     }
