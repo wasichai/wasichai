@@ -13,8 +13,8 @@ class SchemaParityTest : FullAppIntegrationTest() {
     @Autowired
     private lateinit var environment: Environment
 
-    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". one entry per
-    // catalog line. a new one needs an ADR-031 entry.
+    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>", one entry per catalog line.
+    // the user_preferences table (ADR-031 D18) changes behaviour; app-declared actions (ADR-042) only add a feature.
     private val knownDeviations: Map<String, String> =
         mapOf(
             "column audit_log.reason #11 text" to "ADR-031 D25: change reason on record writes",
@@ -61,7 +61,28 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "column custom_fields.geometry_type #20 text" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.srid #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.dimension #22 integer" to "ADR-031 D22: shifted by custom_fields.indexed"
-        )
+        ) +
+            // app-declared actions (ADR-042): a new table, and permissions learns to point at it
+            listOf(
+                "constraint permissions.permissions_action_valid CHECK ((action = ANY ($BUILT_IN_ACTIONS)))",
+                "column object_actions.created_at #4 timestamp with time zone NOT NULL DEFAULT now()",
+                "column object_actions.label #3 text NOT NULL",
+                "column object_actions.name #2 text NOT NULL",
+                "column object_actions.object_id #1 uuid NOT NULL",
+                "column permissions.declared_object_id #6 uuid DEFAULT \nCASE\n    WHEN (action = ANY ($BUILT_IN_ACTIONS)) THEN NULL::uuid\n    ELSE object_id\nEND",
+                "constraint object_actions.object_actions_created_at_not_null NOT NULL created_at",
+                "constraint object_actions.object_actions_label_not_null NOT NULL label",
+                "constraint object_actions.object_actions_name_not_null NOT NULL name",
+                "constraint object_actions.object_actions_name_valid CHECK ((name ~ '^[A-Z][A-Z0-9_]{1,48}\$'::text))",
+                "constraint object_actions.object_actions_not_builtin CHECK ((name <> ALL ($BUILT_IN_ACTIONS)))",
+                "constraint object_actions.object_actions_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE",
+                "constraint object_actions.object_actions_object_id_not_null NOT NULL object_id",
+                "constraint object_actions.object_actions_pkey PRIMARY KEY (object_id, name)",
+                "constraint permissions.permissions_action_valid CHECK (((action = ANY ($BUILT_IN_ACTIONS)) OR (object_id IS NOT NULL)))",
+                "constraint permissions.permissions_declared_action_fkey FOREIGN KEY (declared_object_id, action) REFERENCES META.object_actions(object_id, name) ON DELETE CASCADE",
+                "index object_actions.object_actions_pkey CREATE UNIQUE INDEX object_actions_pkey ON META.object_actions USING btree (object_id, name)",
+                "table object_actions"
+            ).associateWith { "ADR-042: app-declared actions" }
 
     @Test
     fun `the fixture is the original's whole schema`() {
@@ -118,5 +139,11 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     }
                 }
             }
+    }
+
+    private companion object {
+        // how the catalog spells the built-in action list
+        const val BUILT_IN_ACTIONS =
+            "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, 'MANAGE_ORGANIZATION'::text]"
     }
 }

@@ -19,6 +19,9 @@ import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.FieldUsage
 import wasichai.core.metadata.MetadataMapper
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectActionController
+import wasichai.core.metadata.ObjectActionRepository
+import wasichai.core.metadata.ObjectActionService
 import wasichai.core.metadata.ObjectController
 import wasichai.core.metadata.ObjectMetadataController
 import wasichai.core.metadata.ObjectRemovalListener
@@ -140,8 +143,28 @@ class WasichaiMetadataAutoConfiguration {
     @ConditionalOnMissingBean
     fun callerPermissionsService(
         objects: CustomObjectRepository,
+        actions: ObjectActionRepository,
         currentUser: CurrentUser
-    ): CallerPermissionsService = CallerPermissionsService(objects, currentUser)
+    ): CallerPermissionsService = CallerPermissionsService(objects, actions, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun objectActionRepository(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): ObjectActionRepository = ObjectActionRepository(db, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun objectActionService(
+        objects: CustomObjectRepository,
+        actions: ObjectActionRepository,
+        currentUser: CurrentUser
+    ): ObjectActionService = ObjectActionService(objects, actions, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun objectActionController(actions: ObjectActionService): ObjectActionController = ObjectActionController(actions)
 
     @Bean
     @ConditionalOnMissingBean

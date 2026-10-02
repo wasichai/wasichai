@@ -11,6 +11,7 @@ import wasichai.core.admin.UserAdminController
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.organization.OrganizationController
 import wasichai.core.organization.OrganizationRepository
@@ -25,10 +26,11 @@ class WasichaiAdminAutoConfiguration {
     fun adminService(
         db: DatabaseClient,
         metadata: MetadataService,
+        actions: ObjectActionRepository,
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
         schemas: WasichaiSchemas
-    ): AdminService = AdminService(db, metadata, passwordEncoder, currentUser, schemas)
+    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas)
 
     @Bean
     @ConditionalOnMissingBean

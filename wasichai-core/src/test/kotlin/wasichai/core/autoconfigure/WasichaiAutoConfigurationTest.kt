@@ -27,6 +27,7 @@ import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
+import wasichai.core.metadata.ObjectActionService
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumn
@@ -82,6 +83,7 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(RecordService::class.java)
             assertThat(context).hasSingleBean(ClusterLock::class.java)
+            assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)
             // order, not just size: core's twelve types, in ScalarFieldTypes.ALL's declared order
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).containsExactly(
