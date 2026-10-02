@@ -263,6 +263,8 @@ Core is always installed.
   instead of a `500` (ADR-037).
 - D24: append-only and api-only objects, two new metadata columns, and a `RecordWriteGuard` SPI that can veto any record
   write (ADR-040).
+- D25: an optional change reason on every record write, stored in the audit log, and `requiresReason` objects that
+  answer `400` without one (ADR-041).
 
 ## Known limitations
 
