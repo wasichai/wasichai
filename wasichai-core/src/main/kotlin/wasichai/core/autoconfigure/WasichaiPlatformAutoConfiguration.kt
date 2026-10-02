@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import wasichai.core.common.GlobalExceptionHandler
 import wasichai.core.common.HealthController
+import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumnContributor
@@ -51,7 +52,10 @@ class WasichaiPlatformAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun globalExceptionHandler(web: WasichaiWebProperties): GlobalExceptionHandler = GlobalExceptionHandler(web.problemBaseUri)
+    fun globalExceptionHandler(
+        web: WasichaiWebProperties,
+        schema: ObjectProvider<ObjectSchemaManager>
+    ): GlobalExceptionHandler = GlobalExceptionHandler(web.problemBaseUri) { schema.getIfAvailable()?.uniqueFields(it).orEmpty() }
 
     @Bean
     @ConditionalOnMissingBean

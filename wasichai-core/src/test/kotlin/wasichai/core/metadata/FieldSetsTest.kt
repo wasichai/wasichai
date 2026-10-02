@@ -86,6 +86,17 @@ class FieldSetsTest {
             .isInstanceOf(ValidationException::class.java)
     }
 
+    // issue 14: a unique set shares its index with organization_id, so one field fewer fits
+    @Test
+    fun `a caller can lower the field limit`() {
+        val many = (1..32).map { field("f$it") }
+        assertThat(FieldSets.normalize("indexes", listOf(many.map { it.name }), many, types)).hasSize(1)
+        assertThatThrownBy { FieldSets.normalize("uniqueConstraints", listOf(many.map { it.name }), many, types, maxFields = 31) }
+            .isInstanceOf(ValidationException::class.java)
+            .extracting { (it as ValidationException).violations.single().field }
+            .isEqualTo("uniqueConstraints")
+    }
+
     @Test
     fun `the sets a field takes part in`() {
         val sets = listOf(listOf("anio", "predio"), listOf("predio"), listOf("notas"))

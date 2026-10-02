@@ -17,6 +17,8 @@ dependencies {
     api(libs.kotlinx.coroutines.reactor)
     // flyway runs over jdbc at startup (ADR-008). drivers come with the starter (P2).
     implementation(libs.flyway.core)
+    // read only for the constraint a unique violation names (ADR-037). the app brings the driver (the starter does).
+    compileOnly(libs.r2dbc.postgresql)
 
     testImplementation(libs.spring.boot.starter.webflux.test)
     // wasichai-test exposes wasichai-core as api: drop it here, or core's own classes and imports land on the test classpath twice

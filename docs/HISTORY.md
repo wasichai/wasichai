@@ -2,6 +2,23 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Composite unique constraints, and a repeat as a 409
+
+An object can declare `uniqueConstraints: [["sistema_origen", "referencia_externa"]]`, in the shape of `indexes` and
+validated by the same `FieldSets` path. The list is stored in metadata (core migration `V4__unique_constraints.sql`)
+and each entry is a real `UNIQUE (organization_id, …)` on every organization's table, built through
+`ObjectSchemaManager` under a derived name (`<table>_uq_<hash>`) when the model is applied, and dropped when the
+declaration goes. Adding one that existing records already repeat is a `409` naming `uniqueConstraints`, and the
+metadata stays as it was; making a field `unique` over repeated values is a `409` naming `unique`. A field or
+relationship that a unique constraint names cannot be deleted (`409`). A record write that repeats a unique value,
+single-field or composite, now answers `409` problem+json with `errors[]` naming the constraint's fields, where it was
+a `500`: the driver names the constraint and the catalog gives its columns, and no value is echoed back. ADR-037
+records the decisions and ADR-031 D23 the differences from the original. For Kotlin callers, `ConflictException`
+takes an optional list of violations and `GlobalExceptionHandler` an optional resolver of a violation's fields; core
+compiles against the r2dbc PostgreSQL driver, which the starter already brings at runtime. Tested by `FieldSetsTest`,
+`ObjectSchemaManagerTest`, `CompositeUniqueApiTest` (second organization, update, existing repeats, delete guards),
+`FieldApiTest` (core and parity) and `SchemaParityTest`. Closes #14.
+
 ## 2026-10-02 — Declared indexes, lists without a count, keyset reads
 
 A field can be `indexed: true` and an object can list composite `indexes: [["anio", "predio"]]`. Every `RELATION`

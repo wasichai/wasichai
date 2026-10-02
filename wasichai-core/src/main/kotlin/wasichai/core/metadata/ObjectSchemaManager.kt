@@ -1,10 +1,13 @@
 package wasichai.core.metadata
 
+import io.r2dbc.postgresql.api.PostgresqlException
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Component
+import org.springframework.util.ClassUtils
 import wasichai.core.common.ValidationException
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
@@ -38,6 +41,7 @@ class ObjectSchemaManager(
         execute("CREATE INDEX ${SqlIdentifier.quote(obj.physicalTable + "_org_idx")} ON $table (organization_id)")
         fields.forEach { field -> indexStatements(obj, field).forEach { execute(it) } }
         declaredIndexes(ObjectDefinition(obj, fields)).forEach { execute(createIndexStatement(obj, it)) }
+        uniqueSets(ObjectDefinition(obj, fields)).forEach { execute(addUniqueStatement(obj, it)) }
     }
 
     suspend fun addColumn(
@@ -58,6 +62,49 @@ class ObjectSchemaManager(
         after: ObjectDefinition
     ) {
         indexChanges(before, after).forEach { execute(it) }
+    }
+
+    // same for the declared composite uniques. an added one the data already breaks fails here,
+    // inside the caller's transaction, so the metadata write goes back with it (ADR-037)
+    suspend fun syncUniqueConstraints(
+        before: ObjectDefinition,
+        after: ObjectDefinition
+    ) {
+        uniqueConstraintChanges(before, after).forEach { execute(it) }
+    }
+
+    // the fields a violated data-table unique covers, in its column order, organization_id left out.
+    // the driver names the constraint, the catalog says its columns: no parsing of a message that
+    // changes with lc_messages. empty for anything else. column name = field name (MetadataService).
+    suspend fun uniqueFields(violation: DuplicateKeyException): List<String> {
+        if (!DRIVER_PRESENT) return emptyList()
+        val details =
+            generateSequence<Throwable>(violation) { it.cause }.filterIsInstance<PostgresqlException>().firstOrNull()?.errorDetails
+                ?: return emptyList()
+        if (details.schemaName.orElse(null) != schemas.data) return emptyList()
+        val table = details.tableName.orElse(null) ?: return emptyList()
+        val constraint = details.constraintName.orElse(null) ?: return emptyList()
+        return db
+            .sql(
+                """
+                SELECT a.attname
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+                WHERE n.nspname = :schema AND t.relname = :table AND c.conname = :constraint AND c.contype = :type
+                ORDER BY k.ord
+                """.trimIndent()
+            ).bind("schema", schemas.data)
+            .bind("table", table)
+            .bind("constraint", constraint)
+            .bind("type", UNIQUE_CONSTRAINT)
+            .map { row, _ -> row.get("attname", String::class.java)!! }
+            .all()
+            .asFlow()
+            .toList()
+            .filter { it != ORGANIZATION_COLUMN }
     }
 
     // startup reconciliation: build what the metadata declares and the catalog lacks. never drops.
@@ -219,6 +266,41 @@ class ObjectSchemaManager(
         return (was - now.toSet()).map { dropIndexStatement(after.obj, it) } + (now - was.toSet()).map { createIndexStatement(after.obj, it) }
     }
 
+    // the declared composite uniques as column lists (ADR-037)
+    fun uniqueSets(definition: ObjectDefinition): List<List<String>> {
+        val columns = definition.fields.associate { it.name to it.columnName }
+        return definition.obj.uniqueConstraints.mapNotNull { set -> set.map { columns[it] ?: return@mapNotNull null } }
+    }
+
+    // DDL only: what syncUniqueConstraints runs. drops first, so a set moved to new columns never meets its old self.
+    internal fun uniqueConstraintChanges(
+        before: ObjectDefinition,
+        after: ObjectDefinition
+    ): List<String> {
+        val was = uniqueSets(before)
+        val now = uniqueSets(after)
+        return (was - now.toSet()).map { dropUniqueStatement(after.obj, it) } + (now - was.toSet()).map { addUniqueStatement(after.obj, it) }
+    }
+
+    // organization_id leads, like the tenant filter every query carries: unique per organization even
+    // if a table ever held more than one. the name is derived, so dropping needs no catalog read.
+    internal fun addUniqueStatement(
+        obj: CustomObject,
+        columns: List<String>
+    ): String =
+        "ALTER TABLE ${schemas.dataTable(obj.physicalTable)} ADD CONSTRAINT ${SqlIdentifier.quote(uniqueConstraintName(obj, columns))} " +
+            "UNIQUE (${(listOf(ORGANIZATION_COLUMN) + columns).joinToString(", ") { SqlIdentifier.quote(it) }})"
+
+    internal fun dropUniqueStatement(
+        obj: CustomObject,
+        columns: List<String>
+    ): String = "ALTER TABLE ${schemas.dataTable(obj.physicalTable)} DROP CONSTRAINT IF EXISTS ${SqlIdentifier.quote(uniqueConstraintName(obj, columns))}"
+
+    private fun uniqueConstraintName(
+        obj: CustomObject,
+        columns: List<String>
+    ): String = SqlIdentifier.fieldSetName(obj.physicalTable, columns, DECLARED_UNIQUE)
+
     internal fun declaredIndexName(
         obj: CustomObject,
         columns: List<String>
@@ -289,5 +371,12 @@ class ObjectSchemaManager(
 
         // "<table>_ix_<hash>": declared indexes, told apart from the org/state/type ones
         private const val DECLARED_INDEX = "ix"
+
+        // "<table>_uq_<hash>": declared composite uniques (ADR-037)
+        private const val DECLARED_UNIQUE = "uq"
+        private const val ORGANIZATION_COLUMN = "organization_id"
+
+        // the driver is compile only: an app without it never reaches a postgres error anyway
+        private val DRIVER_PRESENT = ClassUtils.isPresent("io.r2dbc.postgresql.api.PostgresqlException", ObjectSchemaManager::class.java.classLoader)
     }
 }

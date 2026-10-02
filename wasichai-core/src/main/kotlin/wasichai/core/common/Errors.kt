@@ -20,8 +20,9 @@ class NotFoundException(
 ) : WasichaiException(HttpStatus.NOT_FOUND, message)
 
 class ConflictException(
-    message: String
-) : WasichaiException(HttpStatus.CONFLICT, message)
+    message: String,
+    violations: List<FieldViolation> = emptyList()
+) : WasichaiException(HttpStatus.CONFLICT, message, violations)
 
 class ForbiddenException(
     message: String

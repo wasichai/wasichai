@@ -95,6 +95,14 @@ These are the only intended differences. Anything else that behaves differently 
   cursor rather than a filter, and both are refused as new field names. A default page now carries `nextCursor`
   whenever another row follows. Tested by `DeclaredIndexApiTest`, `RecordKeysetApiTest`, `FieldApiTest` and
   `SchemaParityTest`.
+- **D23. Composite unique constraints, and a repeat as a `409` ([ADR-037](0037-composite-unique-constraints-and-409-on-repeats.md)).**
+  A record write that repeated a unique value was an untyped `500` with no `errors[]`. Now it is a `409`
+  problem+json with one `errors[]` entry per field of the violated constraint, and any other unique or primary-key
+  violation that reaches a response is a `409` too, without `errors[]`. Making a field `unique` over repeated values is
+  a `409` naming `unique`. An object can declare `uniqueConstraints`, which the original could not: the metadata
+  schema gains `custom_objects.unique_constraints`, which `SchemaParityTest` lists as a known deviation, and each entry
+  is a `UNIQUE (organization_id, …)` on the data table. A field or relationship that one names cannot be deleted
+  (`409`). Tested by `CompositeUniqueApiTest`, `FieldApiTest` (core and parity) and `SchemaParityTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

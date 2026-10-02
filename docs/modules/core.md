@@ -153,7 +153,9 @@ Tables: `organizations`, `users`, `roles`, `user_roles`, `custom_objects`, `cust
 `permissions`, `field_permissions`, `audit_log`. `V3__declared_indexes.sql` adds `custom_fields.indexed` and
 `custom_objects.indexes` ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)). The indexes
 themselves sit on each data table, built by `ObjectSchemaManager`. A declared index is named
-`<physical table>_ix_<hash of its columns>`.
+`<physical table>_ix_<hash of its columns>`. `V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
+([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)), whose constraints are named
+`<physical table>_uq_<hash of its columns>` and lead with `organization_id`.
 
 The opt-in dev seed, `classpath:db/wasichai/core-seed` (history table `flyway_history_core_seed`, order `10`), runs
 only with `wasichai.seed.dev=true` and inserts a demo organization, an `ADMIN` role with every permission, and the
@@ -246,6 +248,8 @@ Core is always installed.
 - D21: every record list and the audit list end their `ORDER BY` with `id`, so rows tied on the sort key keep a stable order.
 - D22: declared and relation indexes, two new metadata columns, `count`/`after` reserved, `nextCursor` on pages
   (ADR-036).
+- D23: composite unique constraints, a new metadata column, and a repeated unique value as a `409` naming its fields
+  instead of a `500` (ADR-037).
 
 ## Known limitations
 

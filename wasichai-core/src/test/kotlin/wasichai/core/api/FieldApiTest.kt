@@ -74,7 +74,42 @@ class FieldApiTest : WasichaiIntegrationTest() {
             .isOk
 
         createRecord("L-1").expectStatus().isCreated
-        createRecord("L-1").expectStatus().is5xxServerError
+        // a repeat is the caller's conflict, not a server error (issue 14, ADR-031 D23)
+        createRecord("L-1")
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("codigo")
+    }
+
+    @Test
+    fun `making a field unique over repeated values is a 409 that leaves the field as it was`() {
+        createRecord("L-1").expectStatus().isCreated
+        createRecord("L-1").expectStatus().isCreated
+
+        client
+            .put()
+            .uri("/api/metadata/objects/$objectName/fields/codigo")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("unique" to true))
+            .exchange()
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("unique")
+
+        client
+            .get()
+            .uri("/api/objects/$objectName")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.fields[?(@.name == 'codigo')].unique")
+            .isEqualTo(false)
     }
 
     @Test
