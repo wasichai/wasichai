@@ -40,7 +40,9 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
 
   A transition is a record update: on an `appendOnly` object it answers `409`, and every `RecordWriteGuard` sees it
   (kind `TRANSITIONED`, with its name) before the state moves. `apiOnly` does not refuse it: it runs the workflow's
-  own rules ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)).
+  own rules ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)). It takes an `X-Change-Reason`
+  header (in-process, `WorkflowService.apply(…, reason)`), stored on its audit entry and required on a
+  `requiresReason` object ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
 
 - A screen and sidebar entry: the `workflow:builder` route at `<basePath>/workflows` (lazy-loaded), listed under the
   `automation` nav group as "Workflows".

@@ -119,6 +119,19 @@ These are the only intended differences. Anything else that behaves differently 
   (`GeometryWireParityTest`). Tested by `RecordWriteRulesTest`, `WriteRulesApiTest`,
   `WorkflowWriteRulesTest` and `AutomationWriteRulesTest`.
 
+**Because a change must say why**
+
+- **D25. Change reason on record writes.** The original's audit log had no reason, and nothing could require one.
+  Now every record write route takes an optional `X-Change-Reason` header (and `RecordService`, `RelatedRecordService`
+  and `WorkflowService` an optional `reason`), stored in the new `audit_log.reason` and returned as `reason` on every
+  audit and history entry; an object may be `requiresReason`, and a write of its records without one answers `400` on
+  `reason` ([ADR-041](0041-a-change-reason-on-record-writes.md)). Automation writes carry `automation '<name>'`. The
+  flag is off by default, so every existing request behaves as before, but every object response now carries
+  `requiresReason` and every audit entry `reason`. The `audit_log.reason` and `custom_objects.requires_reason` columns
+  are a known schema-parity deviation, and the object key a known wire-parity one (`GeometryWireParityTest`). Tested by
+  `ChangeReasonTest`, `RecordWriteRulesTest`, `ChangeReasonApiTest`, `WorkflowWriteRulesTest` and
+  `AutomationWriteRulesTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

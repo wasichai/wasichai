@@ -355,6 +355,18 @@ class ReceiptLines : RecordWriteGuard {
 }
 ```
 
+## Every change says why
+
+When each change must carry an observation, mark the object `requiresReason`: a write without a reason is a `400` on
+`reason`, nothing stored. The UI sends the `X-Change-Reason` header; your code passes the reason to `RecordService`,
+and a job running as the platform must pass one too. It lands on the write's audit entry
+([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)):
+
+```kotlin
+records.update("recibo", id, RecordRequest(mapOf("monto" to 120)), reason = "corrección por error de digitación")
+records.asPlatform(organizationId) { records.create("cierre", RecordRequest(values), reason = "cierre nocturno") }
+```
+
 ## Write your own module
 
 Backend: a library with an `@AutoConfiguration` class registered in

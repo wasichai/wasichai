@@ -52,3 +52,4 @@ supersedes it and says so in its status line.
   lock](0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)
 - [ADR-040: Append-only objects, a pre-write guard SPI, and api-only
   objects](0040-append-only-objects-and-a-pre-write-guard.md)
+- [ADR-041: A change reason on record writes, required per object](0041-a-change-reason-on-record-writes.md)

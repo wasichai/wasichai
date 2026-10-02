@@ -124,7 +124,9 @@ authorization model.
 - `RecordWriteGuard` — runs in `@Order` right **before** every record write, on every route (record API, related
   records, `RecordService` as a user or as the platform, workflow transitions, automations); a throw aborts the write
   with nothing stored or audited. `RecordWriteGuards` calls them after refusing changes to an `appendOnly` object
-  ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)).
+  ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)) and writes without a reason to a
+  `requiresReason` one ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)); `RecordWrite.reason` is the
+  write's change reason.
 - `ObjectRemovalListener`, `FieldUsage` — a module's veto or note when an object or field is about to be removed.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));

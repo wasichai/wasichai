@@ -2,6 +2,24 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — A change reason on record writes, required per object
+
+caja's rule 10 is that every data change carries an observation, and nothing is saved without one; the audit log had
+no place for it ([#19](https://github.com/wasichai/wasichai/issues/19)).
+[ADR-041](adr/0041-a-change-reason-on-record-writes.md) adds an optional `X-Change-Reason` header to every record write
+route (record `POST`/`PUT`/`DELETE`, link and unlink, workflow transitions) and an optional `reason` to
+`RecordService.create`/`update`/`delete`, `RelatedRecordService.link`/`unlink` and `WorkflowService.apply`, as
+overloads beside the old signatures. It is trimmed, blank counts as none, capped at 500 characters, taken as is or in
+the RFC 8187 `UTF-8''` form for text a header cannot carry, and stored on the write's audit row (both rows for a link);
+`GET /api/audit` and the record history return it as `reason`. An object flag `requiresReason` (create, `PUT` with
+left out = unchanged, every object response) refuses a write without a reason with `400` on `reason`, nothing stored;
+the check sits in `RecordWriteGuards`, so it holds on every path, the platform included, and `RecordWrite.reason`
+lets an app's guard judge the text. Automation writes carry `automation '<name>'`. `AuditService.record` gained a
+`reason` parameter (an override must add it). Migration `V6__change_reason` adds `audit_log.reason` and
+`custom_objects.requires_reason`, a schema- and wire-parity deviation (ADR-031 D25). `ChangeReasonTest`,
+`RecordWriteRulesTest`, `ChangeReasonApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest`
+pin it.
+
 ## 2026-10-02 — Append-only objects, a pre-write guard, and api-only objects
 
 Receipts, annulments and a payment outbox are append-only by rule, for everyone, and the generic record API was a
