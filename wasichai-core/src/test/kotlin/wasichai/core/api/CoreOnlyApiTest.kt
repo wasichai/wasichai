@@ -74,7 +74,9 @@ class CoreOnlyApiTest : WasichaiIntegrationTest() {
     fun `object and field json have no module keys`() {
         val definition = body("GET", "/api/objects/$objectName")
 
-        assertThat(keys(definition)).containsExactlyInAnyOrder("id", "name", "label", "pluralLabel", "description", "enabled", "fields")
+        assertThat(
+            keys(definition)
+        ).containsExactlyInAnyOrder("id", "name", "label", "pluralLabel", "description", "enabled", "fields", "appendOnly", "apiOnly")
         assertThat(keys(definition.get("fields").get(0))).containsExactlyInAnyOrder(
             "id",
             "name",

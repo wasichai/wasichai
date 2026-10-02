@@ -18,7 +18,11 @@ data class CustomObject(
     // declared composite indexes, field names in index order (ADR-036)
     val indexes: List<List<String>> = emptyList(),
     // declared composite uniques, field names in constraint order, each per organization (ADR-037)
-    val uniqueConstraints: List<List<String>> = emptyList()
+    val uniqueConstraints: List<List<String>> = emptyList(),
+    // no UPDATE, no DELETE of its records, for anyone: ADMIN and the platform included (ADR-040)
+    val appendOnly: Boolean = false,
+    // the generic record api does not write it; only in-process callers do (ADR-040)
+    val apiOnly: Boolean = false
 )
 
 data class CustomField(

@@ -157,7 +157,8 @@ class RecordServicePlatformTest {
                         changes += change
                     }
                 }
-            )
+            ),
+            RecordWriteGuards(emptyList())
         )
     }
 

@@ -14,6 +14,8 @@ import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordChangeListener
 import wasichai.core.data.RecordResponse
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWrite
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.toResponse
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
@@ -74,7 +76,8 @@ class WorkflowService(
     private val audit: AuditService,
     private val currentUser: CurrentUser,
     private val access: AccessPolicy,
-    private val changes: List<RecordChangeListener>
+    private val changes: List<RecordChangeListener>,
+    private val guards: RecordWriteGuards
 ) {
     suspend fun byObject(objectName: String): Pair<Workflow, String> {
         val user = currentUser.require()
@@ -200,8 +203,9 @@ class WorkflowService(
                 ?: throw NotFoundException("Workflow '${workflow.name}' has no transition '$transitionName'")
 
         val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
+        // read whole: a guard judges the record, not the fields this caller may see (ADR-040)
         val record =
-            store.findById(visible, user.organizationId, id, access.ownerFilter(user), true)
+            store.findById(definition, user.organizationId, id, access.ownerFilter(user), true)
                 ?: throw NotFoundException("Record $id does not exist")
 
         if (!holdsRole(user, transition)) {
@@ -216,6 +220,20 @@ class WorkflowService(
             )
         }
 
+        // a transition moves the state: an UPDATE, so appendOnly refuses it and every guard sees it (ADR-040)
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = user.organizationId,
+                userId = user.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = id,
+                kind = RecordChangeKind.TRANSITIONED,
+                before = record.attributes,
+                transition = transition.name
+            )
+        )
         val moved =
             store.transitionState(visible, user.organizationId, user.userId, id, transition.from, transition.to)
                 ?: throw ConflictException("Record $id left state '${transition.from}' before the transition ran")

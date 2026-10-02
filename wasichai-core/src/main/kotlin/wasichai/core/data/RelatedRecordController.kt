@@ -51,7 +51,7 @@ class RelatedRecordController(
         @PathVariable id: UUID,
         @PathVariable relationship: String,
         @RequestBody request: LinkRequest
-    ) = related.link(objectName, id, relationship, UUID.fromString(request.otherId))
+    ) = related.link(objectName, id, relationship, UUID.fromString(request.otherId), viaApi = true)
 
     @DeleteMapping("/records/{id}/related/{relationship}/{otherId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -60,5 +60,5 @@ class RelatedRecordController(
         @PathVariable id: UUID,
         @PathVariable relationship: String,
         @PathVariable otherId: UUID
-    ) = related.unlink(objectName, id, relationship, otherId)
+    ) = related.unlink(objectName, id, relationship, otherId, viaApi = true)
 }

@@ -9,6 +9,8 @@ import wasichai.core.common.ValidationException
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWrite
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.metadata.MetadataService
 
@@ -24,7 +26,8 @@ class AutomationRunner(
     private val audit: AuditService,
     private val dispatcher: AutomationDispatcher,
     private val webhooks: WebhookSender,
-    private val documents: DocumentIssuer
+    private val documents: DocumentIssuer,
+    private val guards: RecordWriteGuards
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -81,6 +84,22 @@ class AutomationRunner(
                 ?: throw NotFoundException("Record $recordId does not exist")
 
         val value = AutomationRules.render(action.value.orEmpty(), run.toChange())
+        val attributes = current.attributes + (field.name to value)
+        // the platform writes (ADR-016), held to appendOnly and every guard like anyone (ADR-040).
+        // a refusal fails the run, never the write that triggered it.
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = run.organizationId,
+                userId = null,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = recordId,
+                kind = RecordChangeKind.UPDATED,
+                before = current.attributes,
+                attributes = attributes
+            )
+        )
         val updated =
             store.update(
                 definition,
@@ -89,7 +108,7 @@ class AutomationRunner(
                 // the platform wrote the record that triggered it (ADR-039). the audit row says platform.
                 run.userId,
                 recordId,
-                current.attributes + (field.name to value),
+                attributes,
                 // an action writes a field, so every geometry is left exactly as it was
                 emptyMap(),
                 workflow.attached
@@ -135,6 +154,18 @@ class AutomationRunner(
         val change = run.toChange()
         val attributes = action.values.mapValues { (_, template) -> AutomationRules.render(template, change) }
         val workflow = workflows.stateOf(run.organizationId, target.obj.id)
+        guards.beforeWrite(
+            target,
+            RecordWrite(
+                organizationId = run.organizationId,
+                userId = null,
+                objectId = target.obj.id,
+                objectName = target.obj.name,
+                recordId = null,
+                kind = RecordChangeKind.CREATED,
+                attributes = attributes
+            )
+        )
         val created =
             store.insert(target, run.organizationId, run.userId, attributes, emptyMap(), workflow)
         audit.record(

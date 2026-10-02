@@ -19,6 +19,8 @@ import wasichai.core.data.RecordQueryContributor
 import wasichai.core.data.RecordQueryParser
 import wasichai.core.data.RecordService
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWriteGuard
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
 import wasichai.core.data.RelatedRecordService
 import wasichai.core.data.WorkflowStates
@@ -87,6 +89,10 @@ class WasichaiDataAutoConfiguration {
     @ConditionalOnMissingBean
     fun recordQueryParser(contributors: ObjectProvider<RecordQueryContributor>): RecordQueryParser = RecordQueryParser(contributors.orderedStream().toList())
 
+    // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
+    @Bean
+    fun recordWriteGuards(guards: ObjectProvider<RecordWriteGuard>): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList())
+
     @Bean
     @ConditionalOnMissingBean
     fun recordService(
@@ -97,8 +103,9 @@ class WasichaiDataAutoConfiguration {
         access: AccessPolicy,
         workflows: WorkflowStates,
         types: FieldTypeRegistry,
-        changes: ObjectProvider<RecordChangeListener>
-    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList())
+        changes: ObjectProvider<RecordChangeListener>,
+        guards: RecordWriteGuards
+    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards)
 
     @Bean
     @ConditionalOnMissingBean
@@ -113,9 +120,10 @@ class WasichaiDataAutoConfiguration {
         access: AccessPolicy,
         db: DatabaseClient,
         schemas: WasichaiSchemas,
-        audit: AuditService
+        audit: AuditService,
+        guards: RecordWriteGuards
     ): RelatedRecordService =
-        RelatedRecordService(relationships, relationshipService, objects, fields, metadata, store, currentUser, access, db, schemas, audit)
+        RelatedRecordService(relationships, relationshipService, objects, fields, metadata, store, currentUser, access, db, schemas, audit, guards)
 
     @Bean
     @ConditionalOnMissingBean

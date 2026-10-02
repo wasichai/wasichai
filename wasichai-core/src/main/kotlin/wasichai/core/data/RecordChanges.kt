@@ -25,6 +25,7 @@ data class RecordChange(
 // told of every record change, right after the write, in @Order. RecordService opens no
 // transaction of its own (ADR-0025) - a listener that needs atomicity opens its own.
 // data never reaches into a module's tables itself.
+// a veto before the write is a RecordWriteGuard (ADR-040), not a listener.
 interface RecordChangeListener {
     suspend fun recordChanged(change: RecordChange)
 }

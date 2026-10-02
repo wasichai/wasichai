@@ -37,19 +37,19 @@ class RecordController(
     suspend fun create(
         @PathVariable("object") objectName: String,
         @RequestBody request: RecordRequest
-    ): RecordResponse = records.create(objectName, request)
+    ): RecordResponse = records.create(objectName, request, viaApi = true)
 
     @PutMapping("/{id}")
     suspend fun update(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID,
         @RequestBody request: RecordRequest
-    ): RecordResponse = records.update(objectName, id, request)
+    ): RecordResponse = records.update(objectName, id, request, viaApi = true)
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     suspend fun delete(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID
-    ) = records.delete(objectName, id)
+    ) = records.delete(objectName, id, viaApi = true)
 }

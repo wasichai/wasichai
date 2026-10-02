@@ -100,7 +100,9 @@ class MetadataService(
                 enabled = true,
                 physicalTable = physicalTableName(name, user.organizationId),
                 createdAt = null,
-                updatedAt = null
+                updatedAt = null,
+                appendOnly = request.appendOnly,
+                apiOnly = request.apiOnly
             )
 
         var stored = objects.insert(obj)
@@ -226,6 +228,7 @@ class MetadataService(
         val field =
             fields.findByName(obj.id, fieldName)
                 ?: throw NotFoundException("Field '$fieldName' does not exist on '$objectName'")
+        rejectAppendOnly(obj, "its field '$fieldName'")
 
         // a relationship owns its field. dropping it here would leave the relationship half deleted.
         if (field.type == FieldType.RELATION) {
@@ -285,7 +288,9 @@ class MetadataService(
                     description = request.description?.trim(),
                     enabled = request.enabled,
                     indexes = indexes,
-                    uniqueConstraints = uniques
+                    uniqueConstraints = uniques,
+                    appendOnly = request.appendOnly ?: obj.appendOnly,
+                    apiOnly = request.apiOnly ?: obj.apiOnly
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op
@@ -304,6 +309,7 @@ class MetadataService(
         val obj =
             objects.findByName(user.organizationId, name)
                 ?: throw NotFoundException("Object '$name' does not exist")
+        rejectAppendOnly(obj, "it")
 
         // another object's RELATION column points here. dropping the table would strip its
         // foreign key without telling anyone, so refuse and name what is in the way.
@@ -422,5 +428,16 @@ class MetadataService(
         private const val INDEXES = "indexes"
         private const val UNIQUE_CONSTRAINTS = "uniqueConstraints"
         private val ENUM_OPTION = Regex("^[\\p{L}0-9 _.-]{1,64}$")
+    }
+}
+
+// dropping a table or a column deletes stored values: an appendOnly object keeps them until someone
+// switches the rule off first, a deliberate and visible step (ADR-040)
+internal fun rejectAppendOnly(
+    obj: CustomObject,
+    what: String
+) {
+    if (obj.appendOnly) {
+        throw ConflictException("Object '${obj.name}' is append-only: switch appendOnly off before deleting $what")
     }
 }

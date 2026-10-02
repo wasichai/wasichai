@@ -12,6 +12,7 @@ import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordChangeListener
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
@@ -63,8 +64,9 @@ class WasichaiWorkflowAutoConfiguration {
         audit: AuditService,
         currentUser: CurrentUser,
         access: AccessPolicy,
-        changes: ObjectProvider<RecordChangeListener>
-    ): WorkflowService = WorkflowService(roles, workflows, metadata, schema, store, audit, currentUser, access, changes.orderedStream().toList())
+        changes: ObjectProvider<RecordChangeListener>,
+        guards: RecordWriteGuards
+    ): WorkflowService = WorkflowService(roles, workflows, metadata, schema, store, audit, currentUser, access, changes.orderedStream().toList(), guards)
 
     @Bean
     @ConditionalOnMissingBean
