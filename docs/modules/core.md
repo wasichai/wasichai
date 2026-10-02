@@ -36,7 +36,7 @@ An app overrides any core bean by declaring its own bean of the same type — se
 ## What it adds
 
 - Identity: login and the signed-in user, under `/api/auth` (`POST /api/auth/login`, `GET /api/auth/me`,
-  `GET /api/auth/me/permissions` for caller permissions).
+  `GET /api/auth/me/permissions` for caller permissions), and `POST /api/auth/token` for service accounts.
 - Organizations: the tenant itself, under `/api/organizations`.
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
@@ -45,7 +45,8 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
 - Dynamic records and related records: `/api/objects/{object}/records`.
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`.
-- Admin: users and roles, under `/api/users` and `/api/roles`.
+- Admin: users and roles, under `/api/users` and `/api/roles`; service accounts for server-to-server callers, under
+  `/api/service-accounts` ([ADR-043](../adr/0043-service-accounts.md)).
 - Background work: `RecordService.asPlatform(organizationId) { }` for writes with no user, and the `ClusterLock` bean
   (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
   ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)).
@@ -81,8 +82,9 @@ first start after an upgrade that adds relation indexes to existing tables, a la
 Kubernetes startup probe room for it, or switch the reconciliation off and build the indexes another way. Later
 starts find nothing missing and cost one catalog read.
 
-`wasichai.security.jwt.issuer` (default `wasichai`) and `wasichai.security.jwt.ttl` (default 8 hours) are also read from
-`JwtProperties` but rarely need changing. `metadata-schema` and `data-schema` must differ and are validated as
+`wasichai.security.jwt.issuer` (default `wasichai`), `wasichai.security.jwt.ttl` (default 8 hours) and
+`wasichai.security.jwt.service-account-ttl` (default 15 minutes, the life of a service account's token) are also read
+from `JwtProperties` but rarely need changing. `metadata-schema` and `data-schema` must differ and are validated as
 plain identifiers at boot.
 
 Without any YAML, `WasichaiEnvironmentPostProcessor` adds lowest-precedence defaults: `wasichai.database.*` from
@@ -96,8 +98,8 @@ starting with a usable default.
 
 Core declares one `SecurityWebFilterChain` at `@Order(0)`, `@ConditionalOnMissingBean`: Spring Boot's reactive
 resource-server auto-configuration always contributes a catch-all chain of its own, so core's must win on order,
-not by being the only one. Public paths are `/api/auth/login`, `/api/health`, `/actuator/health/**` and every
-`OPTIONS` request; everything else needs a valid token. An app that declares its own `SecurityWebFilterChain` bean
+not by being the only one. Public paths are `/api/auth/login`, `/api/auth/token`, `/api/health`, `/actuator/health/**`
+and every `OPTIONS` request; everything else needs a valid token. An app that declares its own `SecurityWebFilterChain` bean
 replaces core's chain entirely, public paths and CORS included. A module that needs a chain next to core's declares
 it in an auto-configuration that runs after core's, with its own `securityMatcher` and an `@Order` below `0`.
 

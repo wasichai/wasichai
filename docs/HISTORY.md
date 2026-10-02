@@ -2,6 +2,24 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Service accounts for server-to-server callers
+
+The only way in was an email and a password, so systems that post to the API server to server (caja's payment-order
+origins) each used a person-shaped user whose password lived in their configuration, and the system's identity was a
+field of the request rather than of the principal: any of them could post under another's key (issue #17). Now an
+organization has service accounts. An administrator manages them at `/api/service-accounts` (`MANAGE_ORGANIZATION`,
+own tenant only): create with a name and roles, list, enable or disable, replace roles, rotate the secret, delete. The
+server generates the secret (256 bits), shows it on create and rotate only, and stores its `PasswordEncoder` hash. The
+caller trades client id and secret at the public `POST /api/auth/token` for a JWT with its roles, its organization and
+`service_account: "<name>"`, valid for `wasichai.security.jwt.service-account-ttl` (15 minutes by default); every
+refusal is the same `401 Invalid client credentials`. `AuthenticatedUser.serviceAccount` carries the name (`null` for a
+person), so an app binds the caller's identity to the principal. A service account never administers the tenant: no
+`ADMIN`, and every `MANAGE_ORGANIZATION` check refuses it. Each account is backed by a disabled `users`
+row with the same id and an unusable password, hidden from `/api/users`, so foreign keys to `users` (automation runs, issued documents,
+preferences) take its id, and audit entries it makes answer `serviceAccount`. Revoking stops new tokens; one already
+issued lives out its short TTL. Core migration `V8__service_accounts`; the new table and routes are ADR-031 D27.
+Decision: [ADR-043](adr/0043-service-accounts.md).
+
 ## 2026-10-02 — An object declares its own actions
 
 Permissions were a closed set of six actions, so an app with privileges that are not CRUD either split each one into an
