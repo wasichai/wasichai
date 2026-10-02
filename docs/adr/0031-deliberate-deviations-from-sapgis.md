@@ -101,7 +101,7 @@ These are the only intended differences. Anything else that behaves differently 
   violation that reaches a response is a `409` too, without `errors[]`. Making a field `unique` over repeated values is
   a `409` naming `unique`. An object can declare `uniqueConstraints`, which the original could not: the metadata
   schema gains `custom_objects.unique_constraints`, which `SchemaParityTest` lists as a known deviation, and each entry
-  is a `UNIQUE (organization_id, …)` on the data table. A field or relationship that one names cannot be deleted
+  is a `UNIQUE (a, b, …)` on the data table. A field or relationship that one names cannot be deleted
   (`409`). Tested by `CompositeUniqueApiTest`, `FieldApiTest` (core and parity) and `SchemaParityTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and

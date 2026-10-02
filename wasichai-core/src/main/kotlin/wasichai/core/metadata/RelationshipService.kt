@@ -175,7 +175,8 @@ class RelationshipService(
         column?.let { (owner, field) ->
             FieldSets.blocking(field.name, owner)?.let { set ->
                 throw ConflictException(
-                    "Field '${field.name}' of relationship '$name' is part of $set of '${owner.name}'. Remove it from the object first."
+                    "Field '${field.name}' of relationship '$name' is part of $set of '${owner.name}'. " +
+                        "Remove it from the object's ${set.property} first."
                 )
             }
         }

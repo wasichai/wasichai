@@ -86,15 +86,18 @@ class FieldSetsTest {
             .isInstanceOf(ValidationException::class.java)
     }
 
-    // issue 14: a unique set shares its index with organization_id, so one field fewer fits
+    // a field cannot be dropped from under either list, and the refusal names which list holds it
     @Test
-    fun `a caller can lower the field limit`() {
-        val many = (1..32).map { field("f$it") }
-        assertThat(FieldSets.normalize("indexes", listOf(many.map { it.name }), many, types)).hasSize(1)
-        assertThatThrownBy { FieldSets.normalize("uniqueConstraints", listOf(many.map { it.name }), many, types, maxFields = 31) }
-            .isInstanceOf(ValidationException::class.java)
-            .extracting { (it as ValidationException).violations.single().field }
-            .isEqualTo("uniqueConstraints")
+    fun `the set that blocks a delete names its kind and its list`() {
+        val obj =
+            CustomObject(UUID.randomUUID(), UUID.randomUUID(), "o", "O", "Os", null, true, "o__1", null, null)
+                .copy(indexes = listOf(listOf("anio", "predio")), uniqueConstraints = listOf(listOf("predio", "notas")))
+
+        assertThat(FieldSets.blocking("anio", obj).toString()).isEqualTo("index (anio, predio)")
+        assertThat(FieldSets.blocking("anio", obj)!!.property).isEqualTo("indexes")
+        assertThat(FieldSets.blocking("notas", obj).toString()).isEqualTo("unique constraint (predio, notas)")
+        assertThat(FieldSets.blocking("notas", obj)!!.property).isEqualTo("uniqueConstraints")
+        assertThat(FieldSets.blocking("lote", obj)).isNull()
     }
 
     @Test

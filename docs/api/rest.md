@@ -129,14 +129,17 @@ composite index names is a `409`, and so is deleting the relationship that owns 
 }
 ```
 
-`uniqueConstraints` lists uniqueness over two or more fields, in the same shape as `indexes` and checked the same way.
-Each entry is a real `UNIQUE (organization_id, …)` on the organization's table, so two records of one organization
-cannot share the combination and another organization's records never count. A single field keeps `unique: true`.
+`uniqueConstraints` lists uniqueness over a set of fields, in the same shape as `indexes` and checked the same way:
+one to 32 fields per entry. Each entry is a real `UNIQUE (a, b, …)` on the organization's own table, so two records
+of one organization cannot share the combination and another organization's records never count. A one-field entry
+is accepted, but `unique: true` on the field is the way to make one field unique. As with `unique`, `NULL`s are
+distinct: a record with an empty field in a set never collides, so `["caja", "cajero", "fecha"]` only stops repeats
+among records that fill all three. Make the fields `required` when that matters.
 `uniqueConstraints` comes back on an object or a definition only when there are some
 ([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)).
 
 `PUT /api/objects/{object}` with `uniqueConstraints` replaces the list, without it the list is left as it is, and `[]`
-drops them all. A `400` names `uniqueConstraints` for the same mistakes as `indexes`, with at most 31 fields per entry.
+drops them all. A `400` names `uniqueConstraints` for the same mistakes as `indexes`.
 Adding one the existing records already repeat is a `409` naming `uniqueConstraints`, and nothing changes, the
 object's other properties included. So is making a field `unique` over repeated values (`409` naming `unique`).
 Deleting a field that a unique constraint names, or the relationship that owns it, is a `409`.

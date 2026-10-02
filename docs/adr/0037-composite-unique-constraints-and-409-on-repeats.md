@@ -23,15 +23,19 @@ built for `indexes` rather than a second shape:
 - **Validation is `FieldSets.normalize`**, with the property name `uniqueConstraints`: names trimmed and lower-cased,
   order kept, a repeated set counted once, and a `400` naming the property for an empty entry, an unknown field, a
   field named twice, or a field that cannot be indexed (`LONG_TEXT`, or a type its handler keeps out of filters, such
-  as a geometry). A unique constraint is a btree index, so what cannot be indexed cannot be unique. An entry takes at
-  most 31 fields, one fewer than an index, because the constraint also covers `organization_id`.
+  as a geometry). A unique constraint is a btree index, so what cannot be indexed cannot be unique. An entry takes one
+  to 32 fields, like an index. A one-field entry is accepted, as `indexes` accepts one: it adds a constraint of its
+  own beside the field's `unique` flag, which stays the way to make one field unique.
 - **Storage is a jsonb list on `custom_objects`**: core migration `V4__unique_constraints.sql` adds
   `custom_objects.unique_constraints jsonb NOT NULL DEFAULT '[]'`, next to V3's `indexes`.
 - **The DDL goes through `ObjectSchemaManager` alone.** Each entry is `ALTER TABLE … ADD CONSTRAINT
-  "<physical table>_uq_<hash>" UNIQUE (organization_id, …)`, named by `SqlIdentifier.fieldSetName` like a declared
-  index, so it is dropped by name with no catalog read. `organization_id` leads: the table is already per
-  organization, so this changes nothing today, but uniqueness stays per tenant if a table ever holds more than one,
-  and every record query filters on `organization_id` first, so the index still serves lookups on the set.
+  "<physical table>_uq_<hash>" UNIQUE (a, b, …)`, named by `SqlIdentifier.fieldSetName` like a declared index, so it
+  is dropped by name with no catalog read. It covers the set's columns only, like the single-field `UNIQUE (col)`:
+  each organization has its own table, so that is already unique per organization, and `organization_id` would only
+  widen the index.
+- **`NULL`s are distinct**, PostgreSQL's default, as for a single-field unique: a row with a `NULL` in any field of a
+  set never collides with another. `turno (caja, cajero, fecha)` stops repeats only among rows that fill all three;
+  an app that needs the fields filled makes them `required`.
   Creating an object adds its constraints. Updating `uniqueConstraints` compares the lists before and after, drops
   what went first and adds what came, in the transaction that writes the metadata. Without `uniqueConstraints` the
   list is left alone, and `[]` drops every entry.
@@ -46,6 +50,9 @@ built for `indexes` rather than a second shape:
   metadata and its constraint are written in one transaction, so they cannot drift apart through wasichai, and adding a
   constraint at startup could fail on existing data where a missing index only meant slower reads.
 - A caller who cannot read one of the fields of a set does not see that set in the definition, as with `indexes`.
+- **Toggling a field's `unique` touches only its own constraint.** `setUnique` finds the field's constraint in the
+  catalog (PostgreSQL names it) and drops it. It looks only at one-column constraints, so a declared set naming the
+  field is never caught with it. The enum `CHECK` replacement goes through the same lookup.
 
 **A unique violation on a write is a `409` naming the constraint's fields.** `GlobalExceptionHandler` maps Spring's
 `DuplicateKeyException` (SQLSTATE `23505`) to a `409` problem+json in the shape of every other error, with one
@@ -54,7 +61,7 @@ referencia_externa" }`, or `"must be unique"` for a single field. The detail nam
 
 - **The fields come from the constraint name, not the message.** The PostgreSQL driver reports the schema, table and
   constraint of the violation (`PostgresqlException.errorDetails`). `ObjectSchemaManager.uniqueFields` reads that
-  constraint's columns from `pg_constraint`, in constraint order, and leaves `organization_id` out. The message text
+  constraint's columns from `pg_constraint`, in constraint order. The message text
   is never parsed: it changes with `lc_messages` and carries the values. A column is its field's name in core
   (`MetadataService` sets `columnName = name`), so the columns are the field names.
 - **The catalog read happens in the handler**, after the failed write's transaction has ended. Inside it, an aborted

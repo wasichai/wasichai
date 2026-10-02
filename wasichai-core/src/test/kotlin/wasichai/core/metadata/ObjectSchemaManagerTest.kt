@@ -148,14 +148,14 @@ class ObjectSchemaManagerTest {
         assertThat(manager().indexChanges(after, after)).isEmpty()
     }
 
-    // issue 14: a composite unique is a named constraint over the organization and the set's columns
+    // issue 14: a composite unique is a named constraint over the set's columns, like a single-field one
     @Test
-    fun `a unique set is added and dropped as a named constraint that starts with the organization`() {
+    fun `a unique set is added and dropped as a named constraint`() {
         val name = SqlIdentifier.fieldSetName(obj.physicalTable, listOf("sistema", "referencia"), "uq")
 
         assertThat(manager().addUniqueStatement(obj, listOf("sistema", "referencia")))
             .isEqualTo(
-                "ALTER TABLE \"app_data\".\"predio__1234abcd\" ADD CONSTRAINT \"$name\" UNIQUE (\"organization_id\", \"sistema\", \"referencia\")"
+                "ALTER TABLE \"app_data\".\"predio__1234abcd\" ADD CONSTRAINT \"$name\" UNIQUE (\"sistema\", \"referencia\")"
             )
         assertThat(manager().dropUniqueStatement(obj, listOf("sistema", "referencia")))
             .isEqualTo("ALTER TABLE \"app_data\".\"predio__1234abcd\" DROP CONSTRAINT IF EXISTS \"$name\"")

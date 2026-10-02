@@ -155,7 +155,7 @@ Tables: `organizations`, `users`, `roles`, `user_roles`, `custom_objects`, `cust
 themselves sit on each data table, built by `ObjectSchemaManager`. A declared index is named
 `<physical table>_ix_<hash of its columns>`. `V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
 ([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)), whose constraints are named
-`<physical table>_uq_<hash of its columns>` and lead with `organization_id`.
+`<physical table>_uq_<hash of its columns>`.
 
 The opt-in dev seed, `classpath:db/wasichai/core-seed` (history table `flyway_history_core_seed`, order `10`), runs
 only with `wasichai.seed.dev=true` and inserts a demo organization, an `ADMIN` role with every permission, and the

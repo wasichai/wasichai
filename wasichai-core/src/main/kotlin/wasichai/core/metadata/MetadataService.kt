@@ -110,7 +110,7 @@ class MetadataService(
             }
         // the sets name fields, so they are checked once the fields exist (a relation may point at this object)
         val indexes = FieldSets.normalize(INDEXES, request.indexes, storedFields, types)
-        val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types, FieldSets.MAX_UNIQUE_FIELDS)
+        val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types)
         if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
         return ObjectDefinition(stored, storedFields)
@@ -239,7 +239,7 @@ class MetadataService(
 
         // postgres would drop a composite index or unique with the column, and the metadata would still list it
         FieldSets.blocking(field.name, obj)?.let { set ->
-            throw ConflictException("Field '$fieldName' is part of $set. Remove it from the object first.")
+            throw ConflictException("Field '$fieldName' is part of $set. Remove it from the object's ${set.property} first.")
         }
 
         val users = usages.flatMap { it.whoUses(obj, field.name) }
@@ -271,7 +271,7 @@ class MetadataService(
         val objectFields = fields.findByObject(obj.id)
         val indexes = request.indexes?.let { FieldSets.normalize(INDEXES, it, objectFields, types) } ?: obj.indexes
         val uniques =
-            request.uniqueConstraints?.let { FieldSets.normalize(UNIQUE_CONSTRAINTS, it, objectFields, types, FieldSets.MAX_UNIQUE_FIELDS) }
+            request.uniqueConstraints?.let { FieldSets.normalize(UNIQUE_CONSTRAINTS, it, objectFields, types) }
                 ?: obj.uniqueConstraints
         val updated =
             objects.update(

@@ -6,11 +6,12 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 
 An object can declare `uniqueConstraints: [["sistema_origen", "referencia_externa"]]`, in the shape of `indexes` and
 validated by the same `FieldSets` path. The list is stored in metadata (core migration `V4__unique_constraints.sql`)
-and each entry is a real `UNIQUE (organization_id, …)` on every organization's table, built through
+and each entry is a real `UNIQUE (a, b, …)` on every organization's table, built through
 `ObjectSchemaManager` under a derived name (`<table>_uq_<hash>`) when the model is applied, and dropped when the
 declaration goes. Adding one that existing records already repeat is a `409` naming `uniqueConstraints`, and the
 metadata stays as it was; making a field `unique` over repeated values is a `409` naming `unique`. A field or
-relationship that a unique constraint names cannot be deleted (`409`). A record write that repeats a unique value,
+relationship that a unique constraint names cannot be deleted (`409`), and toggling a field's `unique` now drops only
+its own one-column constraint, never a set that names it. As with `unique`, `NULL`s are distinct. A record write that repeats a unique value,
 single-field or composite, now answers `409` problem+json with `errors[]` naming the constraint's fields, where it was
 a `500`: the driver names the constraint and the catalog gives its columns, and no value is echoed back. ADR-037
 records the decisions and ADR-031 D23 the differences from the original. For Kotlin callers, `ConflictException`

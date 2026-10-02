@@ -1,5 +1,6 @@
 package wasichai.core.common
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.reactor.mono
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
@@ -46,6 +47,9 @@ class GlobalExceptionHandler(
             val fields =
                 try {
                     uniqueFields(ex)
+                } catch (e: CancellationException) {
+                    // the request went away: let the coroutine end as cancelled
+                    throw e
                 } catch (e: Exception) {
                     log.warn("could not resolve the fields of a unique violation: {}", e.message)
                     emptyList()

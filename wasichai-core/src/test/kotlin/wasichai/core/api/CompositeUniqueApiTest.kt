@@ -66,7 +66,7 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
         val other = bearer("$slug@wasichai.local", "supersecret")
         applyModel(other, name, target)
         physicalTables(name).also { assertThat(it).hasSize(2) }.forEach { table ->
-            assertThat(uniqueColumns(table)).describedAs(table).contains("organization_id,sistema_origen,referencia_externa")
+            assertThat(uniqueColumns(table)).describedAs(table).contains("sistema_origen,referencia_externa")
         }
 
         client
@@ -182,7 +182,7 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
             .isEqualTo("Orden")
             .jsonPath("$.uniqueConstraints.length()")
             .isEqualTo(1)
-        assertThat(uniqueColumns(table)).contains("organization_id,sistema_origen,referencia_externa").noneMatch { it.endsWith("caja") }
+        assertThat(uniqueColumns(table)).contains("sistema_origen,referencia_externa").noneMatch { it.endsWith("caja") }
 
         // the fields of a set cannot be dropped from under it, nor the relationship that owns one
         put(
@@ -193,7 +193,7 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
                 "uniqueConstraints" to listOf(listOf("sistema_origen", "referencia_externa"), listOf("referencia_externa", "caja"))
             )
         )
-        assertThat(uniqueColumns(table)).contains("organization_id,referencia_externa,caja")
+        assertThat(uniqueColumns(table)).contains("referencia_externa,caja")
         client
             .delete()
             .uri("/api/metadata/objects/$name/fields/sistema_origen")
@@ -222,6 +222,27 @@ class CompositeUniqueApiTest : WasichaiIntegrationTest() {
             .exchange()
             .expectStatus()
             .isNoContent
+    }
+
+    // review round 1: the single-field unique toggle must touch only its own one-column constraint
+    @Test
+    fun `toggling unique on a field leaves the composite set that names it in place`() {
+        val name = uniqueName("orden")
+        val token = bearer()
+        applyModel(token, name, uniqueName("caja"))
+        val table = physicalTables(name).single()
+
+        put(token, "/api/metadata/objects/$name/fields/sistema_origen", mapOf("unique" to true))
+        put(token, "/api/metadata/objects/$name/fields/sistema_origen", mapOf("unique" to false))
+
+        assertThat(uniqueColumns(table)).contains("sistema_origen,referencia_externa").doesNotContain("sistema_origen")
+        createRecord(token, name, mapOf("sistema_origen" to "SIAF", "referencia_externa" to "1")).expectStatus().isCreated
+        createRecord(token, name, mapOf("sistema_origen" to "SIAF", "referencia_externa" to "1"))
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("sistema_origen")
     }
 
     private fun createRecord(
