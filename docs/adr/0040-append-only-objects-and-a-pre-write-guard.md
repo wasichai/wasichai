@@ -34,7 +34,14 @@ These count as an update, and are refused the same way:
   already writes an `UPDATE` on both). The refusal comes before the join table is read, so it is `409` even when the
   call would change nothing: linking a pair that is already linked, or unlinking one that is not, answers `409` here
   where it is an idempotent `204` elsewhere;
-- an automation's `UPDATE_FIELD` (the run fails, the triggering write stays committed, as for any failed action).
+- an automation's `UPDATE_FIELD` (the run fails, the triggering write stays committed, as for any failed action);
+- a **delete of another object's record that an append-only record points at**. A `RELATION` column is
+  `ON DELETE SET NULL` and a join row `ON DELETE CASCADE`, so postgres would blank the append-only record's value or
+  drop its link, with no guard and no history row. `RecordService.delete` checks first, after the `404` and before
+  the guards and the store: one `EXISTS` per `RELATION` field of an append-only object aiming at this one, and per
+  join table shared with an append-only object, tenant-filtered. A hit answers `409` naming the append-only object,
+  for every caller, ADMIN and the platform included. Every record delete goes through
+  `RecordService.delete`; `RecordStore.delete` has no other caller in wasichai.
 
 Metadata deletes that would destroy stored values are refused with 409 too: deleting the object, one of its fields,
 a relationship whose field or join table sits on it, or another object that shares a `MANY_TO_MANY` join table with
@@ -130,5 +137,9 @@ the flags must not switch append-only off by saving a label.
   constructor argument. Code that builds them by hand (tests) passes `RecordWriteGuards(emptyList())`.
 - The REST routes no longer call the public write methods of `RecordService` and `RelatedRecordService`: an
   override of those in an app's subclass is skipped by the REST API (see "How the door is told apart").
+- A record an append-only one points at cannot be deleted while it does: the append-only record is history, and
+  its reference to the deleted one would otherwise vanish. Unlinking first is refused too, so such a record stays
+  until `appendOnly` is switched off. `RecordService` takes an `AppendOnlyReferences` constructor argument (a mock
+  in hand-built tests).
 - Two columns on `custom_objects`: a schema-parity deviation, [ADR-031](0031-deliberate-deviations-from-sapgis.md)
   D24.

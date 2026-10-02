@@ -111,10 +111,12 @@ These are the only intended differences. Anything else that behaves differently 
   `409` for everyone, ADMIN, the platform and automations included) or `apiOnly` (the generic record API answers `403`
   on writes, in-process callers still write), and a `RecordWriteGuard` bean can veto any record write
   ([ADR-040](0040-append-only-objects-and-a-pre-write-guard.md)). On an append-only end, a link that already exists or
-  an unlink of one that does not answers `409`, where it is an idempotent `204` otherwise. Both flags are off by
-  default, so every existing object behaves as before, but every object response now carries both keys. The
-  `custom_objects.append_only` and `custom_objects.api_only` columns are a known schema-parity deviation, and the two
-  keys a known wire-parity one (`GeometryWireParityTest`). Tested by `RecordWriteRulesTest`, `WriteRulesApiTest`,
+  an unlink of one that does not answers `409`, where it is an idempotent `204` otherwise. Deleting a record that an
+  append-only record points at, by a `RELATION` column or a join row, answers `409` too, where `ON DELETE SET NULL` /
+  `CASCADE` would change the append-only record silently. Both flags are off by default, so every existing object
+  behaves as before, but every object response now carries both keys. The `custom_objects.append_only` and
+  `custom_objects.api_only` columns are a known schema-parity deviation, and the two keys a known wire-parity one
+  (`GeometryWireParityTest`). Tested by `RecordWriteRulesTest`, `WriteRulesApiTest`,
   `WorkflowWriteRulesTest` and `AutomationWriteRulesTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and

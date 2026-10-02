@@ -19,8 +19,9 @@ deviation (ADR-031 D24). `RecordService`, `RelatedRecordService`, `WorkflowServi
 `RecordWriteGuards` constructor argument, and the REST controllers now call `internal` `viaApi` overloads, so an app
 subclass that overrides the public `create`/`update`/`delete` of `RecordService` or `link`/`unlink` of
 `RelatedRecordService` is no longer reached by the REST routes (use a `RecordWriteGuard`). On an append-only end a
-no-op link or unlink answers `409` instead of `204`, and deleting an object that shares a join table with an
-append-only one is refused. Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
+no-op link or unlink answers `409` instead of `204`, deleting an object that shares a join table with an
+append-only one is refused, and so is deleting a record an append-only record points at through a `RELATION` field
+or a join row (the database's `SET NULL` / `CASCADE` would change it unaudited). Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
 `WriteRulesApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest` pin it.
 
 ## 2026-10-02 — Background work runs RecordService as the platform, and takes a cluster lock

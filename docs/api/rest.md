@@ -200,7 +200,9 @@ Two flags, both `false` unless set, both in the create request, in `PUT` and in 
   workflow transition, and a link or unlink touching one of its records answer `409`, for `ADMIN` too, even a link
   that already exists or an unlink of one that does not (elsewhere those are a no-op `204`). So do deleting the
   object, one of its fields, a relationship that holds its values, or an object it shares a join table with: switch
-  `appendOnly` off first.
+  `appendOnly` off first. Deleting another object's record that an append-only record points at, through a
+  `RELATION` field or a `MANY_TO_MANY` link, answers `409` naming the append-only object, for `ADMIN` too: the
+  database would otherwise null the field or drop the link behind the append-only record's back.
 - `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
   end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
   are unchanged.
