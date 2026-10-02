@@ -72,7 +72,8 @@ class RecordService(
     private val workflows: WorkflowStates,
     private val types: FieldTypeRegistry,
     private val changes: List<RecordChangeListener>,
-    private val guards: RecordWriteGuards
+    private val guards: RecordWriteGuards,
+    private val references: AppendOnlyReferences
 ) {
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
@@ -285,6 +286,8 @@ class RecordService(
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
+        // postgres would null or drop what append-only records hold of this one (ADR-040)
+        references.rejectDelete(caller.organizationId, definition, id)
         guards.beforeWrite(
             definition,
             RecordWrite(

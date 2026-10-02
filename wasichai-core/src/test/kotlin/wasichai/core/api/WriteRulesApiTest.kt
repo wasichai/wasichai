@@ -276,6 +276,100 @@ class WriteRulesApiTest : WasichaiIntegrationTest() {
     }
 
     @Test
+    fun `a record an append-only relation column points at is not deleted`() {
+        val customer = uniqueName("customer")
+        val receipt = uniqueName("receipt")
+        createObject(customer).expectStatus().isCreated
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to receipt,
+                    "label" to receipt,
+                    "appendOnly" to true,
+                    "fields" to
+                        listOf(
+                            mapOf("name" to "codigo", "type" to "TEXT"),
+                            mapOf("name" to "customer", "type" to "RELATION", "relationTarget" to customer)
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        val c = createRecord(customer, "C-1").expectStatus().isCreated.idOf()
+        val unused = createRecord(customer, "C-2").expectStatus().isCreated.idOf()
+        val r =
+            client
+                .post()
+                .uri("/api/objects/$receipt/records")
+                .header(HttpHeaders.AUTHORIZATION, admin)
+                .bodyValue(mapOf("attributes" to mapOf("codigo" to "R-1", "customer" to c)))
+                .exchange()
+                .expectStatus()
+                .isCreated
+                .idOf()
+
+        // ON DELETE SET NULL would blank the receipt's customer behind its back
+        deleteRecord(customer, c).expectStatus().isEqualTo(HttpStatus.CONFLICT).expectBody().jsonPath("$.detail").value<String> {
+            assertThat(it).contains(receipt)
+        }
+        assertThatThrownBy { runBlocking { records.asPlatform(organizationId) { records.delete(customer, UUID.fromString(c)) } } }
+            .isInstanceOf(ConflictException::class.java)
+        getRecord(receipt, r).jsonPath("$.attributes.customer").isEqualTo(c)
+        getRecord(customer, c).jsonPath("$.attributes.codigo").isEqualTo("C-1")
+        assertThat(auditOf(customer)).containsExactly("CREATE", "CREATE")
+
+        // nothing append-only points at this one
+        deleteRecord(customer, unused).expectStatus().isNoContent
+    }
+
+    @Test
+    fun `a record linked to an append-only one is not deleted`() {
+        val receipt = uniqueName("receipt")
+        val tag = uniqueName("tag")
+        createObject(receipt).expectStatus().isCreated
+        createObject(tag).expectStatus().isCreated
+        val relationship = uniqueName("rel").take(30)
+        client
+            .post()
+            .uri("/api/relationships")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("name" to relationship, "label" to "Tags", "type" to "MANY_TO_MANY", "source" to tag, "target" to receipt))
+            .exchange()
+            .expectStatus()
+            .isCreated
+        val r = createRecord(receipt, "R-1").expectStatus().isCreated.idOf()
+        val t = createRecord(tag, "T-1").expectStatus().isCreated.idOf()
+        val unlinked = createRecord(tag, "T-2").expectStatus().isCreated.idOf()
+        client
+            .post()
+            .uri("/api/objects/$tag/records/$t/related/$relationship")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("otherId" to r))
+            .exchange()
+            .expectStatus()
+            .isNoContent
+        putObject(receipt, mapOf("label" to receipt, "appendOnly" to true)).expectStatus().isOk
+
+        // ON DELETE CASCADE would drop the receipt's link with no history row
+        deleteRecord(tag, t).expectStatus().isEqualTo(HttpStatus.CONFLICT)
+        client
+            .get()
+            .uri("/api/objects/$receipt/records/$r/related/$relationship")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.totalElements")
+            .isEqualTo(1)
+
+        deleteRecord(tag, unlinked).expectStatus().isNoContent
+    }
+
+    @Test
     fun `a guard veto aborts the write - nothing stored, nothing audited`() {
         val name = uniqueName("guarded")
         createObject(name).expectStatus().isCreated

@@ -167,7 +167,8 @@ class RecordAuditSnapshotTest {
             NoWorkflowStates(),
             FieldTypeRegistry(emptyList()),
             listOf(listener),
-            RecordWriteGuards(emptyList())
+            RecordWriteGuards(emptyList()),
+            mock(AppendOnlyReferences::class.java)
         )
     }
 

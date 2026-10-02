@@ -152,7 +152,8 @@ class RecordWriteRulesTest {
             NoWorkflowStates(),
             FieldTypeRegistry(emptyList()),
             listOf(listener),
-            RecordWriteGuards(listOf(guard))
+            RecordWriteGuards(listOf(guard)),
+            mock(AppendOnlyReferences::class.java)
         )
     }
 

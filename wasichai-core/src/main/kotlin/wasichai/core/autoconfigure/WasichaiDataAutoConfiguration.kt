@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditController
 import wasichai.core.audit.AuditQueryService
 import wasichai.core.audit.AuditService
+import wasichai.core.data.AppendOnlyReferences
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.PhysicalTableRecordStore
 import wasichai.core.data.RecordChangeListener
@@ -93,6 +94,16 @@ class WasichaiDataAutoConfiguration {
     @Bean
     fun recordWriteGuards(guards: ObjectProvider<RecordWriteGuard>): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList())
 
+    // no @ConditionalOnMissingBean: appendOnly is for everyone (ADR-040)
+    @Bean
+    fun appendOnlyReferences(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        objects: CustomObjectRepository,
+        fields: CustomFieldRepository,
+        relationships: RelationshipRepository
+    ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships)
+
     @Bean
     @ConditionalOnMissingBean
     fun recordService(
@@ -104,8 +115,9 @@ class WasichaiDataAutoConfiguration {
         workflows: WorkflowStates,
         types: FieldTypeRegistry,
         changes: ObjectProvider<RecordChangeListener>,
-        guards: RecordWriteGuards
-    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards)
+        guards: RecordWriteGuards,
+        references: AppendOnlyReferences
+    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references)
 
     @Bean
     @ConditionalOnMissingBean
