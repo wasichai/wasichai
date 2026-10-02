@@ -67,4 +67,22 @@ class RecordQueryParserTest {
         assertThat(parser.parse(mapOf("uso" to "A")).criteria).isEmpty()
         assertThatThrownBy { parser.parse(mapOf("near" to "lejos")) }.isInstanceOf(ValidationException::class.java)
     }
+
+    // issue 21: count and after are core's, never field filters
+    @Test
+    fun `count defaults on, can be switched off, and after is passed through as sent`() {
+        val parser = RecordQueryParser(emptyList())
+
+        assertThat(parser.parse(emptyMap()).count).isTrue()
+        assertThat(parser.parse(emptyMap()).after).isNull()
+        val query = parser.parse(mapOf("count" to "FALSE", "after" to "abc"))
+        assertThat(query.count).isFalse()
+        assertThat(query.after).isEqualTo("abc")
+        assertThat(query.filters).isEmpty()
+        assertThat(parser.parse(mapOf("count" to "true")).count).isTrue()
+        assertThatThrownBy { parser.parse(mapOf("count" to "nah")) }
+            .isInstanceOf(ValidationException::class.java)
+            .extracting { (it as ValidationException).violations.single().field }
+            .isEqualTo("count")
+    }
 }

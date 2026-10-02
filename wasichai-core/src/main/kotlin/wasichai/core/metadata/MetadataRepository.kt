@@ -17,23 +17,26 @@ import java.util.UUID
 
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
-        "physical_table, created_at, updated_at"
+        "physical_table, created_at, updated_at, indexes::text AS indexes"
 
 @Repository
 class CustomObjectRepository(
     private val db: DatabaseClient,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val objectMapper: ObjectMapper
 ) {
     suspend fun insert(obj: CustomObject): CustomObject =
         db
             .sql(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
-                    (id, organization_id, name, label, plural_label, description, enabled, physical_table)
-                VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable)
+                    (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes)
+                VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
+                        CAST(:indexes AS jsonb))
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
+            .bind("indexes", objectMapper.writeValueAsString(obj.indexes))
             .bind("organizationId", obj.organizationId)
             .bind("name", obj.name)
             .bind("label", obj.label)
@@ -78,17 +81,28 @@ class CustomObjectRepository(
             .asFlow()
             .toList()
 
+    // every organization's objects, for the platform's own startup work (index reconciliation). no
+    // caller, no tenant: never reachable from a request.
+    suspend fun findAllOrganizations(): List<CustomObject> =
+        db
+            .sql("SELECT $OBJECT_COLUMNS FROM ${schemas.metadata}.custom_objects ORDER BY organization_id, name")
+            .map(::mapObject)
+            .all()
+            .asFlow()
+            .toList()
+
     suspend fun update(obj: CustomObject): CustomObject =
         db
             .sql(
                 """
                 UPDATE ${schemas.metadata}.custom_objects
                 SET label = :label, plural_label = :pluralLabel, description = :description,
-                    enabled = :enabled, updated_at = now()
+                    enabled = :enabled, indexes = CAST(:indexes AS jsonb), updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
+            .bind("indexes", objectMapper.writeValueAsString(obj.indexes))
             .bind("organizationId", obj.organizationId)
             .bind("label", obj.label)
             .bind("pluralLabel", obj.pluralLabel)
@@ -125,13 +139,16 @@ class CustomObjectRepository(
             enabled = Rows.bool(row, "enabled"),
             physicalTable = Rows.string(row, "physical_table"),
             createdAt = Rows.instantOrNull(row, "created_at"),
-            updatedAt = Rows.instantOrNull(row, "updated_at")
+            updatedAt = Rows.instantOrNull(row, "updated_at"),
+            indexes =
+                Rows.stringOrNull(row, "indexes")?.let { objectMapper.readValue(it, object : TypeReference<List<List<String>>>() {}) }
+                    ?: emptyList()
         )
 }
 
 private const val FIELD_COLUMNS =
     "id, object_id, name, label, type, column_name, required, is_unique, default_value, " +
-        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable"
+        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed"
 
 @Repository
 class CustomFieldRepository(
@@ -154,9 +171,9 @@ class CustomFieldRepository(
                     """
                     INSERT INTO $table
                         (id, object_id, name, label, type, column_name, required, is_unique, default_value,
-                         description, position, enum_options, relation_target_object_id, visible, editable$extraColumns)
+                         description, position, enum_options, relation_target_object_id, visible, editable, indexed$extraColumns)
                     VALUES (:id, :objectId, :name, :label, :type, :columnName, :required, :unique, :defaultValue,
-                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable$extraValues)
+                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed$extraValues)
                     RETURNING $selectColumns
                     """.trimIndent()
                 ).bind("id", field.id)
@@ -174,6 +191,7 @@ class CustomFieldRepository(
                 .bindNullable("relationTarget", field.relationTargetObjectId)
                 .bind("visible", field.visible)
                 .bind("editable", field.editable)
+                .bind("indexed", field.indexed)
         attributeColumns.forEachIndexed { index, column ->
             val value = field.attributes[column]
             spec = if (value == null) spec.bindNull("a$index", types.attributeColumns.getValue(column)) else spec.bind("a$index", value)
@@ -231,7 +249,7 @@ class CustomFieldRepository(
                 UPDATE $table
                 SET label = :label, required = :required, is_unique = :unique, description = :description,
                     position = :position, enum_options = CAST(:enumOptions AS jsonb), visible = :visible,
-                    editable = :editable, updated_at = now()
+                    editable = :editable, indexed = :indexed, updated_at = now()
                 WHERE id = :id
                 RETURNING $selectColumns
                 """.trimIndent()
@@ -244,6 +262,7 @@ class CustomFieldRepository(
             .bindNullable("enumOptions", field.enumOptions?.let { objectMapper.writeValueAsString(it) })
             .bind("visible", field.visible)
             .bind("editable", field.editable)
+            .bind("indexed", field.indexed)
             .map(::mapField)
             .one()
             .awaitSingle()
@@ -299,7 +318,8 @@ class CustomFieldRepository(
             relationTargetObjectId = Rows.uuidOrNull(row, "relation_target_object_id"),
             attributes = attributeColumns.associateWith { row.get(it) },
             visible = Rows.bool(row, "visible"),
-            editable = Rows.bool(row, "editable")
+            editable = Rows.bool(row, "editable"),
+            indexed = Rows.bool(row, "indexed")
         )
 }
 

@@ -101,11 +101,14 @@ class MetadataService(
                 updatedAt = null
             )
 
-        val stored = objects.insert(obj)
+        var stored = objects.insert(obj)
         val storedFields =
             request.fields.mapIndexed { index, field ->
                 fields.insert(buildField(stored.id, field, index, user.organizationId))
             }
+        // the sets name fields, so they are checked once the fields exist (a relation may point at this object)
+        val indexes = FieldSets.normalize(INDEXES, request.indexes, storedFields, types)
+        if (indexes.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
         return ObjectDefinition(stored, storedFields)
     }
@@ -160,6 +163,7 @@ class MetadataService(
 
         // the type's own rules (a module type may refuse unique)
         types.handler(existing.type).checkUpdate(existing, request)
+        if (request.indexed == true) FieldSets.requireIndexable(existing, "indexed", types)
 
         val enumOptions =
             request.enumOptions?.map { it.trim() }?.filter { it.isNotEmpty() }?.also { options ->
@@ -185,12 +189,18 @@ class MetadataService(
                 position = request.position ?: existing.position,
                 enumOptions = enumOptions,
                 visible = request.visible ?: existing.visible,
-                editable = request.editable ?: existing.editable
+                editable = request.editable ?: existing.editable,
+                indexed = request.indexed ?: existing.indexed
             )
 
         // metadata and table move together, in one transaction
         if (updated.required != existing.required) schema.setRequired(obj, existing, updated.required)
         if (updated.unique != existing.unique) schema.setUnique(obj, existing, updated.unique)
+        // unique counts too: a unique column's constraint is its index, so a plain one comes or goes with it
+        if (updated.indexed != existing.indexed || updated.unique != existing.unique) {
+            val all = fields.findByObject(obj.id)
+            schema.syncIndexes(ObjectDefinition(obj, all), ObjectDefinition(obj, all.map { if (it.id == existing.id) updated else it }))
+        }
         if (updated.enumOptions != existing.enumOptions && existing.type == FieldType.ENUM) {
             schema.replaceEnumCheck(obj, existing, updated.enumOptions.orEmpty())
         }
@@ -220,6 +230,13 @@ class MetadataService(
             }
         }
 
+        // postgres would drop a composite index with the column, and the metadata would still list it
+        FieldSets.containing(field.name, obj.indexes).firstOrNull()?.let { set ->
+            throw ConflictException(
+                "Field '$fieldName' is part of index ${set.joinToString(", ", "(", ")")}. Remove it from the object's indexes first."
+            )
+        }
+
         val users = usages.flatMap { it.whoUses(obj, field.name) }
         if (users.isNotEmpty()) {
             throw ConflictException("Field '$fieldName' is used by ${users.joinToString(", ")}. Change or delete them first.")
@@ -246,6 +263,8 @@ class MetadataService(
                 "the name backs the table and the API path; create a new object instead"
             )
         }
+        val objectFields = fields.findByObject(obj.id)
+        val indexes = request.indexes?.let { FieldSets.normalize(INDEXES, it, objectFields, types) } ?: obj.indexes
         val updated =
             objects.update(
                 obj.copy(
@@ -256,10 +275,13 @@ class MetadataService(
                             .orEmpty()
                             .ifBlank { request.label.trim() },
                     description = request.description?.trim(),
-                    enabled = request.enabled
+                    enabled = request.enabled,
+                    indexes = indexes
                 )
             )
-        return ObjectDefinition(updated, fields.findByObject(updated.id))
+        // the same sets again change nothing: applying a model twice is a no-op
+        if (indexes != obj.indexes) schema.syncIndexes(ObjectDefinition(obj, objectFields), ObjectDefinition(updated, objectFields))
+        return ObjectDefinition(updated, objectFields)
     }
 
     @Transactional
@@ -334,28 +356,32 @@ class MetadataService(
             throw ValidationException("Relation field '$name' has no target", "relationTarget", "is required")
         }
 
-        return CustomField(
-            id = UUID.randomUUID(),
-            objectId = objectId,
-            name = name,
-            label =
-                request.label
-                    ?.trim()
-                    .orEmpty()
-                    .ifBlank { name },
-            type = type,
-            columnName = name,
-            required = request.required,
-            unique = request.unique,
-            defaultValue = request.defaultValue,
-            description = request.description?.trim(),
-            position = position,
-            enumOptions = enumOptions,
-            relationTargetObjectId = relationTarget,
-            attributes = attributes,
-            visible = request.visible,
-            editable = request.editable
-        )
+        val field =
+            CustomField(
+                id = UUID.randomUUID(),
+                objectId = objectId,
+                name = name,
+                label =
+                    request.label
+                        ?.trim()
+                        .orEmpty()
+                        .ifBlank { name },
+                type = type,
+                columnName = name,
+                required = request.required,
+                unique = request.unique,
+                defaultValue = request.defaultValue,
+                description = request.description?.trim(),
+                position = position,
+                enumOptions = enumOptions,
+                relationTargetObjectId = relationTarget,
+                attributes = attributes,
+                visible = request.visible,
+                editable = request.editable,
+                indexed = request.indexed
+            )
+        if (field.indexed) FieldSets.requireIndexable(field, "indexed", types)
+        return field
     }
 
     // "<name>__<first 8 of org uuid>": readable, unique per tenant, fits an identifier
@@ -365,6 +391,7 @@ class MetadataService(
     ): String = "${name}__${organizationId.toString().replace("-", "").take(8)}"
 
     companion object {
+        private const val INDEXES = "indexes"
         private val ENUM_OPTION = Regex("^[\\p{L}0-9 _.-]{1,64}$")
     }
 }

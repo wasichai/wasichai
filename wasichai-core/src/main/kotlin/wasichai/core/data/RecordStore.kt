@@ -29,7 +29,12 @@ data class RecordQuery(
     // record-level security. non-null = only rows this user created.
     val createdBy: UUID? = null,
     // selecting the state column on a table that has none would blow up
-    val withState: Boolean = false
+    val withState: Boolean = false,
+    // false: no COUNT(*), the page carries no totals. a big table read page by page needs no total each time.
+    val count: Boolean = true,
+    // keyset read: the nextCursor of the page before. resumes after its (sort value, id), so a large
+    // read costs one pass instead of OFFSET's growing skip. never with page > 0 (ADR-036).
+    val after: String? = null
 )
 
 // port. physical tables today, could be jsonb tomorrow without touching callers. ADR-004.

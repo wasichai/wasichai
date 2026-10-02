@@ -42,3 +42,5 @@ supersedes it and says so in its status line.
   locale](0034-user-preferences-and-themes.md)
 - [ADR-035: Themes get extension tokens and data-slot hooks, and the library ships themes as optional
   sheets](0035-theme-extension-tokens-slots-and-optional-sheets.md)
+- [ADR-036: Declared indexes, an optional count and keyset
+  reads](0036-declared-indexes-optional-count-and-keyset-reads.md)

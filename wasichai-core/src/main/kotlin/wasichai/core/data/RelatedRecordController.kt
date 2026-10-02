@@ -41,13 +41,7 @@ class RelatedRecordController(
         @RequestParam params: Map<String, String>
     ): PageResponse<RecordResponse> {
         val (_, page) = related.relatedRecords(objectName, id, relationship, queries.parse(params))
-        return PageResponse(
-            content = page.content.map { it.toResponse() },
-            page = page.page,
-            size = page.size,
-            totalElements = page.totalElements,
-            totalPages = page.totalPages
-        )
+        return page.map { it.toResponse() }
     }
 
     @PostMapping("/records/{id}/related/{relationship}")

@@ -163,4 +163,90 @@ class PhysicalTableRecordStoreTest {
         verify(spec).bindNull("s0", String::class.java)
         verify(spec).bind("s1", "12.5")
     }
+
+    // issue 21: a keyset read resumes after (sort value, id), the same pair the ORDER BY ends on
+    @Test
+    fun `a cursor round-trips, even a value with line breaks or none at all`() {
+        val id = UUID.randomUUID()
+        listOf("P-1", "two\nlines", "", null).forEach { value ->
+            val cursor = RecordCursor("codigo", true, value, id)
+            assertThat(RecordCursor.decode(cursor.encode())).isEqualTo(cursor)
+        }
+        assertThat(RecordCursor("codigo", false, "x", id).encode()).doesNotContain("codigo", "\n", "=", "+", "/")
+    }
+
+    @Test
+    fun `a cursor that is not one is a 400 on after`() {
+        listOf(
+            "nope",
+            "",
+            "!!!",
+            java.util.Base64
+                .getUrlEncoder()
+                .encodeToString("2\nid\na\nx\n-".toByteArray())
+        ).forEach { raw ->
+            assertThatThrownBy { RecordCursor.decode(raw) }
+                .describedAs(raw)
+                .isInstanceOf(ValidationException::class.java)
+                .extracting { (it as ValidationException).violations.single().field }
+                .isEqualTo("after")
+        }
+    }
+
+    @Test
+    fun `a not-null sort key resumes with a row comparison in the sort direction`() {
+        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo))
+        val id = UUID.randomUUID()
+        val query = RecordQuery(page = PageRequest.of(0, 10))
+
+        val (asc, bindings) = store().keysetCondition(definition, query, RecordCursor("created_at", false, "2026-10-02 10:00:00+00", id))
+        assertThat(asc).isEqualTo("(created_at, id) > (CAST(:afterValue AS timestamptz), :afterId)")
+        assertThat(bindings).containsEntry("afterValue", "2026-10-02 10:00:00+00").containsEntry("afterId", id)
+
+        val (desc, _) = store().keysetCondition(definition, query.copy(descending = true), RecordCursor("created_at", true, "x", id))
+        assertThat(desc).isEqualTo("(created_at, id) < (CAST(:afterValue AS timestamptz), :afterId)")
+
+        val (byId, idBindings) = store().keysetCondition(definition, query.copy(sort = "id"), RecordCursor("id", false, id.toString(), id))
+        assertThat(byId).isEqualTo("id > :afterId")
+        assertThat(idBindings).containsOnlyKeys("afterId")
+    }
+
+    // nulls sort last ascending and first descending, so the cursor has to step over them the same way
+    @Test
+    fun `a nullable sort key resumes around its nulls`() {
+        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo))
+        val id = UUID.randomUUID()
+        val asc = RecordQuery(page = PageRequest.of(0, 10), sort = "codigo")
+        val desc = asc.copy(descending = true)
+        val c = "\"codigo\""
+        val v = "CAST(:afterValue AS text)"
+
+        assertThat(store().keysetCondition(definition, asc, RecordCursor("codigo", false, "P", id)).first)
+            .isEqualTo("($c > $v OR ($c = $v AND id > :afterId) OR $c IS NULL)")
+        assertThat(store().keysetCondition(definition, asc, RecordCursor("codigo", false, null, id)).first)
+            .isEqualTo("($c IS NULL AND id > :afterId)")
+        assertThat(store().keysetCondition(definition, desc, RecordCursor("codigo", true, "P", id)).first)
+            .isEqualTo("($c < $v OR ($c = $v AND id < :afterId))")
+        assertThat(store().keysetCondition(definition, desc, RecordCursor("codigo", true, null, id)).first)
+            .isEqualTo("(($c IS NULL AND id < :afterId) OR $c IS NOT NULL)")
+        assertThat(store().keysetCondition(definition, desc, RecordCursor("codigo", true, null, id)).second).containsOnlyKeys("afterId")
+    }
+
+    @Test
+    fun `a cursor from another sort, or after combined with a page, is a 400`() {
+        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo))
+        val cursor = RecordCursor("created_at", false, "x", UUID.randomUUID())
+
+        assertThatThrownBy { store().keysetCondition(definition, RecordQuery(page = PageRequest.of(0, 10), sort = "codigo"), cursor) }
+            .isInstanceOf(ValidationException::class.java)
+        assertThatThrownBy { store().keysetCondition(definition, RecordQuery(page = PageRequest.of(0, 10), descending = true), cursor) }
+            .isInstanceOf(ValidationException::class.java)
+        assertThatThrownBy {
+            kotlinx.coroutines.runBlocking {
+                store().query(definition, UUID.randomUUID(), RecordQuery(page = PageRequest.of(1, 10), after = cursor.encode()))
+            }
+        }.isInstanceOf(ValidationException::class.java)
+            .extracting { (it as ValidationException).violations.single().field }
+            .isEqualTo("after")
+    }
 }

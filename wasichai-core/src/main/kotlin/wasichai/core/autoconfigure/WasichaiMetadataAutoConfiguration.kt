@@ -3,6 +3,7 @@ package wasichai.core.autoconfigure
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
@@ -12,6 +13,7 @@ import wasichai.core.metadata.CallerPermissionsController
 import wasichai.core.metadata.CallerPermissionsService
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.DeclaredIndexReconciler
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.FieldUsage
@@ -37,16 +39,17 @@ class WasichaiMetadataAutoConfiguration {
     @ConditionalOnMissingBean
     fun fieldTypeRegistry(handlers: ObjectProvider<FieldTypeHandler>): FieldTypeRegistry = FieldTypeRegistry(handlers.orderedStream().toList())
 
+    // JsonMapper, not the wider ObjectMapper: Boot 4.1's JacksonAutoConfiguration exposes a
+    // JsonMapper bean (jackson 3). asking for the narrower type binds to it unambiguously even if
+    // an app also has some other ObjectMapper-typed bean lying around.
     @Bean
     @ConditionalOnMissingBean
     fun customObjectRepository(
         db: DatabaseClient,
-        schemas: WasichaiSchemas
-    ): CustomObjectRepository = CustomObjectRepository(db, schemas)
+        schemas: WasichaiSchemas,
+        objectMapper: JsonMapper
+    ): CustomObjectRepository = CustomObjectRepository(db, schemas, objectMapper)
 
-    // JsonMapper, not the wider ObjectMapper: Boot 4.1's JacksonAutoConfiguration exposes a
-    // JsonMapper bean (jackson 3). asking for the narrower type binds to it unambiguously even if
-    // an app also has some other ObjectMapper-typed bean lying around.
     @Bean
     @ConditionalOnMissingBean
     fun customFieldRepository(
@@ -70,6 +73,16 @@ class WasichaiMetadataAutoConfiguration {
         schemas: WasichaiSchemas,
         types: FieldTypeRegistry
     ): ObjectSchemaManager = ObjectSchemaManager(db, schemas, types)
+
+    // switched off by an app that manages its data-table indexes itself
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty("wasichai.metadata.reconcile-indexes", havingValue = "true", matchIfMissing = true)
+    fun declaredIndexReconciler(
+        objects: CustomObjectRepository,
+        fields: CustomFieldRepository,
+        schema: ObjectSchemaManager
+    ): DeclaredIndexReconciler = DeclaredIndexReconciler(objects, fields, schema)
 
     @Bean
     @ConditionalOnMissingBean

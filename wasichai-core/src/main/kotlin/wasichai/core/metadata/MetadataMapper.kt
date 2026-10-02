@@ -20,6 +20,7 @@ class MetadataMapper(
             enabled = definition.obj.enabled,
             createdAt = definition.obj.createdAt,
             updatedAt = definition.obj.updatedAt,
+            indexes = definition.obj.indexes,
             extensions = types.objectProperties(definition)
         )
 
@@ -35,6 +36,7 @@ class MetadataMapper(
             description = definition.obj.description,
             enabled = definition.obj.enabled,
             fields = toFieldResponses(definition.fields, organizationId),
+            indexes = definition.obj.indexes,
             extensions = types.objectProperties(definition)
         )
 
@@ -69,6 +71,7 @@ class MetadataMapper(
             relationTarget = relationTargetName,
             visible = field.visible,
             editable = field.editable,
+            indexed = field.indexed,
             extensions = types.fieldProperties(field)
         )
 }

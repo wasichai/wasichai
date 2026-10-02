@@ -2,6 +2,25 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Declared indexes, lists without a count, keyset reads
+
+A field can be `indexed: true` and an object can list composite `indexes: [["anio", "predio"]]`. Every `RELATION`
+column is indexed whether declared or not, because PostgreSQL does not index a foreign key. The indexes are stored in
+metadata (core migration `V3__declared_indexes.sql`) and built through `ObjectSchemaManager` on every organization's
+table as its model is applied, under names derived from the column list (`<table>_ix_<hash>`). They are dropped when
+the declaration goes. Applying the same metadata twice changes nothing. `DeclaredIndexReconciler` runs at startup and
+builds what the metadata declares and the catalog lacks, which is how tables from before this change get their
+relation indexes (`wasichai.metadata.reconcile-indexes=false` switches it off).
+
+A record list takes `?count=false` (`RecordQuery.count`) to skip the `COUNT(*)`, and its `totalElements` and
+`totalPages` are then `null`. Every page now carries `nextCursor` when another row follows, and `?after=<cursor>`
+(`RecordQuery.after`) resumes strictly after that row's `(sort value, id)`, the pair #20 made unique. Reading a large
+set therefore costs one pass, and every row comes back once, tied ones included. `after` with `page > 0`, or a cursor
+from another sort, is a `400`. With none of this, an object, a field and a page read exactly as before. ADR-036
+records the decisions. Tested by `FieldSetsTest`, `ObjectSchemaManagerTest`, `PhysicalTableRecordStoreTest`,
+`RecordQueryParserTest`, `PageResponseTest`, `RecordServiceTest`, `DeclaredIndexApiTest` (second organization,
+`EXPLAIN`, reconciliation) and `RecordKeysetApiTest`. Closes #21.
+
 ## 2026-10-02 — Record lists page in a stable order
 
 A record list ordered by one key only, so rows tied on it (a receipt and its lines share `created_at`) could repeat or
