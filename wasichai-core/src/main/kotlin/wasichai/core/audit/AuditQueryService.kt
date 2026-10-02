@@ -96,7 +96,7 @@ class AuditQueryService(
                     WHERE a.organization_id = :organizationId
                       AND (:objectName = '' OR a.object_name = :objectName)
                       AND (:operation = '' OR a.operation = :operation)$filters
-                    ORDER BY a.occurred_at DESC
+                    ORDER BY a.occurred_at DESC, a.id DESC
                     LIMIT :limit
                     """.trimIndent()
                 ).bind("organizationId", organizationId)

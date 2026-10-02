@@ -307,7 +307,7 @@ class PhysicalTableRecordStore(
         return values
     }
 
-    private fun orderBy(
+    internal fun orderBy(
         definition: ObjectDefinition,
         query: RecordQuery
     ): String {
@@ -319,7 +319,8 @@ class PhysicalTableRecordStore(
                 requested in setOf("id", "created_at", "updated_at") -> requested
                 else -> SqlIdentifier.quote(fieldOrFail(definition, requested).columnName)
             }
-        return "ORDER BY $column $direction"
+        // id last: rows of one transaction tie on created_at, and OFFSET over a tie can repeat or skip rows
+        return if (column == "id") "ORDER BY id $direction" else "ORDER BY $column $direction, id $direction"
     }
 
     private fun fieldOrFail(

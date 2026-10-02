@@ -78,6 +78,14 @@ These are the only intended differences. Anything else that behaves differently 
   `oklch(52% 0.13 155)`: every success text, badge and icon in light is a little darker, 5.0:1 on `surface` and 4.6:1
   on `success-soft`. Dark is unchanged. Tested by wasichai-ui's `theme.test.ts`.
 
+**Because paging must be stable**
+
+- **D21. Tied rows have a stable order.** The original ordered a record list by the sort key alone, so rows sharing it
+  (everything one transaction writes shares `created_at`) came back in whatever order the plan produced, and a client
+  paging through them could see a row twice and miss a sibling. Now every record list ends its `ORDER BY` with `id`, in
+  the direction of the primary sort, and the audit list does the same. Tested by `PhysicalTableRecordStoreTest` and
+  `RecordApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
