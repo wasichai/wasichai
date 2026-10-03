@@ -16,28 +16,34 @@ import java.util.UUID
  * would refuse it anyway, but as a 409 meant for the delete race (ADR-044): a client that sent an id
  * that never existed made a mistake on a field, a 400.
  *
- * Checked before guards and the store: one tenant-filtered read per target object, only for values
- * sent and non-null. Missing and another organization's record answer the same, so nothing leaks. A
- * record deleted between this check and the write still fails the FK: that stays the 409.
+ * Called by [RecordWriteGuards], after the built-in write rules and before the app's guards, so every
+ * write path checks. One tenant-filtered read per target object, only for values sent, non-null and
+ * changed. Missing and another organization's record answer the same, so nothing leaks. A record
+ * deleted between this check and the write still fails the FK: that stays the 409.
  */
-class RelationTargets(
+open class RelationTargets(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
     private val objects: CustomObjectRepository
 ) {
+    // [before]: the stored row on an update. a value it already holds is not looked up again.
     suspend fun rejectMissing(
         organizationId: UUID,
         definition: ObjectDefinition,
-        attributes: Map<String, Any?>
+        attributes: Map<String, Any?>,
+        before: Map<String, Any?>? = null
     ) {
         // field -> id, only what can be looked up. a value that is no uuid is the codec's 400, later.
         val sent =
             definition.fields
                 .filter { it.type == FieldType.RELATION && it.relationTargetObjectId != null }
-                .mapNotNull { field -> uuidOf(attributes[field.name])?.let { field to it } }
+                .mapNotNull { field ->
+                    val id = uuidOf(attributes[field.name]) ?: return@mapNotNull null
+                    if (before != null && uuidOf(before[field.name]) == id) null else field to id
+                }
         if (sent.isEmpty()) return
         val missing =
-            sent.groupBy({ it.first.relationTargetObjectId!! }) { it }.flatMap { (targetObjectId, pairs) ->
+            sent.groupBy { it.first.relationTargetObjectId!! }.flatMap { (targetObjectId, pairs) ->
                 val found = existing(organizationId, targetObjectId, pairs.map { it.second }.distinct())
                 pairs.filter { it.second !in found }.map { it.first }
             }
@@ -51,7 +57,8 @@ class RelationTargets(
     }
 
     // the ids of [ids] that are records of this organization. no target object: none are.
-    private suspend fun existing(
+    // open for unit tests only.
+    internal open suspend fun existing(
         organizationId: UUID,
         targetObjectId: UUID,
         ids: List<UUID>

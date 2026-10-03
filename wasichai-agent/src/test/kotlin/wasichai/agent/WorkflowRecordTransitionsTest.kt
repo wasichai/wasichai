@@ -4,15 +4,19 @@ import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditService
 import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWriteGuards
+import wasichai.core.data.RelationTargets
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
+import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectSchemaManager
+import wasichai.core.platform.WasichaiSchemas
 import wasichai.workflow.AvailableTransition
 import wasichai.workflow.WorkflowRepository
 import wasichai.workflow.WorkflowService
@@ -36,7 +40,10 @@ class WorkflowRecordTransitionsTest {
             mock(CurrentUser::class.java),
             mock(AccessPolicy::class.java),
             emptyList(),
-            RecordWriteGuards(emptyList())
+            RecordWriteGuards(
+                emptyList(),
+                RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java))
+            )
         ) {
             override suspend fun transitionsOf(
                 objectName: String,

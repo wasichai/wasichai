@@ -189,6 +189,100 @@ class RelationTargetApiTest : WasichaiIntegrationTest() {
         listRecords(admin, receipt).jsonPath("$.totalElements").isEqualTo(0)
     }
 
+    // the built-in write rules come first (ADR-040, ADR-041): a write that can never happen is refused as such
+    @Test
+    fun `an update of an append-only record is a 409 whatever its relation names`() {
+        val ledger = uniqueName("ledger")
+        createObject(admin, ledger, relationFields("customer"), mapOf("appendOnly" to true))
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+        val r = createRecord(admin, ledger, mapOf("codigo" to "L-1", "customer" to c))
+
+        client
+            .put()
+            .uri("/api/objects/$ledger/records/$r")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("codigo" to "L-1", "customer" to UUID.randomUUID().toString())))
+            .exchange()
+            .expectStatus()
+            .isEqualTo(409)
+    }
+
+    @Test
+    fun `a missing reason is reported before a relation naming no record`() {
+        val strict = uniqueName("strict")
+        createObject(admin, strict, relationFields("customer"), mapOf("requiresReason" to true))
+
+        client
+            .post()
+            .uri("/api/objects/$strict/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("codigo" to "S-1", "customer" to UUID.randomUUID().toString())))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors.length()")
+            .isEqualTo(1)
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("reason")
+    }
+
+    @Test
+    fun `two relations to the same object are both named, in field order`() {
+        val sale = uniqueName("sale")
+        createObject(admin, sale, relationFields("buyer", "seller"))
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+
+        client
+            .post()
+            .uri("/api/objects/$sale/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("seller" to UUID.randomUUID().toString(), "buyer" to UUID.randomUUID().toString())))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("Invalid value for 'buyer', 'seller'")
+            .jsonPath("$.errors.length()")
+            .isEqualTo(2)
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("buyer")
+            .jsonPath("$.errors[1].field")
+            .isEqualTo("seller")
+
+        // one good, one not: only the bad one is named
+        client
+            .post()
+            .uri("/api/objects/$sale/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("buyer" to c, "seller" to UUID.randomUUID().toString())))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors.length()")
+            .isEqualTo(1)
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("seller")
+        listRecords(admin, sale).jsonPath("$.totalElements").isEqualTo(0)
+    }
+
+    @Test
+    fun `a value that is no uuid is still the codec's 400`() {
+        createReceipt(admin, mapOf("codigo" to "R-1", "customer" to "not-a-uuid"))
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("customer")
+            .jsonPath("$.errors[0].message")
+            .isEqualTo("is not a UUID")
+    }
+
+    private fun relationFields(vararg names: String): List<Map<String, Any>> =
+        listOf(mapOf("name" to "codigo", "type" to "TEXT")) + names.map { mapOf("name" to it, "type" to "RELATION", "relationTarget" to customer) }
+
     private fun applyModel(token: String) {
         createObject(token, customer, listOf(mapOf("name" to "codigo", "type" to "TEXT")))
         createObject(
@@ -204,12 +298,13 @@ class RelationTargetApiTest : WasichaiIntegrationTest() {
     private fun createObject(
         token: String,
         name: String,
-        fields: List<Map<String, Any>>
+        fields: List<Map<String, Any>>,
+        flags: Map<String, Any> = emptyMap()
     ) = client
         .post()
         .uri("/api/objects")
         .header(HttpHeaders.AUTHORIZATION, token)
-        .bodyValue(mapOf("name" to name, "label" to name, "fields" to fields))
+        .bodyValue(mapOf("name" to name, "label" to name, "fields" to fields) + flags)
         .exchange()
         .expectStatus()
         .isCreated

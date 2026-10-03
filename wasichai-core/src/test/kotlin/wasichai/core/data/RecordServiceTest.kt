@@ -129,9 +129,8 @@ class RecordServiceTest {
             NoWorkflowStates(),
             types,
             emptyList(),
-            RecordWriteGuards(emptyList()),
-            AppendOnlyReferencesFixtures.none(),
-            RelationTargetsFixtures.none()
+            RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
+            AppendOnlyReferencesFixtures.none()
         )
     }
 

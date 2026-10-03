@@ -93,7 +93,10 @@ class WasichaiDataAutoConfiguration {
 
     // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
     @Bean
-    fun recordWriteGuards(guards: ObjectProvider<RecordWriteGuard>): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList())
+    fun recordWriteGuards(
+        guards: ObjectProvider<RecordWriteGuard>,
+        relationTargets: RelationTargets
+    ): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList(), relationTargets)
 
     // no @ConditionalOnMissingBean: appendOnly is for everyone (ADR-040)
     @Bean
@@ -106,7 +109,7 @@ class WasichaiDataAutoConfiguration {
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships) { TransactionalOperator.create(transactionManager.getObject()) }
 
-    // no @ConditionalOnMissingBean: a relation value naming no record is a 400 for everyone (D29)
+    // no @ConditionalOnMissingBean: a relation value naming no record is a 400 for everyone, through RecordWriteGuards (D29)
     @Bean
     fun relationTargets(
         db: DatabaseClient,
@@ -126,10 +129,8 @@ class WasichaiDataAutoConfiguration {
         types: FieldTypeRegistry,
         changes: ObjectProvider<RecordChangeListener>,
         guards: RecordWriteGuards,
-        references: AppendOnlyReferences,
-        relationTargets: RelationTargets
-    ): RecordService =
-        RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references, relationTargets)
+        references: AppendOnlyReferences
+    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references)
 
     @Bean
     @ConditionalOnMissingBean

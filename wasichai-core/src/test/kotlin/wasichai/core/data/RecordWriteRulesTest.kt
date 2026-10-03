@@ -161,9 +161,8 @@ class RecordWriteRulesTest {
             NoWorkflowStates(),
             FieldTypeRegistry(emptyList()),
             listOf(listener),
-            RecordWriteGuards(listOf(guard)),
-            AppendOnlyReferencesFixtures.none(),
-            RelationTargetsFixtures.none()
+            RecordWriteGuards(listOf(guard), RelationTargetsFixtures.none()),
+            AppendOnlyReferencesFixtures.none()
         )
     }
 

@@ -870,8 +870,10 @@ Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an 
 write with its own status, `400` or `409` as a rule.
 
 A `RELATION` value must name a record of the caller's organization. One that names no record, or a record of another
-organization, is a `400` on the field, the same answer either way, and nothing is stored. It is checked before any
-`RecordWriteGuard`, only for values sent and not `null`; a value that is no UUID is the usual `400` "is not a UUID":
+organization, is a `400` on the field, the same answer either way, and nothing is stored. It is checked after the
+write rules above (`appendOnly` answers its `409`, `requiresReason` its `400` on `reason`, first) and before any
+`RecordWriteGuard`, only for values sent, not `null` and, on `PUT`, different from the stored one. A value that is no
+UUID is still the usual `400` "is not a UUID":
 
 ```json
 {
