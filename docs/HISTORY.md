@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — Integration tests bind their server to 127.0.0.1
+
+`GeometryWireParityTest` once failed with `404` on all five cases under load (issue #34). The failing step was the
+login every test starts with, and wasichai's login never answers `404`: another process had answered. Reproduced on
+macOS: the test server listened on every address of its random port, the kernel lets another process bind
+`127.0.0.1` on that same port, and the more specific socket gets every `localhost` request. Any local HTTP server
+doing that (an IDE, a tool) turned the suite's login into its `404`. Linux refuses that bind, so CI never saw it.
+`WasichaiIntegrationTest` now sets `server.address=127.0.0.1`: a second `127.0.0.1` bind on the port is refused.
+`bearer()` fails with the URL, status, response headers and body instead of the status alone. New test:
+`TestServerPortTest` (coreOnly), which binds a `404` server on the test server's port and logs in through it.
+
 ## 2026-10-03 — A RELATION value naming no record is a 400
 
 A `RELATION` value was only checked to be a UUID; the column's foreign key refused one naming no record, and since
