@@ -5,8 +5,8 @@ Base path `/api`. Everything except `/api/auth/login` and `/api/health` needs
 
 ## Modules and routes
 
-Core serves auth, organizations, objects, fields, relationships, records, related records, caller permissions,
-audit and history, and admin. Every other route belongs to one module and exists only when that module is
+Core serves auth, organizations, objects, fields, declared actions, relationships, records, related records, caller
+permissions, audit and history, and admin. Every other route belongs to one module and exists only when that module is
 installed (its starter is on the classpath and `wasichai.<module>.enabled` is not `false`):
 
 | Module | Routes | Doc |
@@ -38,8 +38,9 @@ PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  â†
 ```
 
 Only objects the caller may `READ` are listed, as in `GET /api/objects`, each with the record actions
-the caller holds on it: `READ`, `CREATE`, `UPDATE`, `DELETE`. The administrator gets all four on every
-object. Field access is not repeated here: the definition endpoints already leave out the fields the
+the caller holds on it: `READ`, `CREATE`, `UPDATE`, `DELETE`, followed by the [declared actions](#declared-actions)
+they hold, by name (`["READ", "CREATE", "ANULAR_AJENO"]`). The administrator gets all four on every
+object, plus every action the object declares. Field access is not repeated here: the definition endpoints already leave out the fields the
 caller cannot read and mark the ones they cannot write `editable: false`.
 
 The answer is for hiding actions a client would be refused, and it grants nothing: every write is
@@ -64,6 +65,7 @@ DELETE /api/objects/{object}                     drop object, its table and its 
 GET    /api/metadata/objects/{object}            same definition, spec-shaped path
 GET    /api/metadata/objects/{object}/fields
 POST   /api/metadata/objects/{object}/fields     add a field (ALTER TABLE)
+GET    /api/metadata/objects/{object}/actions    declared actions (see below)
 GET    /api/metadata/objects/{object}/views
 GET    /api/metadata/objects/{object}/pages
 ```
@@ -213,6 +215,42 @@ Three flags, all `false` unless set, all in the create request, in `PUT` and in 
 
 On `PUT`, leaving any of the three flags out keeps it as it is (unlike `enabled`, which defaults to `true`): a client
 that does not know a flag never switches it off by saving a label.
+
+## Declared actions
+
+```http
+GET    /api/metadata/objects/{object}/actions             what may be granted beyond CRUD (READ on the object)
+POST   /api/metadata/objects/{object}/actions             declare one (MANAGE_METADATA)
+DELETE /api/metadata/objects/{object}/actions/{action}    remove it and every grant of it (MANAGE_METADATA)
+```
+
+An object declares the verbs it has beyond `READ`/`CREATE`/`UPDATE`/`DELETE`, so a role can be granted them and the
+app can check them ([ADR-042](../adr/0042-app-declared-actions.md)):
+
+```json
+{ "name": "ANULAR_AJENO", "label": "Anular recibo ajeno" }
+```
+
+`name` is upper snake, `^[A-Z][A-Z0-9_]{1,48}$`, sent in any case and stored upper; one of the built-in actions
+(`READ`, `CREATE`, `UPDATE`, `DELETE`, `MANAGE_METADATA`, `MANAGE_ORGANIZATION`) or a bad shape is `400`, a name the
+object already declares is `409`. `label` defaults to the name. The response, and each entry of the list, is
+`{ name, label }`. Deleting an action the object does not declare is `404`.
+
+A declared action is granted with `PUT /api/roles/{name}/permissions` like any other, always with the `objectName` that
+declares it:
+
+```json
+{ "permissions": [ { "objectName": "recibo", "action": "READ" }, { "objectName": "recibo", "action": "ANULAR_AJENO" } ] }
+```
+
+The same entry without `objectName`, or naming an object that does not declare the action, is
+`400 Unknown action 'ANULAR_AJENO'`, as is any name that is neither built in nor declared. The app checks it with
+`CurrentUser.requirePermission(user, "ANULAR_AJENO", objectId)`; `ADMIN` holds every declared action. The caller sees
+the ones they hold in `GET /api/auth/me/permissions`. Removing the declaration removes its grants with it.
+
+The permissions `PUT` replaces the role's whole set, so a client must send the declared grants back with the rest. A
+client that drops actions it does not know deletes them on save; wasichai-ui's roles page does this today, until its
+`Action` type is widened and it keeps declared rows (ADR-042).
 
 ## Organizations
 

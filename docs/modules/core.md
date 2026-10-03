@@ -40,6 +40,8 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Organizations: the tenant itself, under `/api/organizations`.
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
+- Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
+  checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
 - Dynamic records and related records: `/api/objects/{object}/records`.
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`.
@@ -161,10 +163,11 @@ Migration location `classpath:db/wasichai/core`, history table `flyway_history_c
 ([ADR-026](../adr/0026-per-module-migrations.md)). Creates the `pgcrypto` extension `WITH SCHEMA public` (shared by
 every app in the database, so it outlives any one app) and, when the server ships it, `pgvector` the same way.
 Tables: `organizations`, `users`, `roles`, `user_roles`, `custom_objects`, `custom_fields`, `relationships`,
-`permissions`, `field_permissions`, `audit_log`. `V3__declared_indexes.sql` adds `custom_fields.indexed` and
-`custom_objects.indexes` ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)). The indexes
-themselves sit on each data table, built by `ObjectSchemaManager`. A declared index is named
-`<physical table>_ix_<hash of its columns>`. `V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
+`permissions`, `field_permissions`, `audit_log`, `user_preferences` (`V2`) and `object_actions` (`V7`, ADR-042).
+`V3__declared_indexes.sql` adds `custom_fields.indexed` and `custom_objects.indexes`
+([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)). The indexes themselves sit on each data
+table, built by `ObjectSchemaManager`. A declared index is named `<physical table>_ix_<hash of its columns>`.
+`V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
 ([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)), whose constraints are named
 `<physical table>_uq_<hash of its columns>`.
 
@@ -265,6 +268,8 @@ Core is always installed.
   write (ADR-040).
 - D25: an optional change reason on every record write, stored in the audit log, and `requiresReason` objects that
   answer `400` without one (ADR-041).
+- D26: objects declare actions beyond CRUD, granted per role like any other, a new `object_actions` table and a
+  `permissions` column (ADR-042).
 
 ## Known limitations
 

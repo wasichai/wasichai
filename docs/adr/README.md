@@ -53,3 +53,5 @@ supersedes it and says so in its status line.
 - [ADR-040: Append-only objects, a pre-write guard SPI, and api-only
   objects](0040-append-only-objects-and-a-pre-write-guard.md)
 - [ADR-041: A change reason on record writes, required per object](0041-a-change-reason-on-record-writes.md)
+- [ADR-042: An object declares its own actions, and they are granted, checked and listed like
+  CRUD](0042-app-declared-actions.md)

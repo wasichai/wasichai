@@ -16,6 +16,7 @@ import wasichai.core.common.ValidationException
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
@@ -27,6 +28,7 @@ import java.util.UUID
 class AdminService(
     private val db: DatabaseClient,
     private val metadata: MetadataService,
+    private val actions: ObjectActionRepository,
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas
@@ -226,13 +228,20 @@ class AdminService(
         val resolved =
             request.permissions.map { entry ->
                 val action = entry.action.trim().uppercase()
-                if (action !in KNOWN_ACTIONS) {
-                    throw ValidationException("Unknown action '$action'", "action", "must be one of ${KNOWN_ACTIONS.joinToString(", ")}")
+                val objectName =
+                    entry.objectName
+                        ?.trim()
+                        ?.lowercase()
+                        ?.ifBlank { null }
+                // the action is judged before the object, as it always was
+                if (action !in Actions.BUILT_IN && !isDeclared(admin.organizationId, objectName, action)) {
+                    throw ValidationException(
+                        "Unknown action '$action'",
+                        "action",
+                        "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
+                    )
                 }
-                val objectId =
-                    entry.objectName?.trim()?.lowercase()?.ifBlank { null }?.let {
-                        objectOrBadRequest(admin.organizationId, it).obj.id
-                    }
+                val objectId = objectName?.let { objectOrBadRequest(admin.organizationId, it).obj.id }
                 Triple(objectId, action, entry.allowed)
             }
 
@@ -495,6 +504,22 @@ class AdminService(
             throw ValidationException("Unknown object '$objectName'", "objectName", "object does not exist")
         }
 
+    // a declared action (ADR-042) exists only on the object that declares it, never tenant-wide
+    private suspend fun isDeclared(
+        organizationId: UUID,
+        objectName: String?,
+        action: String
+    ): Boolean {
+        if (objectName == null) return false
+        val objectId =
+            try {
+                metadata.loadDefinition(organizationId, objectName).obj.id
+            } catch (ignored: NotFoundException) {
+                return false
+            }
+        return actions.exists(organizationId, objectId, action)
+    }
+
     private suspend fun resolveRoles(
         organizationId: UUID,
         names: List<String>
@@ -537,14 +562,5 @@ class AdminService(
     companion object {
         private const val MIN_PASSWORD = 8
         private val ROLE_NAME = Regex("^[A-Z][A-Z0-9_]{1,48}$")
-        private val KNOWN_ACTIONS =
-            setOf(
-                Actions.READ,
-                Actions.CREATE,
-                Actions.UPDATE,
-                Actions.DELETE,
-                Actions.MANAGE_METADATA,
-                Actions.MANAGE_ORGANIZATION
-            )
     }
 }

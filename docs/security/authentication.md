@@ -39,11 +39,14 @@ present.
 ## Authorization
 
 Permissions are `(role, object, action)` with actions `READ`, `CREATE`, `UPDATE`, `DELETE` and
-`MANAGE_METADATA`. `object_id NULL` means "every object in the organization". `ADMIN` short-circuits
-the check. Field- and record-level permissions are enforced: `own_records_only` limits a role to the
-records it created (a caller with several roles is restricted only if every one of them sets it), and
-field access hides unreadable fields from responses and refuses writes to unwritable ones.
-`GET /api/auth/me/permissions` tells the caller what they may do (ADR-020).
+`MANAGE_METADATA`. `object_id NULL` means "every object in the organization". An object may also declare actions of
+its own, such as `ANULAR_AJENO` on `recibo`: they are granted on that object only, checked with
+`CurrentUser.requirePermission(user, "ANULAR_AJENO", objectId)`, and their grants go when the declaration does
+([ADR-042](../adr/0042-app-declared-actions.md)). `ADMIN` short-circuits the check, declared actions included.
+Field- and record-level permissions are enforced: `own_records_only` limits a role to the records it created (a
+caller with several roles is restricted only if every one of them sets it), and field access hides unreadable fields
+from responses and refuses writes to unwritable ones. `GET /api/auth/me/permissions` tells the caller what they may do
+(ADR-020).
 
 ## The security chain
 

@@ -132,6 +132,18 @@ These are the only intended differences. Anything else that behaves differently 
   `ChangeReasonTest`, `RecordWriteRulesTest`, `ChangeReasonApiTest`, `WorkflowWriteRulesTest` and
   `AutomationWriteRulesTest`.
 
+**Because an object has verbs of its own**
+
+- **D26. Declared actions.** The original's permissions were a closed set, and a privilege that is not CRUD was an
+  object of its own or a role-name check in app code. Now an object can declare actions (`object_actions` table,
+  `/api/metadata/objects/{object}/actions`), granted through `PUT /api/roles/{name}/permissions` with the declaring
+  `objectName`, and `permissions` gains a stored `declared_object_id` column. Observable changes: the `400 Unknown
+  action` violation text now ends "or an action the object declares" (the message is the same); `GET
+  /api/auth/me/permissions` may list declared actions after the four record actions; and wasichai-ui's roles page,
+  typed by a closed `Action` union, drops declared rows, so saving a role there deletes its declared grants until the UI
+  follows up. Tested by `DeclaredActionsApiTest` and `SchemaParityTest`
+  ([ADR-042](0042-app-declared-actions.md)).
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
