@@ -16,9 +16,10 @@ answer for a missing one (`400`, "Invalid value for '<field>'", `errors[].field`
 platform and automations keep the organization-only check. A value an update leaves as stored is still not looked up,
 so an update keeping a link the caller cannot see goes through. `RecordWriteGuards.beforeWrite` takes an optional
 third parameter, `reader: AuthenticatedUser?` (default `null`, organization only), which `RecordService` passes on
-create and update; it must be the user of the `RecordWrite`. `RelationTargets.rejectMissing` takes the same optional
-`reader`. Public Kotlin API: source compatible, not binary compatible. New tests in `RelationTargetApiTest`,
-`RelationTargetsTest` and `RecordServiceTest`. ADR-031 D30.
+create and update; it must be the user of the `RecordWrite`, and a write with a user that sets a `RELATION` value
+without it throws `IllegalStateException` (fail closed; links, transitions and deletes set none).
+`RelationTargets.rejectMissing` takes the same optional `reader`. Public Kotlin API: source compatible, not binary
+compatible. New tests in `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`. ADR-031 D30.
 
 ## 2026-10-03 — A RELATION value naming no record is a 400
 

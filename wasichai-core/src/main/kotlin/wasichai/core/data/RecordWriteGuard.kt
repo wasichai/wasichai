@@ -63,8 +63,8 @@ class RecordWriteGuards(
     // appendOnly first, then requiresReason, then relation targets (D29): no guard is asked about a write
     // that can never happen.
     // [reader]: the person or service account writing, whose read scope the relation targets must be in
-    // (D30). null: the platform, an automation, or a write that carries no RELATION value (links,
-    // transitions, deletes); those check the organization only.
+    // (D30). null: the platform or an automation, which check the organization only, or a user's write
+    // that sets no RELATION value (links, transitions, deletes). a user's write that sets one throws.
     suspend fun beforeWrite(
         definition: ObjectDefinition,
         change: RecordWrite,
@@ -86,7 +86,14 @@ class RecordWriteGuards(
             )
         }
         // every write path passes here, so every one checks its relation values: api, platform, automations
-        change.attributes?.let { relationTargets.rejectMissing(change.organizationId, definition, it, change.before, reader) }
+        change.attributes?.let { attributes ->
+            // a user's write without its reader would check the organization only: fail closed (D30). links,
+            // transitions and deletes look nothing up, the platform and automations have no user
+            check(reader != null || change.userId == null || relationTargets.lookups(definition, attributes, change.before).isEmpty()) {
+                "a write by a user that sets RELATION values must pass that user as the reader"
+            }
+            relationTargets.rejectMissing(change.organizationId, definition, attributes, change.before, reader)
+        }
         guards.forEach { it.beforeWrite(change) }
     }
 }

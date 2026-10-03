@@ -9,6 +9,7 @@ import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.RoleQueries
+import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
@@ -44,14 +45,7 @@ open class RelationTargets(
         before: Map<String, Any?>? = null,
         reader: AuthenticatedUser? = null
     ) {
-        // field -> id, only what can be looked up. a value that is no uuid is the codec's 400, later.
-        val sent =
-            definition.fields
-                .filter { it.type == FieldType.RELATION && it.relationTargetObjectId != null }
-                .mapNotNull { field ->
-                    val id = uuidOf(attributes[field.name]) ?: return@mapNotNull null
-                    if (before != null && uuidOf(before[field.name]) == id) null else field to id
-                }
+        val sent = lookups(definition, attributes, before)
         if (sent.isEmpty()) return
         // a service account is never ADMIN (ADR-043), so it is always scoped
         val scope = reader?.takeUnless { it.isAdmin }
@@ -68,6 +62,20 @@ open class RelationTargets(
             fields.map { FieldViolation(it.name, "no record with this id") }
         )
     }
+
+    // field -> id, only what can be looked up: RELATION values sent, non-null, changed. a value that is
+    // no uuid is the codec's 400, later.
+    internal fun lookups(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>,
+        before: Map<String, Any?>?
+    ): List<Pair<CustomField, UUID>> =
+        definition.fields
+            .filter { it.type == FieldType.RELATION && it.relationTargetObjectId != null }
+            .mapNotNull { field ->
+                val id = uuidOf(attributes[field.name]) ?: return@mapNotNull null
+                if (before != null && uuidOf(before[field.name]) == id) null else field to id
+            }
 
     // the ids of [ids] that are records of this organization, and readable by [scope] when one is
     // given. no target object: none are. open for unit tests only.

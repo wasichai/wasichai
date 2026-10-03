@@ -136,6 +136,52 @@ class RelationTargetsTest {
             assertThat(lookups).isEmpty()
         }
 
+    // fix round 1 (D30): a write with a user must say who reads, or the check would be tenant-only
+    private val guards = RecordWriteGuards(emptyList(), targets)
+
+    private fun write(
+        userId: UUID?,
+        attributes: Map<String, Any?>,
+        before: Map<String, Any?>? = null
+    ) = RecordWrite(
+        organizationId = organizationId,
+        userId = userId,
+        objectId = definition.obj.id,
+        objectName = definition.obj.name,
+        recordId = if (before == null) null else UUID.randomUUID(),
+        kind = if (before == null) RecordChangeKind.CREATED else RecordChangeKind.UPDATED,
+        before = before,
+        attributes = attributes
+    )
+
+    @Test
+    fun `a user's write that looks up a relation without its reader fails closed, before any read`() =
+        runTest {
+            val ex = runCatching { guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to known))) }.exceptionOrNull()
+            assertThat(ex).isInstanceOf(IllegalStateException::class.java)
+            assertThat(lookups).isEmpty()
+        }
+
+    @Test
+    fun `a user's write with nothing to look up needs no reader`() =
+        runTest {
+            val stored = UUID.randomUUID()
+            // a link names its relationship, a transition or a delete carries no attributes, a kept value is not looked up
+            guards.beforeWrite(definition, write(member.userId, mapOf("rel:sale" to UUID.randomUUID())))
+            guards.beforeWrite(definition, write(member.userId, mapOf("codigo" to "X", "buyer" to null)))
+            guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to stored), before = mapOf("buyer" to stored)))
+            guards.beforeWrite(definition, write(member.userId, emptyMap()).copy(attributes = null, kind = RecordChangeKind.DELETED))
+            assertThat(lookups).isEmpty()
+        }
+
+    @Test
+    fun `the platform and automations look up with no reader, a user with theirs`() =
+        runTest {
+            guards.beforeWrite(definition, write(null, mapOf("buyer" to known)))
+            guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to known)), member)
+            assertThat(scopes).containsExactly(null, member)
+        }
+
     private fun relation(
         name: String,
         target: UUID

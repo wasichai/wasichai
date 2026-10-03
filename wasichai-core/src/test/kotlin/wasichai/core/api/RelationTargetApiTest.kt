@@ -385,6 +385,35 @@ class RelationTargetApiTest : WasichaiIntegrationTest() {
         assertThat(created.attributes["customer"].toString()).isEqualTo(theirs)
     }
 
+    // a platform record has no creator: an own-records-only caller cannot read it, so cannot name it either
+    @Test
+    fun `an own-records-only caller cannot name a record the platform created`() {
+        val role = newRole(ownRecordsOnly = true)
+        grant(role, customer to "READ", receipt to "READ", receipt to "CREATE")
+        val member = newUserToken(role)
+        val platformMade =
+            runBlocking { records.asPlatform(organizationId) { records.create(customer, RecordRequest(mapOf("codigo" to "PLATFORM"))) } }.id
+
+        val unseen = createReceipt(member, mapOf("codigo" to "R-1", "customer" to platformMade)).expectStatus().isBadRequest.problem()
+        val missing = createReceipt(member, mapOf("codigo" to "R-1", "customer" to UUID.randomUUID().toString())).expectStatus().isBadRequest.problem()
+
+        assertThat(unseen).isEqualTo(missing)
+        listRecords(admin, receipt).jsonPath("$.totalElements").isEqualTo(0)
+    }
+
+    // own records only binds when every role says so, as for reads
+    @Test
+    fun `one role without own records only lifts the owner filter`() {
+        val owner = newRole(ownRecordsOnly = true)
+        grant(owner, customer to "READ", receipt to "READ", receipt to "CREATE")
+        val plain = newRole(ownRecordsOnly = false)
+        grant(plain, customer to "READ")
+        val member = newUserToken(owner, plain)
+        val theirs = createRecord(admin, customer, mapOf("codigo" to "THEIRS"))
+
+        createReceipt(member, mapOf("codigo" to "R-1", "customer" to theirs)).expectStatus().isCreated
+    }
+
     private fun newRole(ownRecordsOnly: Boolean): String {
         val name = "R" + uniqueName("").uppercase()
         client
@@ -413,13 +442,13 @@ class RelationTargetApiTest : WasichaiIntegrationTest() {
             .isOk
     }
 
-    private fun newUserToken(role: String): String {
+    private fun newUserToken(vararg roles: String): String {
         val email = "${uniqueName("member")}@wasichai.local"
         client
             .post()
             .uri("/api/users")
             .header(HttpHeaders.AUTHORIZATION, admin)
-            .bodyValue(mapOf("email" to email, "displayName" to "Member", "password" to "supersecret", "roles" to listOf(role)))
+            .bodyValue(mapOf("email" to email, "displayName" to "Member", "password" to "supersecret", "roles" to roles.toList()))
             .exchange()
             .expectStatus()
             .isCreated
