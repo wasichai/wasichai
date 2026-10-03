@@ -322,8 +322,8 @@ class RecordService(
             store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
         // postgres would null or drop what append-only records hold of this one (ADR-040). checked
-        // under a row lock, in one transaction with the delete, when anything append-only can (ADR-044)
-        references.deleting(caller.organizationId, definition, id) {
+        // again under a row lock, with the delete, when anything append-only can point here (ADR-044)
+        references.deleting(caller.organizationId, definition, id, guard = {
             guards.beforeWrite(
                 definition,
                 RecordWrite(
@@ -337,6 +337,7 @@ class RecordService(
                     reason = changeReason
                 )
             )
+        }) {
             store.delete(definition, caller.organizationId, id)
         }
         audit.record(

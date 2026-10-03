@@ -10,9 +10,13 @@ NULL` or join-table `CASCADE` then changed the new append-only row unaudited. No
 at the record, a `SELECT … FOR UPDATE` on the record, the checks, the guards and the delete run in one transaction
 (joining the caller's, opening one otherwise). A concurrent insert either commits first and is seen (`409`), or waits
 and then fails its foreign key. Objects no append-only object can point at keep the old path, with no transaction and
-no lock. `AppendOnlyReferences.rejectDelete` became `deleting { }`. New tests: the race itself, interleaved through a
-held transaction and `pg_blocking_pids`; a `MANY_TO_MANY` link where the deleted record is the target; a `RELATION`
-made by a `ONE_TO_MANY` relationship. `AutomationDrainTest` now waits for a count of drains instead of asserting a
+no lock. Inside a caller's transaction the locked part runs inline in it, so a refusal stays the caller's to catch.
+The guards run before the lock. An insert that arrives after the lock fails its foreign key, and a foreign-key violation
+now answers `409` instead of `500` (ADR-031 D28). `AppendOnlyReferences.rejectDelete` became `deleting(…, guard) { }`,
+and its constructor takes a new `transactions: () -> TransactionalOperator` parameter (public API). New tests: both
+orders of the race, interleaved through a held transaction and `pg_blocking_pids`; a refused delete caught inside a
+caller's transaction; a `MANY_TO_MANY` link where the deleted record is the target; a `RELATION` made by a
+`ONE_TO_MANY` relationship. `AutomationDrainTest` now waits for a count of drains instead of asserting a
 count after a fixed 600 ms. Decision: [ADR-044](adr/0044-append-only-delete-check-under-a-row-lock.md).
 
 ## 2026-10-02 — Service accounts for server-to-server callers

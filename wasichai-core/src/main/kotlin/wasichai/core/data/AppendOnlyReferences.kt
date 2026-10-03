@@ -1,7 +1,10 @@
 package wasichai.core.data
 
+import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
+import org.springframework.transaction.NoTransactionException
+import org.springframework.transaction.reactive.TransactionSynchronizationManager
 import org.springframework.transaction.reactive.TransactionalOperator
 import org.springframework.transaction.reactive.executeAndAwait
 import wasichai.core.common.ConflictException
@@ -24,6 +27,10 @@ import java.util.UUID
  * `FOR KEY SHARE` on the record for its FK, so it waits for the lock, or the lock waits for it and
  * the check then sees it. Objects nothing append-only can point at skip both.
  *
+ * Assumes READ COMMITTED, postgres' default: the check after the lock is a new statement, so it sees
+ * an insert that committed while the lock waited. A caller's REPEATABLE READ or SERIALIZABLE snapshot
+ * can miss it (SERIALIZABLE then fails the commit instead).
+ *
  * [transactions] is resolved on first use, as in ClusterLock: an app with no reference never needs one.
  */
 class AppendOnlyReferences(
@@ -37,25 +44,57 @@ class AppendOnlyReferences(
     private val operator by lazy(transactions)
 
     /**
-     * Runs [delete] unless an append-only record holds [recordId]; 409 if one does. With an append-only
-     * referrer it runs lock -> check -> [delete] in one transaction, joining the caller's (ADR-038).
+     * Runs [guard] then [delete] unless an append-only record holds [recordId]; 409 if one does.
+     *
+     * With an append-only referrer: check (refuses before the guards, as ADR-040 orders it), [guard]
+     * outside the lock, then lock -> check again -> [delete]. That last part runs in the caller's
+     * transaction when there is one, inline, so a refusal stays the caller's to catch (ADR-038); a
+     * participating TransactionalOperator would mark the caller rollback-only. With none, it runs in a
+     * transaction of its own.
      */
     suspend fun <T> deleting(
         organizationId: UUID,
         definition: ObjectDefinition,
         recordId: UUID,
+        guard: suspend () -> Unit,
         delete: suspend () -> T
     ): T {
         val referrers = referrers(organizationId, definition)
-        if (referrers.isEmpty()) return delete()
-        return operator.executeAndAwait {
+        if (referrers.isEmpty()) {
+            guard()
+            return delete()
+        }
+        reject(referrers, organizationId, recordId)
+        // before the lock: a guard taking a lock of its own cannot deadlock against a referencing insert
+        guard()
+        val locked: suspend () -> T = {
             lock(definition, organizationId, recordId)
-            referrers.forEach { referrer ->
-                if (exists(referrer.table, referrer.column, organizationId, recordId)) throw ConflictException(referrer.refusal(recordId))
-            }
+            reject(referrers, organizationId, recordId)
             delete()
         }
+        return if (inTransaction()) locked() else operator.executeAndAwait { locked() }
     }
+
+    private suspend fun reject(
+        referrers: List<Referrer>,
+        organizationId: UUID,
+        recordId: UUID
+    ) {
+        referrers.forEach { referrer ->
+            if (exists(referrer.table, referrer.column, organizationId, recordId)) throw ConflictException(referrer.refusal(recordId))
+        }
+    }
+
+    // no reactive transaction context at all counts as none
+    private suspend fun inTransaction(): Boolean =
+        try {
+            TransactionSynchronizationManager
+                .forCurrentTransaction()
+                .map { it.isActualTransactionActive }
+                .awaitFirstOrNull() == true
+        } catch (_: NoTransactionException) {
+            false
+        }
 
     // a column or join table of an append-only object that can hold this object's ids
     private class Referrer(
@@ -111,10 +150,8 @@ class AppendOnlyReferences(
             .sql("SELECT id FROM ${schemas.dataTable(definition.obj.physicalTable)} WHERE id = :recordId AND organization_id = :organizationId FOR UPDATE")
             .bind("recordId", recordId)
             .bind("organizationId", organizationId)
-            .fetch()
-            .all()
-            .collectList()
-            .awaitSingle()
+            .then()
+            .awaitFirstOrNull()
     }
 
     private suspend fun exists(

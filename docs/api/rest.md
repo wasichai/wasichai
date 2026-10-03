@@ -248,7 +248,7 @@ Three flags, all `false` unless set, all in the create request, in `PUT` and in 
   `RELATION` field or a `MANY_TO_MANY` link, answers `409` naming the append-only object, for `ADMIN` too: the
   database would otherwise null the field or drop the link behind the append-only record's back. The check and the
   delete run in one transaction behind a lock on the record, so an append-only record created at the same moment
-  either is seen (`409`) or fails its own insert; it is never nulled
+  either is seen (`409`) or fails its own insert with `409`; it is never nulled
   ([ADR-044](../adr/0044-append-only-delete-check-under-a-row-lock.md)).
 - `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
   end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
@@ -1098,4 +1098,4 @@ RFC 7807 `application/problem+json`:
 | 401 | missing or invalid token |
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
-| 409 | duplicate object or field name; a repeated unique value (`errors[]` names the constraint's fields); changing or deleting an `appendOnly` record |
+| 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile |

@@ -521,6 +521,111 @@ class WriteRulesApiTest : WasichaiIntegrationTest() {
         }
     }
 
+    // the other order: the delete holds the record first, then an append-only insert points at it.
+    // the insert waits on the delete's lock, then fails its FK: 409, and no receipt stored nulled.
+    @Test
+    fun `an append-only insert racing a delete that holds the record waits and fails with a conflict`() {
+        val customer = uniqueName("customer")
+        val receipt = uniqueName("receipt")
+        createReceiptPointingAt(customer, receipt)
+        val c = UUID.fromString(createRecord(customer, "C-1").expectStatus().isCreated.idOf())
+
+        runBlocking {
+            val deleted = CompletableDeferred<Int>()
+            val commit = CompletableDeferred<Unit>()
+            val deleter =
+                async(Dispatchers.IO) {
+                    records.asPlatform(organizationId) {
+                        transactions.executeAndAwait {
+                            records.delete(customer, c)
+                            deleted.complete(backendPid())
+                            commit.await()
+                        }
+                    }
+                }
+            val deleterPid = withTimeout(30_000) { deleted.await() }
+
+            val insert =
+                async(Dispatchers.IO) {
+                    client
+                        .post()
+                        .uri("/api/objects/$receipt/records")
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .bodyValue(mapOf("attributes" to mapOf("codigo" to "R-1", "customer" to c.toString())))
+                        .exchange()
+                        .expectStatus()
+                        .isEqualTo(HttpStatus.CONFLICT)
+                        .expectBody()
+                        .returnResult()
+                }
+            // the insert is parked behind the delete's lock: now let the delete commit
+            withTimeout(30_000) { while (!blockedBy(deleterPid)) delay(20) }
+            commit.complete(Unit)
+            deleter.await()
+            insert.await()
+
+            listRecords(receipt).jsonPath("$.totalElements").isEqualTo(0)
+            assertThat(auditOf(customer)).containsExactly("CREATE", "DELETE")
+        }
+    }
+
+    // ADR-038: a refusal inside the caller's transaction is the caller's to handle. caught, the rest
+    // of the block still commits; the refusal must not mark the transaction rollback-only.
+    @Test
+    fun `a refused delete inside the caller's transaction leaves it committable`() {
+        val customer = uniqueName("customer")
+        val receipt = uniqueName("receipt")
+        createReceiptPointingAt(customer, receipt)
+        val c = createRecord(customer, "C-1").expectStatus().isCreated.idOf()
+        client
+            .post()
+            .uri("/api/objects/$receipt/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("codigo" to "R-1", "customer" to c)))
+            .exchange()
+            .expectStatus()
+            .isCreated
+
+        val after =
+            runBlocking {
+                records.asPlatform(organizationId) {
+                    transactions.executeAndAwait {
+                        val refused = runCatching { records.delete(customer, UUID.fromString(c)) }
+                        assertThat(refused.exceptionOrNull()).isInstanceOf(ConflictException::class.java)
+                        records.create(customer, RecordRequest(mapOf("codigo" to "C-AFTER"))).id
+                    }
+                }
+            }
+
+        getRecord(customer, after).jsonPath("$.attributes.codigo").isEqualTo("C-AFTER")
+        getRecord(customer, c).jsonPath("$.attributes.codigo").isEqualTo("C-1")
+    }
+
+    private fun createReceiptPointingAt(
+        customer: String,
+        receipt: String
+    ) {
+        createObject(customer).expectStatus().isCreated
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to receipt,
+                    "label" to receipt,
+                    "appendOnly" to true,
+                    "fields" to
+                        listOf(
+                            mapOf("name" to "codigo", "type" to "TEXT"),
+                            mapOf("name" to "customer", "type" to "RELATION", "relationTarget" to customer)
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+    }
+
     private suspend fun backendPid(): Int =
         db
             .sql("SELECT pg_backend_pid() AS pid")
