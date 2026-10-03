@@ -869,11 +869,14 @@ Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an 
 `DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
 write with its own status, `400` or `409` as a rule.
 
-A `RELATION` value must name a record of the caller's organization. One that names no record, or a record of another
-organization, is a `400` on the field, the same answer either way, and nothing is stored. It is checked after the
-write rules above (`appendOnly` answers its `409`, `requiresReason` its `400` on `reason`, first) and before any
-`RecordWriteGuard`, only for values sent, not `null` and, on `PUT`, different from the stored one. A value that is no
-UUID is still the usual `400` "is not a UUID":
+A `RELATION` value must name a record of the caller's organization that the caller can read: `READ` on the target
+object and, for a caller whose roles all set `ownRecordsOnly`, a record they created. `ADMIN` reads every record of the
+organization, and so do the platform and automations, in process. One that names no record, a record of another
+organization or one the caller cannot read is a `400` on the field, the same answer every way, and nothing is stored.
+It is checked after the write rules above (`appendOnly` answers its `409`, `requiresReason` its `400` on `reason`,
+first) and before any `RecordWriteGuard`, only for values sent, not `null` and, on `PUT`, different from the stored
+one: an update may keep a value the caller can no longer read. A value that is no UUID is still the usual `400` "is
+not a UUID":
 
 ```json
 {
@@ -886,7 +889,7 @@ UUID is still the usual `400` "is not a UUID":
 ```
 
 The id is not echoed back. A record deleted between that check and the write still fails the database's foreign key:
-that is a `409`, "A record this one points at does not exist any more" (ADR-031 D28, D29).
+that is a `409`, "A record this one points at does not exist any more" (ADR-031 D28, D29, D30).
 
 ### Change reason
 

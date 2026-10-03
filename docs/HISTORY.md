@@ -2,6 +2,35 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — A RELATION value names only a record the caller can read
+
+Since "A RELATION value naming no record is a 400" (below), a `RELATION` value had to name a record of the writer's organization, and
+nothing more: an own-records-only caller could point a relation at another user's record, and a caller without `READ` on the target
+object at any of its records, and the accepted write told them the id existed (issue #39). Now, when a person or a
+service account who is not `ADMIN` writes, the target must also be one they can read: `READ` on the target object,
+and created by them when every role they hold is own-records-only. Both rules are folded into the same one read per
+target object, with bound values: `… AND EXISTS (<permission rule>) AND (created_by = :userId OR NOT <owner rule>)`.
+The rule SQL now lives in one place, `RoleQueries.permissionQuery` and `AccessPolicy.ownRecordsOnlyQuery` (internal),
+and `RoleQueries.hasPermission` and `AccessPolicy.ownRecordsOnly` use it too. A target out of scope gets exactly the
+answer for a missing one (`400`, "Invalid value for '<field>'", `errors[].field`), and nothing is stored. `ADMIN`, the
+platform and automations keep the organization-only check. A value an update leaves as stored is still not looked up,
+so an update keeping a link the caller cannot see goes through. `RecordWriteGuards.beforeWrite` takes an optional
+third parameter, `reader: AuthenticatedUser?` (default `null`, organization only), which `RecordService` passes on
+create and update; it must be the user of the `RecordWrite`, and a write with a user that sets a `RELATION` value
+without it throws `IllegalStateException` (fail closed; links, transitions and deletes set none).
+`RelationTargets.rejectMissing` takes the same optional `reader`. Public Kotlin API: source compatible, not binary
+compatible. New tests in `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`. ADR-031 D30.
+## 2026-10-03 — Integration tests bind their server to 127.0.0.1
+
+`GeometryWireParityTest` once failed with `404` on all five cases under load (issue #34). The failing step was the
+login every test starts with, and wasichai's login never answers `404`: another process had answered. Reproduced on
+macOS: the test server listened on every address of its random port, the kernel lets another process bind
+`127.0.0.1` on that same port, and the more specific socket gets every `localhost` request. Any local HTTP server
+doing that (an IDE, a tool) turned the suite's login into its `404`. Linux refuses that bind, so CI never saw it.
+`WasichaiIntegrationTest` now sets `server.address=127.0.0.1`: a second `127.0.0.1` bind on the port is refused.
+`bearer()` fails with the URL, status, response headers and body instead of the status alone. New test:
+`TestServerPortTest` (coreOnly), which binds a `404` server on the test server's port and logs in through it.
+
 ## 2026-10-03 — A RELATION value naming no record is a 400
 
 A `RELATION` value was only checked to be a UUID; the column's foreign key refused one naming no record, and since

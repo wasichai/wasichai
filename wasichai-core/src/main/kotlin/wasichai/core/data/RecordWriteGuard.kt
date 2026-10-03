@@ -3,6 +3,7 @@ package wasichai.core.data
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
@@ -60,11 +61,18 @@ class RecordWriteGuards(
     private val relationTargets: RelationTargets
 ) {
     // appendOnly first, then requiresReason, then relation targets (D29): no guard is asked about a write
-    // that can never happen
+    // that can never happen.
+    // [reader]: the person or service account writing, whose read scope the relation targets must be in
+    // (D30). null: the platform or an automation, which check the organization only, or a user's write
+    // that sets no RELATION value (links, transitions, deletes). a user's write that sets one throws.
     suspend fun beforeWrite(
         definition: ObjectDefinition,
-        change: RecordWrite
+        change: RecordWrite,
+        reader: AuthenticatedUser? = null
     ) {
+        require(reader == null || (reader.userId == change.userId && reader.organizationId == change.organizationId)) {
+            "the reader is the one who writes"
+        }
         if (definition.obj.appendOnly && change.kind != RecordChangeKind.CREATED) {
             throw ConflictException("Object '${definition.obj.name}' is append-only: its records are never changed or deleted")
         }
@@ -78,7 +86,14 @@ class RecordWriteGuards(
             )
         }
         // every write path passes here, so every one checks its relation values: api, platform, automations
-        change.attributes?.let { relationTargets.rejectMissing(change.organizationId, definition, it, change.before) }
+        change.attributes?.let { attributes ->
+            // a user's write without its reader would check the organization only: fail closed (D30). links,
+            // transitions and deletes look nothing up, the platform and automations have no user
+            check(reader != null || change.userId == null || relationTargets.lookups(definition, attributes, change.before).isEmpty()) {
+                "a write by a user that sets RELATION values must pass that user as the reader"
+            }
+            relationTargets.rejectMissing(change.organizationId, definition, attributes, change.before, reader)
+        }
         guards.forEach { it.beforeWrite(change) }
     }
 }
