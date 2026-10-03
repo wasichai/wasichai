@@ -6,13 +6,15 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 
-// issue 33 (D29): which relation values are looked up, how many reads, and what the refusal says
+// issue 33 (D29): which relation values are looked up, how many reads, and what the refusal says.
+// issue 39 (D30): whose read scope each read is filtered by
 class RelationTargetsTest {
     private val organizationId = ObjectDefinitionFixtures.obj.organizationId
     private val customers = UUID.randomUUID()
@@ -25,6 +27,8 @@ class RelationTargetsTest {
 
     private val known = UUID.randomUUID()
     private val lookups = mutableListOf<Pair<UUID, List<UUID>>>()
+    private val scopes = mutableListOf<AuthenticatedUser?>()
+    private val member = AuthenticatedUser(UUID.randomUUID(), organizationId, "member@example.com", listOf("SALES"))
 
     // the database knows one record, [known], of every target object
     private val targets =
@@ -32,9 +36,11 @@ class RelationTargetsTest {
             override suspend fun existing(
                 organizationId: UUID,
                 targetObjectId: UUID,
-                ids: List<UUID>
+                ids: List<UUID>,
+                scope: AuthenticatedUser?
             ): Set<UUID> {
                 lookups += targetObjectId to ids
+                scopes += scope
                 return ids.filter { it == known }.toSet()
             }
         }
@@ -82,6 +88,98 @@ class RelationTargetsTest {
         runTest {
             targets.rejectMissing(organizationId, definition, mapOf("buyer" to known.toString(), "plot" to known))
             assertThat(lookups).hasSize(2)
+        }
+
+    @Test
+    fun `a caller's reads are scoped to them, still one per target object`() =
+        runTest {
+            targets.rejectMissing(organizationId, definition, mapOf("buyer" to known, "seller" to known, "plot" to known), reader = member)
+            assertThat(lookups.map { it.first }).containsExactlyInAnyOrder(customers, plots)
+            assertThat(scopes).containsOnly(member)
+        }
+
+    @Test
+    fun `ADMIN, the platform and automations read tenant-wide`() =
+        runTest {
+            val admin = member.copy(roles = listOf(AuthenticatedUser.ADMIN_ROLE))
+            targets.rejectMissing(organizationId, definition, mapOf("buyer" to known), reader = admin)
+            targets.rejectMissing(organizationId, definition, mapOf("buyer" to known), reader = null)
+            assertThat(scopes).containsExactly(null, null)
+        }
+
+    @Test
+    fun `a service account holding an ADMIN role is still scoped`() =
+        runTest {
+            val account = member.copy(roles = listOf(AuthenticatedUser.ADMIN_ROLE), serviceAccount = "erp")
+            targets.rejectMissing(organizationId, definition, mapOf("buyer" to known), reader = account)
+            assertThat(scopes).containsExactly(account)
+        }
+
+    @Test
+    fun `out of scope reads as missing, the same refusal`() =
+        runTest {
+            val unseen = UUID.randomUUID()
+            val ex = runCatching { targets.rejectMissing(organizationId, definition, mapOf("buyer" to unseen), reader = member) }.exceptionOrNull()
+            assertThat(ex).isInstanceOf(ValidationException::class.java)
+            ex as ValidationException
+            assertThat(ex.message).isEqualTo("Invalid value for 'buyer'")
+            assertThat(ex.violations.map { it.message }).containsExactly("no record with this id")
+        }
+
+    // keeping a value is no new claim on the target: an update must not fail on a record the caller
+    // lost sight of after it was linked
+    @Test
+    fun `a value the stored row already holds is not looked up, even for a scoped caller`() =
+        runTest {
+            val stored = UUID.randomUUID()
+            targets.rejectMissing(organizationId, definition, mapOf("buyer" to stored), before = mapOf("buyer" to stored), reader = member)
+            assertThat(lookups).isEmpty()
+        }
+
+    // fix round 1 (D30): a write with a user must say who reads, or the check would be tenant-only
+    private val guards = RecordWriteGuards(emptyList(), targets)
+
+    private fun write(
+        userId: UUID?,
+        attributes: Map<String, Any?>,
+        before: Map<String, Any?>? = null
+    ) = RecordWrite(
+        organizationId = organizationId,
+        userId = userId,
+        objectId = definition.obj.id,
+        objectName = definition.obj.name,
+        recordId = if (before == null) null else UUID.randomUUID(),
+        kind = if (before == null) RecordChangeKind.CREATED else RecordChangeKind.UPDATED,
+        before = before,
+        attributes = attributes
+    )
+
+    @Test
+    fun `a user's write that looks up a relation without its reader fails closed, before any read`() =
+        runTest {
+            val ex = runCatching { guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to known))) }.exceptionOrNull()
+            assertThat(ex).isInstanceOf(IllegalStateException::class.java)
+            assertThat(lookups).isEmpty()
+        }
+
+    @Test
+    fun `a user's write with nothing to look up needs no reader`() =
+        runTest {
+            val stored = UUID.randomUUID()
+            // a link names its relationship, a transition or a delete carries no attributes, a kept value is not looked up
+            guards.beforeWrite(definition, write(member.userId, mapOf("rel:sale" to UUID.randomUUID())))
+            guards.beforeWrite(definition, write(member.userId, mapOf("codigo" to "X", "buyer" to null)))
+            guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to stored), before = mapOf("buyer" to stored)))
+            guards.beforeWrite(definition, write(member.userId, emptyMap()).copy(attributes = null, kind = RecordChangeKind.DELETED))
+            assertThat(lookups).isEmpty()
+        }
+
+    @Test
+    fun `the platform and automations look up with no reader, a user with theirs`() =
+        runTest {
+            guards.beforeWrite(definition, write(null, mapOf("buyer" to known)))
+            guards.beforeWrite(definition, write(member.userId, mapOf("buyer" to known)), member)
+            assertThat(scopes).containsExactly(null, member)
         }
 
     private fun relation(

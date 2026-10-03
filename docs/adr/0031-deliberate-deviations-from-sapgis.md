@@ -172,6 +172,17 @@ These are the only intended differences. Anything else that behaves differently 
   the write still fails the foreign key with D28's `409`. The link route is unchanged: an `otherId` that names no
   record stays a `404`. Tested by `RelationTargetApiTest`, `RelationTargetsTest`, `AutomationWriteRulesTest` and
   `WriteRulesApiTest`.
+- **D30. A `RELATION` value must name a record the caller can read.** The original, and D29, checked a `RELATION`
+  value against the organization only: an own-records-only caller could point a relation at another user's record, and
+  a caller without `READ` on the target object at any of its records, and the `201` told them the id existed. Now, for
+  a person or a service account who is not `ADMIN`, the target must also be in their read scope: `READ` on the target
+  object (an org-wide grant counts) and, when every role of the caller is own-records-only, `created_by` the caller.
+  The rules are the ones record reads apply (`RoleQueries`, `AccessPolicy`), folded into D29's one read per target
+  object. A target outside the scope gets D29's answer for a missing one, `400` "Invalid value for '<field>'" with
+  `errors[].field`, the same body, and nothing is stored. `ADMIN`, the platform (`asPlatform`) and automation actions
+  keep D29's organization-only check. On an update, a value equal to the stored one is still not looked up, so an
+  update that keeps a link the caller cannot see (made by someone who could) goes through. Tested by
+  `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

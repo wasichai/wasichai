@@ -86,6 +86,13 @@ caller with several roles is restricted only if every one of them sets it), and 
 from responses and refuses writes to unwritable ones. `GET /api/auth/me/permissions` tells the caller what they may do
 (ADR-020).
 
+A write may only point at what the caller can read. A `RELATION` value sent by a person or a service account must name
+a record of the target object the caller holds `READ` on, created by them when they are own-records-only; anything
+else gets the answer for a missing record (`400` on the field), so it tells nothing about whether the record exists.
+The check is one read per target object with the role and owner rules folded in, the same rules record reads apply.
+`ADMIN`, the platform and automations check the organization only. A value an update leaves as stored is not checked
+again (ADR-031 D30).
+
 ## The security chain
 
 Core declares one `SecurityWebFilterChain` at `@Order(0)`. Spring Boot's reactive resource-server auto-configuration

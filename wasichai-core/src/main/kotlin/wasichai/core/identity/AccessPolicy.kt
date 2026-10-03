@@ -75,13 +75,8 @@ class AccessPolicy(
     suspend fun ownRecordsOnly(user: AuthenticatedUser): Boolean {
         if (user.isAdmin || user.roles.isEmpty()) return false
         return db
-            .sql(
-                """
-                SELECT bool_and(own_records_only) AS restricted
-                FROM ${schemas.metadata}.roles
-                WHERE organization_id = :organizationId AND name IN (:roleNames)
-                """.trimIndent()
-            ).bind("organizationId", user.organizationId)
+            .sql(ownRecordsOnlyQuery(schemas))
+            .bind("organizationId", user.organizationId)
             .bind("roleNames", user.roles)
             .map { row, _ -> row.get("restricted") as Boolean? ?: false }
             .one()
@@ -90,4 +85,16 @@ class AccessPolicy(
 
     // null means "no owner filter". saves every caller the same if/else.
     suspend fun ownerFilter(user: AuthenticatedUser): UUID? = if (ownRecordsOnly(user)) user.userId else null
+
+    companion object {
+        // the owner rule: true when every role of the caller says own records only. a query of its own
+        // here, a subquery where a read folds it in (RelationTargets, ADR-031 D30).
+        // binds :organizationId and :roleNames (never empty). no row of those roles: null, read as false.
+        internal fun ownRecordsOnlyQuery(schemas: WasichaiSchemas): String =
+            """
+            SELECT bool_and(own_records_only) AS restricted
+            FROM ${schemas.metadata}.roles
+            WHERE organization_id = :organizationId AND name IN (:roleNames)
+            """.trimIndent()
+    }
 }

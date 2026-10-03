@@ -2,6 +2,24 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — A RELATION value names only a record the caller can read
+
+Since "A RELATION value naming no record is a 400" (below), a `RELATION` value had to name a record of the writer's organization, and
+nothing more: an own-records-only caller could point a relation at another user's record, and a caller without `READ` on the target
+object at any of its records, and the accepted write told them the id existed (issue #39). Now, when a person or a
+service account who is not `ADMIN` writes, the target must also be one they can read: `READ` on the target object,
+and created by them when every role they hold is own-records-only. Both rules are folded into the same one read per
+target object, with bound values: `… AND EXISTS (<permission rule>) AND (created_by = :userId OR NOT <owner rule>)`.
+The rule SQL now lives in one place, `RoleQueries.permissionQuery` and `AccessPolicy.ownRecordsOnlyQuery` (internal),
+and `RoleQueries.hasPermission` and `AccessPolicy.ownRecordsOnly` use it too. A target out of scope gets exactly the
+answer for a missing one (`400`, "Invalid value for '<field>'", `errors[].field`), and nothing is stored. `ADMIN`, the
+platform and automations keep the organization-only check. A value an update leaves as stored is still not looked up,
+so an update keeping a link the caller cannot see goes through. `RecordWriteGuards.beforeWrite` takes an optional
+third parameter, `reader: AuthenticatedUser?` (default `null`, organization only), which `RecordService` passes on
+create and update; it must be the user of the `RecordWrite`, and a write with a user that sets a `RELATION` value
+without it throws `IllegalStateException` (fail closed; links, transitions and deletes set none).
+`RelationTargets.rejectMissing` takes the same optional `reader`. Public Kotlin API: source compatible, not binary
+compatible. New tests in `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`. ADR-031 D30.
 ## 2026-10-03 — Integration tests bind their server to 127.0.0.1
 
 `GeometryWireParityTest` once failed with `404` on all five cases under load (issue #34). The failing step was the

@@ -280,6 +280,207 @@ class RelationTargetApiTest : WasichaiIntegrationTest() {
             .isEqualTo("is not a UUID")
     }
 
+    // issue 39 (ADR-031 D30): a caller may only name a record they can read. out of scope reads as missing.
+
+    @Test
+    fun `an own-records-only caller cannot name another user's record, and the answer is the one for a missing record`() {
+        val role = newRole(ownRecordsOnly = true)
+        grant(role, customer to "READ", customer to "CREATE", receipt to "READ", receipt to "CREATE")
+        val member = newUserToken(role)
+        val theirs = createRecord(admin, customer, mapOf("codigo" to "THEIRS"))
+        val mine = createRecord(member, customer, mapOf("codigo" to "MINE"))
+
+        val unseen = createReceipt(member, mapOf("codigo" to "R-1", "customer" to theirs)).expectStatus().isBadRequest.problem()
+        val missing = createReceipt(member, mapOf("codigo" to "R-1", "customer" to UUID.randomUUID().toString())).expectStatus().isBadRequest.problem()
+
+        assertThat(unseen).isEqualTo(missing)
+        assertThat((unseen["errors"] as List<*>).map { (it as Map<*, *>)["field"] }).containsExactly("customer")
+        listRecords(admin, receipt).jsonPath("$.totalElements").isEqualTo(0)
+        assertThat(auditOf(receipt)).isEmpty()
+
+        // their own record links
+        createReceipt(member, mapOf("codigo" to "R-2", "customer" to mine)).expectStatus().isCreated
+        // the admin's view is not narrowed by anyone's role
+        createReceipt(admin, mapOf("codigo" to "R-3", "customer" to mine)).expectStatus().isCreated
+    }
+
+    @Test
+    fun `a caller without READ on the target object cannot name any of its records`() {
+        val role = newRole(ownRecordsOnly = false)
+        grant(role, receipt to "READ", receipt to "CREATE")
+        val member = newUserToken(role)
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+
+        val unseen = createReceipt(member, mapOf("codigo" to "R-1", "customer" to c)).expectStatus().isBadRequest.problem()
+        val missing = createReceipt(member, mapOf("codigo" to "R-1", "customer" to UUID.randomUUID().toString())).expectStatus().isBadRequest.problem()
+        assertThat(unseen).isEqualTo(missing)
+        listRecords(admin, receipt).jsonPath("$.totalElements").isEqualTo(0)
+
+        // READ on it, and the same write goes through
+        grant(role, receipt to "READ", receipt to "CREATE", customer to "READ")
+        createReceipt(member, mapOf("codigo" to "R-1", "customer" to c)).expectStatus().isCreated
+    }
+
+    @Test
+    fun `an org-wide READ covers every target object`() {
+        val role = newRole(ownRecordsOnly = false)
+        grant(role, null to "READ", receipt to "CREATE")
+        val member = newUserToken(role)
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+
+        createReceipt(member, mapOf("codigo" to "R-1", "customer" to c)).expectStatus().isCreated
+    }
+
+    @Test
+    fun `a service account is scoped by its roles like a person`() {
+        val role = newRole(ownRecordsOnly = false)
+        grant(role, receipt to "READ", receipt to "CREATE")
+        val account = serviceAccountToken(role)
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+
+        val unseen = createReceipt(account, mapOf("codigo" to "R-1", "customer" to c)).expectStatus().isBadRequest.problem()
+        val missing = createReceipt(account, mapOf("codigo" to "R-1", "customer" to UUID.randomUUID().toString())).expectStatus().isBadRequest.problem()
+        assertThat(unseen).isEqualTo(missing)
+
+        grant(role, receipt to "READ", receipt to "CREATE", customer to "READ")
+        createReceipt(account, mapOf("codigo" to "R-1", "customer" to c)).expectStatus().isCreated
+    }
+
+    // keeping a value is no new claim on its target: the record was linked by someone who could see it
+    @Test
+    fun `an update that keeps a value the caller cannot read still goes through, changing it does not`() {
+        val role = newRole(ownRecordsOnly = false)
+        grant(role, receipt to "READ", receipt to "UPDATE")
+        val member = newUserToken(role)
+        val c = createRecord(admin, customer, mapOf("codigo" to "C-1"))
+        val other = createRecord(admin, customer, mapOf("codigo" to "C-2"))
+        val r = createRecord(admin, receipt, mapOf("codigo" to "R-1", "customer" to c))
+
+        updateReceipt(member, r, mapOf("codigo" to "R-2", "customer" to c)).expectStatus().isOk
+
+        updateReceipt(member, r, mapOf("codigo" to "R-3", "customer" to other))
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("customer")
+        getRecord(admin, receipt, r)
+            .jsonPath("$.attributes.codigo")
+            .isEqualTo("R-2")
+            .jsonPath("$.attributes.customer")
+            .isEqualTo(c)
+    }
+
+    @Test
+    fun `the platform still names any record of the organization`() {
+        val role = newRole(ownRecordsOnly = true)
+        grant(role, customer to "READ", customer to "CREATE")
+        val member = newUserToken(role)
+        val theirs = createRecord(member, customer, mapOf("codigo" to "THEIRS"))
+
+        val created =
+            runBlocking {
+                records.asPlatform(organizationId) { records.create(receipt, RecordRequest(mapOf("codigo" to "R-1", "customer" to theirs))) }
+            }
+        assertThat(created.attributes["customer"].toString()).isEqualTo(theirs)
+    }
+
+    // a platform record has no creator: an own-records-only caller cannot read it, so cannot name it either
+    @Test
+    fun `an own-records-only caller cannot name a record the platform created`() {
+        val role = newRole(ownRecordsOnly = true)
+        grant(role, customer to "READ", receipt to "READ", receipt to "CREATE")
+        val member = newUserToken(role)
+        val platformMade =
+            runBlocking { records.asPlatform(organizationId) { records.create(customer, RecordRequest(mapOf("codigo" to "PLATFORM"))) } }.id
+
+        val unseen = createReceipt(member, mapOf("codigo" to "R-1", "customer" to platformMade)).expectStatus().isBadRequest.problem()
+        val missing = createReceipt(member, mapOf("codigo" to "R-1", "customer" to UUID.randomUUID().toString())).expectStatus().isBadRequest.problem()
+
+        assertThat(unseen).isEqualTo(missing)
+        listRecords(admin, receipt).jsonPath("$.totalElements").isEqualTo(0)
+    }
+
+    // own records only binds when every role says so, as for reads
+    @Test
+    fun `one role without own records only lifts the owner filter`() {
+        val owner = newRole(ownRecordsOnly = true)
+        grant(owner, customer to "READ", receipt to "READ", receipt to "CREATE")
+        val plain = newRole(ownRecordsOnly = false)
+        grant(plain, customer to "READ")
+        val member = newUserToken(owner, plain)
+        val theirs = createRecord(admin, customer, mapOf("codigo" to "THEIRS"))
+
+        createReceipt(member, mapOf("codigo" to "R-1", "customer" to theirs)).expectStatus().isCreated
+    }
+
+    private fun newRole(ownRecordsOnly: Boolean): String {
+        val name = "R" + uniqueName("").uppercase()
+        client
+            .post()
+            .uri("/api/roles")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("name" to name, "label" to "Relations", "ownRecordsOnly" to ownRecordsOnly))
+            .exchange()
+            .expectStatus()
+            .isCreated
+        return name
+    }
+
+    // replaces the role's grants with these. object null: every object (an org-wide row)
+    private fun grant(
+        role: String,
+        vararg entries: Pair<String?, String>
+    ) {
+        client
+            .put()
+            .uri("/api/roles/$role/permissions")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("permissions" to entries.map { (target, action) -> mapOf("objectName" to target, "action" to action, "allowed" to true) }))
+            .exchange()
+            .expectStatus()
+            .isOk
+    }
+
+    private fun newUserToken(vararg roles: String): String {
+        val email = "${uniqueName("member")}@wasichai.local"
+        client
+            .post()
+            .uri("/api/users")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("email" to email, "displayName" to "Member", "password" to "supersecret", "roles" to roles.toList()))
+            .exchange()
+            .expectStatus()
+            .isCreated
+        return bearer(email, "supersecret")
+    }
+
+    private fun serviceAccountToken(role: String): String {
+        val body =
+            client
+                .post()
+                .uri("/api/service-accounts")
+                .header(HttpHeaders.AUTHORIZATION, admin)
+                .bodyValue(mapOf("name" to uniqueName("erp"), "roles" to listOf(role)))
+                .exchange()
+                .expectStatus()
+                .isCreated
+                .expectBody(Map::class.java)
+                .returnResult()
+                .responseBody!!
+        return "Bearer " +
+            client
+                .post()
+                .uri("/api/auth/token")
+                .bodyValue(mapOf("clientId" to body["clientId"], "clientSecret" to body["clientSecret"]))
+                .exchange()
+                .expectStatus()
+                .isOk
+                .expectBody(Map::class.java)
+                .returnResult()
+                .responseBody!!["token"] as String
+    }
+
     private fun relationFields(vararg names: String): List<Map<String, Any>> =
         listOf(mapOf("name" to "codigo", "type" to "TEXT")) + names.map { mapOf("name" to it, "type" to "RELATION", "relationTarget" to customer) }
 

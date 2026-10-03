@@ -77,27 +77,10 @@ class RoleQueries(
         objectId: UUID? = null
     ): Boolean {
         if (roleNames.isEmpty()) return false
-        val scope =
-            if (objectId == null) {
-                "AND p.object_id IS NULL"
-            } else {
-                "AND (p.object_id IS NULL OR p.object_id = :objectId)"
-            }
         var spec =
             db
-                .sql(
-                    """
-                    SELECT true
-                    FROM ${schemas.metadata}.permissions p
-                    JOIN ${schemas.metadata}.roles r ON r.id = p.role_id
-                    WHERE r.organization_id = :organizationId
-                      AND r.name IN (:roleNames)
-                      AND p.action = :action
-                      AND p.allowed
-                      $scope
-                    LIMIT 1
-                    """.trimIndent()
-                ).bind("organizationId", organizationId)
+                .sql(permissionQuery(schemas, objectScoped = objectId != null))
+                .bind("organizationId", organizationId)
                 .bind("roleNames", roleNames)
                 .bind("action", action)
         if (objectId != null) spec = spec.bind("objectId", objectId)
@@ -105,5 +88,28 @@ class RoleQueries(
             .map { _, _ -> true }
             .one()
             .awaitFirstOrNull() ?: false
+    }
+
+    companion object {
+        // the permission rule, one row when one of the roles allows [action]. a query of its own here, a
+        // subquery where a read folds it in (RelationTargets, ADR-031 D30).
+        // binds :organizationId, :roleNames (never empty), :action, and :objectId when [objectScoped].
+        internal fun permissionQuery(
+            schemas: WasichaiSchemas,
+            objectScoped: Boolean
+        ): String {
+            val scope = if (objectScoped) "AND (p.object_id IS NULL OR p.object_id = :objectId)" else "AND p.object_id IS NULL"
+            return """
+                SELECT true
+                FROM ${schemas.metadata}.permissions p
+                JOIN ${schemas.metadata}.roles r ON r.id = p.role_id
+                WHERE r.organization_id = :organizationId
+                  AND r.name IN (:roleNames)
+                  AND p.action = :action
+                  AND p.allowed
+                  $scope
+                LIMIT 1
+                """.trimIndent()
+        }
     }
 }

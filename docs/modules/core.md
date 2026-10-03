@@ -130,7 +130,10 @@ authorization model.
   with nothing stored or audited. `RecordWriteGuards` calls them after refusing changes to an `appendOnly` object
   ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)) and writes without a reason to a
   `requiresReason` one ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)); `RecordWrite.reason` is the
-  write's change reason.
+  write's change reason. Then it checks the write's `RELATION` values (ADR-031 D29, D30): a module that writes for a
+  person or a service account passes them as `beforeWrite(definition, change, reader)`, so a target must be one that
+  caller can read. A write with a `userId` that sets a `RELATION` value without its `reader` throws
+  `IllegalStateException`; the platform and automations (`userId` null) check the organization only.
 - `ObjectRemovalListener`, `FieldUsage` — a module's veto or note when an object or field is about to be removed.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));

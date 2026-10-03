@@ -168,7 +168,8 @@ class RecordService(
                 kind = RecordChangeKind.CREATED,
                 attributes = request.attributes,
                 reason = changeReason
-            )
+            ),
+            caller.user
         )
         val created =
             store.insert(
@@ -252,7 +253,8 @@ class RecordService(
                 before = before.attributes,
                 attributes = request.attributes,
                 reason = changeReason
-            )
+            ),
+            caller.user
         )
         // locked fields keep their stored value: a full-replace PUT must not blank them.
         // the state is untouched here: it only moves through a transition.

@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
+import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.audit.AuditService
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
@@ -14,11 +15,13 @@ import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.FieldAccess
 import wasichai.core.metadata.CustomField
+import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.platform.WasichaiSchemas
 import java.time.Instant
 import java.util.UUID
 
@@ -95,7 +98,7 @@ class RecordServiceTest {
                 id: UUID,
                 createdBy: UUID?,
                 withState: Boolean
-            ): RecordRow? = null
+            ): RecordRow? = stored?.copy(id = id)
 
             override suspend fun query(
                 definition: ObjectDefinition,
@@ -109,9 +112,16 @@ class RecordServiceTest {
 
     private var lastQuery: RecordQuery? = null
 
+    // what findById answers. null: no such record
+    private var stored: RecordRow? = null
+
     // fieldAccess restricted (not FieldAccess.FULL) so the write check actually runs.
     // suspend: stubbing a suspend function means calling it, which needs a coroutine.
-    private suspend fun service(fieldAccess: FieldAccess): RecordService {
+    private suspend fun service(
+        fieldAccess: FieldAccess,
+        relationTargets: RelationTargets = RelationTargetsFixtures.none(),
+        definition: ObjectDefinition = this.definition
+    ): RecordService {
         val currentUser = mock(CurrentUser::class.java)
         val metadata = mock(MetadataService::class.java)
         val access = mock(AccessPolicy::class.java)
@@ -129,9 +139,60 @@ class RecordServiceTest {
             NoWorkflowStates(),
             types,
             emptyList(),
-            RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
+            RecordWriteGuards(emptyList(), relationTargets),
             AppendOnlyReferencesFixtures.none()
         )
+    }
+
+    // issue 39 (D30): the relation check reads in the caller's scope, so it must be told who calls
+    private val customers = UUID.randomUUID()
+    private val customer = ObjectDefinitionFixtures.field("customer", FieldType.RELATION).copy(relationTargetObjectId = customers)
+    private val withRelation = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo, customer))
+    private val scopes = mutableListOf<AuthenticatedUser?>()
+    private val recordingTargets =
+        object : RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java)) {
+            override suspend fun existing(
+                organizationId: UUID,
+                targetObjectId: UUID,
+                ids: List<UUID>,
+                scope: AuthenticatedUser?
+            ): Set<UUID> {
+                scopes += scope
+                return ids.toSet()
+            }
+        }
+
+    @Test
+    fun `a create hands the caller to the relation check`() {
+        runTest {
+            service(FieldAccess.FULL, recordingTargets, withRelation).create("predio", RecordRequest(mapOf("customer" to UUID.randomUUID().toString())))
+        }
+
+        assertThat(scopes).containsExactly(user)
+    }
+
+    @Test
+    fun `an update hands the caller to the relation check`() {
+        val id = UUID.randomUUID()
+        stored = RecordRow(id, Instant.now(), Instant.now(), mapOf("customer" to UUID.randomUUID()), emptyMap())
+
+        runTest {
+            service(FieldAccess.FULL, recordingTargets, withRelation).update("predio", id, RecordRequest(mapOf("customer" to UUID.randomUUID().toString())))
+        }
+
+        assertThat(scopes).containsExactly(user)
+    }
+
+    @Test
+    fun `the platform hands no reader to the relation check`() {
+        runTest {
+            val records = service(FieldAccess.FULL, recordingTargets, withRelation)
+            records.asPlatform(user.organizationId) {
+                records.create("predio", RecordRequest(mapOf("customer" to UUID.randomUUID().toString())))
+            }
+        }
+
+        assertThat(scopes).containsExactly(null)
     }
 
     @Test
