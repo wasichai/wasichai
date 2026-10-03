@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
+import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.audit.AuditService
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
@@ -14,11 +15,13 @@ import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.FieldAccess
 import wasichai.core.metadata.CustomField
+import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.platform.WasichaiSchemas
 import java.time.Instant
 import java.util.UUID
 
@@ -111,7 +114,11 @@ class RecordServiceTest {
 
     // fieldAccess restricted (not FieldAccess.FULL) so the write check actually runs.
     // suspend: stubbing a suspend function means calling it, which needs a coroutine.
-    private suspend fun service(fieldAccess: FieldAccess): RecordService {
+    private suspend fun service(
+        fieldAccess: FieldAccess,
+        relationTargets: RelationTargets = RelationTargetsFixtures.none(),
+        definition: ObjectDefinition = this.definition
+    ): RecordService {
         val currentUser = mock(CurrentUser::class.java)
         val metadata = mock(MetadataService::class.java)
         val access = mock(AccessPolicy::class.java)
@@ -129,9 +136,36 @@ class RecordServiceTest {
             NoWorkflowStates(),
             types,
             emptyList(),
-            RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
+            RecordWriteGuards(emptyList(), relationTargets),
             AppendOnlyReferencesFixtures.none()
         )
+    }
+
+    // issue 39 (D30): the relation check reads in the caller's scope, so it must be told who calls
+    @Test
+    fun `a create hands the caller to the relation check`() {
+        val customers = UUID.randomUUID()
+        val customer = ObjectDefinitionFixtures.field("customer", FieldType.RELATION).copy(relationTargetObjectId = customers)
+        val withRelation = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo, customer))
+        val scopes = mutableListOf<AuthenticatedUser?>()
+        val targets =
+            object : RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java)) {
+                override suspend fun existing(
+                    organizationId: UUID,
+                    targetObjectId: UUID,
+                    ids: List<UUID>,
+                    scope: AuthenticatedUser?
+                ): Set<UUID> {
+                    scopes += scope
+                    return ids.toSet()
+                }
+            }
+
+        runTest {
+            service(FieldAccess.FULL, targets, withRelation).create("predio", RecordRequest(mapOf("customer" to UUID.randomUUID().toString())))
+        }
+
+        assertThat(scopes).containsExactly(user)
     }
 
     @Test

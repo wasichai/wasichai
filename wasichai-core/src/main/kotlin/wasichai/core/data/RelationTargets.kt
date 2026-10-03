@@ -3,8 +3,12 @@ package wasichai.core.data
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import org.springframework.r2dbc.core.DatabaseClient
+import wasichai.core.common.Actions
 import wasichai.core.common.FieldViolation
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.identity.RoleQueries
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
@@ -16,22 +20,29 @@ import java.util.UUID
  * would refuse it anyway, but as a 409 meant for the delete race (ADR-044): a client that sent an id
  * that never existed made a mistake on a field, a 400.
  *
+ * With a reader (a person or a service account, not ADMIN) the record must also be one they can read
+ * (issue 39, ADR-031 D30): READ on the target object, and their own record when they see only their
+ * own. The same rules RecordService reads with, folded into the same read.
+ *
  * Called by [RecordWriteGuards], after the built-in write rules and before the app's guards, so every
  * write path checks. One tenant-filtered read per target object, only for values sent, non-null and
- * changed. Missing and another organization's record answer the same, so nothing leaks. A record
- * deleted between this check and the write still fails the FK: that stays the 409.
+ * changed. Missing, another organization's record and one the reader cannot see answer the same, so
+ * nothing leaks. A record deleted between this check and the write still fails the FK: that stays the 409.
  */
 open class RelationTargets(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
     private val objects: CustomObjectRepository
 ) {
-    // [before]: the stored row on an update. a value it already holds is not looked up again.
+    // [before]: the stored row on an update. a value it already holds is not looked up again, in scope
+    // or not: keeping a link is no new claim on its target.
+    // [reader]: who writes. null (the platform, an automation) or ADMIN: the organization is the scope.
     suspend fun rejectMissing(
         organizationId: UUID,
         definition: ObjectDefinition,
         attributes: Map<String, Any?>,
-        before: Map<String, Any?>? = null
+        before: Map<String, Any?>? = null,
+        reader: AuthenticatedUser? = null
     ) {
         // field -> id, only what can be looked up. a value that is no uuid is the codec's 400, later.
         val sent =
@@ -42,9 +53,11 @@ open class RelationTargets(
                     if (before != null && uuidOf(before[field.name]) == id) null else field to id
                 }
         if (sent.isEmpty()) return
+        // a service account is never ADMIN (ADR-043), so it is always scoped
+        val scope = reader?.takeUnless { it.isAdmin }
         val missing =
             sent.groupBy { it.first.relationTargetObjectId!! }.flatMap { (targetObjectId, pairs) ->
-                val found = existing(organizationId, targetObjectId, pairs.map { it.second }.distinct())
+                val found = existing(organizationId, targetObjectId, pairs.map { it.second }.distinct(), scope)
                 pairs.filter { it.second !in found }.map { it.first }
             }
         if (missing.isEmpty()) return
@@ -56,18 +69,40 @@ open class RelationTargets(
         )
     }
 
-    // the ids of [ids] that are records of this organization. no target object: none are.
-    // open for unit tests only.
+    // the ids of [ids] that are records of this organization, and readable by [scope] when one is
+    // given. no target object: none are. open for unit tests only.
     internal open suspend fun existing(
         organizationId: UUID,
         targetObjectId: UUID,
-        ids: List<UUID>
+        ids: List<UUID>,
+        scope: AuthenticatedUser?
     ): Set<UUID> {
         val target = objects.findById(organizationId, targetObjectId) ?: return emptySet()
-        return db
-            .sql("SELECT id FROM ${schemas.dataTable(target.physicalTable)} WHERE organization_id = :organizationId AND id = ANY(:ids)")
-            .bind("organizationId", organizationId)
-            .bind("ids", ids.toTypedArray())
+        // no role grants nothing (RoleQueries): no read to ask
+        if (scope != null && scope.roles.isEmpty()) return emptySet()
+        val sql =
+            buildString {
+                append("SELECT id FROM ${schemas.dataTable(target.physicalTable)} WHERE organization_id = :organizationId AND id = ANY(:ids)")
+                if (scope != null) {
+                    // READ on the target object, then the owner filter, as RecordService.get applies them
+                    append(" AND EXISTS (${RoleQueries.permissionQuery(schemas, objectScoped = true)})")
+                    append(" AND (created_by = :userId OR NOT COALESCE((${AccessPolicy.ownRecordsOnlyQuery(schemas)}), false))")
+                }
+            }
+        var spec =
+            db
+                .sql(sql)
+                .bind("organizationId", organizationId)
+                .bind("ids", ids.toTypedArray())
+        if (scope != null) {
+            spec =
+                spec
+                    .bind("roleNames", scope.roles)
+                    .bind("action", Actions.READ)
+                    .bind("objectId", targetObjectId)
+                    .bind("userId", scope.userId)
+        }
+        return spec
             .map { row, _ -> row.get("id", UUID::class.java)!! }
             .all()
             .asFlow()

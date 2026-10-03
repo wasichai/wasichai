@@ -3,6 +3,7 @@ package wasichai.core.data
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
@@ -60,11 +61,18 @@ class RecordWriteGuards(
     private val relationTargets: RelationTargets
 ) {
     // appendOnly first, then requiresReason, then relation targets (D29): no guard is asked about a write
-    // that can never happen
+    // that can never happen.
+    // [reader]: the person or service account writing, whose read scope the relation targets must be in
+    // (D30). null: the platform, an automation, or a write that carries no RELATION value (links,
+    // transitions, deletes); those check the organization only.
     suspend fun beforeWrite(
         definition: ObjectDefinition,
-        change: RecordWrite
+        change: RecordWrite,
+        reader: AuthenticatedUser? = null
     ) {
+        require(reader == null || (reader.userId == change.userId && reader.organizationId == change.organizationId)) {
+            "the reader is the one who writes"
+        }
         if (definition.obj.appendOnly && change.kind != RecordChangeKind.CREATED) {
             throw ConflictException("Object '${definition.obj.name}' is append-only: its records are never changed or deleted")
         }
@@ -78,7 +86,7 @@ class RecordWriteGuards(
             )
         }
         // every write path passes here, so every one checks its relation values: api, platform, automations
-        change.attributes?.let { relationTargets.rejectMissing(change.organizationId, definition, it, change.before) }
+        change.attributes?.let { relationTargets.rejectMissing(change.organizationId, definition, it, change.before, reader) }
         guards.forEach { it.beforeWrite(change) }
     }
 }
