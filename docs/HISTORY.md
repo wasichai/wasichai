@@ -21,8 +21,10 @@ subclass that overrides the public `create`/`update`/`delete` of `RecordService`
 `RelatedRecordService` is no longer reached by the REST routes (use a `RecordWriteGuard`). On an append-only end a
 no-op link or unlink answers `409` instead of `204`, deleting an object that shares a join table with an
 append-only one is refused, and so is deleting a record an append-only record points at through a `RELATION` field
-or a join row (the database's `SET NULL` / `CASCADE` would change it unaudited). Objects without the flags behave exactly as before. `RecordWriteRulesTest`,
-`WriteRulesApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest` pin it.
+or a join row (the database's `SET NULL` / `CASCADE` would change it unaudited). Objects without the flags behave
+exactly as before. A guard runs in the caller's coroutine, so an app can mark its own in-process writes with a
+coroutine-context element and refuse unmarked ones. `RecordWriteRulesTest`,
+`WriteRulesApiTest`, `WriteGuardCoroutineApiTest` (wasichai-core), `WorkflowWriteRulesTest` and `AutomationWriteRulesTest` pin it.
 
 ## 2026-10-02 — Background work runs RecordService as the platform, and takes a cluster lock
 

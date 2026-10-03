@@ -37,6 +37,11 @@ data class RecordWrite(
  *
  * It runs in the caller's transaction when there is one (ADR-038), so a read here sees what the
  * caller already wrote. It does not lock anything for you.
+ *
+ * It runs in the caller's coroutine, no dispatcher switch in between: an app marks its own in-process
+ * writes with a CoroutineContext.Element around its RecordService calls, and its guard refuses the
+ * unmarked ones with `coroutineContext[Marker] == null` (the generic REST api carries none). The
+ * platform and automations call it in their own coroutine, so they carry no app marker.
  */
 interface RecordWriteGuard {
     suspend fun beforeWrite(change: RecordWrite)

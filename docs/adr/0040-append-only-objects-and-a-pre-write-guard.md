@@ -126,6 +126,13 @@ an object gets a workflow only when its admin attaches one. A guard can veto the
 **leaving them out keeps them as they are**. `enabled` defaults to `true` on that `PUT`, but a client that predates
 the flags must not switch append-only off by saving a label.
 
+A guard runs in the caller's coroutine: `beforeWrite` is `suspend` and no `withContext` or dispatcher switch sits
+between a public write method and the call ([#15](https://github.com/wasichai/wasichai/issues/15)). An app can wrap its
+own in-process `RecordService` and `RelatedRecordService` calls in a `CoroutineContext.Element` marker and have its guard
+refuse a write whose `coroutineContext[Marker]` is null, which is every write through the generic REST API. The platform
+(ADR-039) and automations call the guard in their own coroutine, so they carry no app marker. Pinned by
+`WriteGuardCoroutineApiTest`.
+
 ## Consequences
 
 - Immutability is one flag, enforced for everyone, and checkable in tests. srtm-backend's `CuotasInmutables`
