@@ -22,6 +22,8 @@ class MetadataMapper(
             updatedAt = definition.obj.updatedAt,
             indexes = definition.obj.indexes,
             uniqueConstraints = definition.obj.uniqueConstraints,
+            appendOnly = definition.obj.appendOnly,
+            apiOnly = definition.obj.apiOnly,
             extensions = types.objectProperties(definition)
         )
 
@@ -39,6 +41,8 @@ class MetadataMapper(
             fields = toFieldResponses(definition.fields, organizationId),
             indexes = definition.obj.indexes,
             uniqueConstraints = definition.obj.uniqueConstraints,
+            appendOnly = definition.obj.appendOnly,
+            apiOnly = definition.obj.apiOnly,
             extensions = types.objectProperties(definition)
         )
 

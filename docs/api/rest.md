@@ -58,7 +58,7 @@ in the body is refused with `400` rather than silently ignored. A caller with no
 GET    /api/objects                              list objects in the tenant
 POST   /api/objects                              create object, fields and physical table
 GET    /api/objects/{object}                     definition (object + fields)
-PUT    /api/objects/{object}                     relabel / describe / enable or disable
+PUT    /api/objects/{object}                     relabel / describe / enable or disable / write rules
 DELETE /api/objects/{object}                     drop object, its table and its metadata
 
 GET    /api/metadata/objects/{object}            same definition, spec-shaped path
@@ -178,12 +178,37 @@ answered with `400` naming the field rather than being ignored. Create a new obj
 `POST`, `PUT` and `DELETE` on them answer `409`. It is the reversible alternative to deleting.
 
 `DELETE` is not. It drops the physical table with its records, and the views, forms, pages,
-permissions, workflow and automations that hang off the object. Two cases are refused with `409`
-instead:
+permissions, workflow and automations that hang off the object. It is refused with `409` instead when:
 
 - another object has a `RELATION` field pointing here — the response names them as `object.field`;
-- nothing else. Relationships owned by the object go with it, join tables included, and a published
-  GeoServer layer is unpublished first so no layer is left pointing at a table that no longer exists.
+- the object is `appendOnly`, or shares a `MANY_TO_MANY` join table with an `appendOnly` object (see "Write rules").
+
+Nothing else stops it. Relationships owned by the object go with it, join tables included, and a published
+GeoServer layer is unpublished first so no layer is left pointing at a table that no longer exists.
+
+### Write rules
+
+Two flags, both `false` unless set, both in the create request, in `PUT` and in every object response (`GET
+/api/objects`, `GET /api/objects/{object}`, `GET /api/metadata/objects/{object}`)
+([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
+
+```json
+{ "name": "recibo", "label": "Recibo", "appendOnly": true, "apiOnly": true, "fields": [] }
+```
+
+- `appendOnly: true` — records are created, never changed or deleted, by anyone: `PUT` and `DELETE` on a record, a
+  workflow transition, and a link or unlink touching one of its records answer `409`, for `ADMIN` too, even a link
+  that already exists or an unlink of one that does not (elsewhere those are a no-op `204`). So do deleting the
+  object, one of its fields, a relationship that holds its values, or an object it shares a join table with: switch
+  `appendOnly` off first. Deleting another object's record that an append-only record points at, through a
+  `RELATION` field or a `MANY_TO_MANY` link, answers `409` naming the append-only object, for `ADMIN` too: the
+  database would otherwise null the field or drop the link behind the append-only record's back.
+- `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
+  end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
+  are unchanged.
+
+On `PUT`, leaving either flag out keeps it as it is (unlike `enabled`, which defaults to `true`): a client that does
+not know a flag never switches it off by saving a label.
 
 ## Organizations
 
@@ -293,6 +318,7 @@ DELETE /api/objects/{object}/records/{id}/related/{relationship}/{otherId}
 
 The read works from **either** end: from a plot it returns its owner, from the owner it returns their
 plots. Link and unlink apply to `MANY_TO_MANY` only — for the others, set the field on the record.
+A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`.
 
 ## Pages
 
@@ -746,6 +772,10 @@ same way.
 `geometry` names the geometry field a `bbox` applies to; without it, the object's first. A `bbox` on
 an object with no geometry, or naming one it does not have, is a `400`.
 
+Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an `apiOnly` one (`POST`, `PUT`,
+`DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
+write with its own status, `400` or `409` as a rule.
+
 ## GIS
 
 Module: wasichai-gis.
@@ -937,6 +967,6 @@ RFC 7807 `application/problem+json`:
 |---|---|
 | 400 | validation: bad value, unknown field, wrong geometry type, invalid technical name |
 | 401 | missing or invalid token |
-| 403 | authenticated but lacking the object/action permission |
+| 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
-| 409 | duplicate object or field name; a record that repeats a unique value, with `errors[]` naming the constraint's fields |
+| 409 | duplicate object or field name; a repeated unique value (`errors[]` names the constraint's fields); changing or deleting an `appendOnly` record |

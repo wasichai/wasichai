@@ -72,6 +72,7 @@ of all of them. A package may only import the packages below it in this order; t
 | `RecordQueryContributor` + `RecordCriterion` | `wasichai-core` (`data`) | Strategy | modules that narrow the record query (list) |
 | `SystemColumnContributor` → `SystemColumns` | `wasichai-core` (`platform`) | Registry | modules that add a reserved column name (list) |
 | `RecordChangeListener` | `wasichai-core` (`data`) | Observer | modules that react to a record write (list) |
+| `RecordWriteGuard` → `RecordWriteGuards` | `wasichai-core` (`data`) | Chain (veto) | apps and modules that veto a write before it lands (ADR-040) |
 | `ObjectRemovalListener`, `FieldUsage` | `wasichai-core` (`metadata`) | Observer / Chain | modules that store something about an object or field (list) |
 | `WorkflowStates` | `wasichai-core` (`data`) | Null Object | `NoWorkflowStates` (core default); wasichai-workflow's real implementation |
 | `ModuleMigration` | `wasichai-core` (`platform`) | Registry | every module, one entry each, plus core's own and its dev seed |

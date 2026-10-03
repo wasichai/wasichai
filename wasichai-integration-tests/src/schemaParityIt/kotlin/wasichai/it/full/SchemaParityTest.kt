@@ -13,10 +13,16 @@ class SchemaParityTest : FullAppIntegrationTest() {
     @Autowired
     private lateinit var environment: Environment
 
-    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". the
-    // user_preferences table (ADR-031 D18), one entry per catalog line. a new one needs an ADR-031 entry.
+    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". one entry per
+    // catalog line. a new one needs an ADR-031 entry.
     private val knownDeviations: Map<String, String> =
         mapOf(
+            "column custom_objects.append_only #13 boolean NOT NULL DEFAULT false" to "ADR-031 D24: append-only and api-only objects",
+            "column custom_objects.api_only #14 boolean NOT NULL DEFAULT false" to "ADR-031 D24: append-only and api-only objects",
+            "constraint custom_objects.custom_objects_append_only_not_null NOT NULL append_only" to
+                "ADR-031 D24: append-only and api-only objects",
+            "constraint custom_objects.custom_objects_api_only_not_null NOT NULL api_only" to
+                "ADR-031 D24: append-only and api-only objects",
             "column user_preferences.locale #3 text" to "ADR-031 D18: per-user theme and locale",
             "column user_preferences.theme #2 text NOT NULL DEFAULT 'system'::text" to
                 "ADR-031 D18: per-user theme and locale",

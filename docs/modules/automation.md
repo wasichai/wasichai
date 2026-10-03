@@ -31,6 +31,9 @@ it ran, was skipped (an unmet condition or the depth cap), or failed.
 A record written by the platform (`RecordService.asPlatform`,
 [ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)) triggers rules like any other;
 with no user behind the change, the rows its actions write carry a null `created_by`/`updated_by`.
+`UPDATE_FIELD` and `CREATE_RECORD` are held to `appendOnly` and to every `RecordWriteGuard` like any other write; a
+refusal fails the run, never the write that triggered it. They may write an `apiOnly` object: they run in-process
+([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)).
 
 Action kinds (`ActionType`): `UPDATE_FIELD`, `CREATE_RECORD`, `WEBHOOK`, `GENERATE_DOCUMENT`. `WEBHOOK` posts JSON
 to an admin-supplied URL; the URL is validated on save and again before every call, and a host that resolves to a

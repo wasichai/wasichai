@@ -166,6 +166,16 @@ class RelationshipService(
         val relationship =
             relationships.findByName(user.organizationId, name)
                 ?: throw NotFoundException("Relationship '$name' does not exist")
+        // its join table holds links of both ends, its field sits on one: either way stored values go
+        val holders =
+            if (relationship.joinTable != null) {
+                listOf(relationship.sourceObjectId, relationship.targetObjectId)
+            } else {
+                listOfNotNull(relationship.relationFieldId?.let { fields.findById(it)?.objectId })
+            }
+        holders
+            .mapNotNull { objects.findById(user.organizationId, it) }
+            .forEach { rejectAppendOnly(it, "relationship '$name'") }
 
         val column =
             relationship.relationFieldId?.let { fieldId ->

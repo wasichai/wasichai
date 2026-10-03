@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditController
 import wasichai.core.audit.AuditQueryService
 import wasichai.core.audit.AuditService
+import wasichai.core.data.AppendOnlyReferences
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.PhysicalTableRecordStore
 import wasichai.core.data.RecordChangeListener
@@ -19,6 +20,8 @@ import wasichai.core.data.RecordQueryContributor
 import wasichai.core.data.RecordQueryParser
 import wasichai.core.data.RecordService
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWriteGuard
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
 import wasichai.core.data.RelatedRecordService
 import wasichai.core.data.WorkflowStates
@@ -87,6 +90,20 @@ class WasichaiDataAutoConfiguration {
     @ConditionalOnMissingBean
     fun recordQueryParser(contributors: ObjectProvider<RecordQueryContributor>): RecordQueryParser = RecordQueryParser(contributors.orderedStream().toList())
 
+    // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
+    @Bean
+    fun recordWriteGuards(guards: ObjectProvider<RecordWriteGuard>): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList())
+
+    // no @ConditionalOnMissingBean: appendOnly is for everyone (ADR-040)
+    @Bean
+    fun appendOnlyReferences(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        objects: CustomObjectRepository,
+        fields: CustomFieldRepository,
+        relationships: RelationshipRepository
+    ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships)
+
     @Bean
     @ConditionalOnMissingBean
     fun recordService(
@@ -97,8 +114,10 @@ class WasichaiDataAutoConfiguration {
         access: AccessPolicy,
         workflows: WorkflowStates,
         types: FieldTypeRegistry,
-        changes: ObjectProvider<RecordChangeListener>
-    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList())
+        changes: ObjectProvider<RecordChangeListener>,
+        guards: RecordWriteGuards,
+        references: AppendOnlyReferences
+    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references)
 
     @Bean
     @ConditionalOnMissingBean
@@ -113,9 +132,10 @@ class WasichaiDataAutoConfiguration {
         access: AccessPolicy,
         db: DatabaseClient,
         schemas: WasichaiSchemas,
-        audit: AuditService
+        audit: AuditService,
+        guards: RecordWriteGuards
     ): RelatedRecordService =
-        RelatedRecordService(relationships, relationshipService, objects, fields, metadata, store, currentUser, access, db, schemas, audit)
+        RelatedRecordService(relationships, relationshipService, objects, fields, metadata, store, currentUser, access, db, schemas, audit, guards)
 
     @Bean
     @ConditionalOnMissingBean

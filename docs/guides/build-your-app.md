@@ -329,6 +329,32 @@ class OutboxPublisher(
   the lock and holds it until the transaction ends, joining yours if there is one.
 - Both compose with `TransactionalOperator`, either way round.
 
+## Records nobody rewrites, and rules the record API cannot skip
+
+Receipts and an outbox are written once. Mark the object `appendOnly` and nobody, `ADMIN` and the platform included,
+changes or deletes its records: `409`. Mark it `apiOnly` and the generic record API refuses writes on it (`403`), so a
+user with `CREATE` cannot skip your own endpoint's numbering and locks; your code still calls `RecordService`
+([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
+
+```json
+POST /api/objects
+{ "name": "recibo", "label": "Recibo", "appendOnly": true, "apiOnly": true, "fields": [ … ] }
+```
+
+A rule of your own goes in a `RecordWriteGuard` bean. It runs before every record write, on every route, and a throw
+stops the write with nothing stored or audited:
+
+```kotlin
+@Component
+class ReceiptLines : RecordWriteGuard {
+    override suspend fun beforeWrite(change: RecordWrite) {
+        if (change.objectName != "recibo_linea" || change.kind != RecordChangeKind.CREATED) return
+        val amount = (change.attributes?.get("monto") as? Number)?.toDouble() ?: return
+        if (amount < 0) throw ValidationException("A line cannot be negative", "monto", "must be 0 or more")
+    }
+}
+```
+
 ## Write your own module
 
 Backend: a library with an `@AutoConfiguration` class registered in

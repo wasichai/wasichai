@@ -42,7 +42,8 @@ class RelatedRecordService(
     private val access: AccessPolicy,
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
-    private val audit: AuditService
+    private val audit: AuditService,
+    private val guards: RecordWriteGuards
 ) {
     // records on the other side of a relationship, from one record
     suspend fun relatedRecords(
@@ -114,8 +115,19 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID
+    ) = link(objectName, recordId, relationshipName, otherId, viaApi = false)
+
+    // viaApi: the generic related-record route, which an apiOnly end refuses (ADR-040)
+    @Transactional
+    internal suspend fun link(
+        objectName: String,
+        recordId: UUID,
+        relationshipName: String,
+        otherId: UUID,
+        viaApi: Boolean
     ) {
-        val ends = checkedEnds(objectName, recordId, relationshipName, otherId)
+        val ends = checkedEnds(objectName, recordId, relationshipName, otherId, viaApi)
+        guard(ends, linked = true)
         val inserted =
             db
                 .sql(
@@ -141,8 +153,18 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID
+    ) = unlink(objectName, recordId, relationshipName, otherId, viaApi = false)
+
+    @Transactional
+    internal suspend fun unlink(
+        objectName: String,
+        recordId: UUID,
+        relationshipName: String,
+        otherId: UUID,
+        viaApi: Boolean
     ) {
-        val ends = checkedEnds(objectName, recordId, relationshipName, otherId)
+        val ends = checkedEnds(objectName, recordId, relationshipName, otherId, viaApi)
+        guard(ends, linked = false)
         val deleted =
             db
                 .sql(
@@ -163,8 +185,10 @@ class RelatedRecordService(
         val relationship: Relationship,
         val definition: ObjectDefinition,
         val recordId: UUID,
+        val record: RecordRow,
         val otherDefinition: ObjectDefinition,
-        val otherId: UUID
+        val otherId: UUID,
+        val other: RecordRow
     ) {
         private val fromSource get() = definition.obj.id == relationship.sourceObjectId
         val sourceId: UUID get() = if (fromSource) recordId else otherId
@@ -180,7 +204,8 @@ class RelatedRecordService(
         objectName: String,
         recordId: UUID,
         relationshipName: String,
-        otherId: UUID
+        otherId: UUID,
+        viaApi: Boolean
     ): LinkEnds {
         val user = currentUser.require()
         val (relationship, obj) = manyToManyOrFail(user, objectName, relationshipName)
@@ -189,12 +214,44 @@ class RelatedRecordService(
         val definition = metadata.loadDefinitionById(user.organizationId, obj.id)
         val otherDefinition = metadata.loadDefinitionById(user.organizationId, otherObjectId)
         rejectDisabled(otherDefinition)
+        if (viaApi) {
+            rejectApiOnly(definition)
+            rejectApiOnly(otherDefinition)
+        }
         val owner = access.ownerFilter(user)
-        store.findById(definition, user.organizationId, recordId, owner)
-            ?: throw NotFoundException("Record $recordId does not exist")
-        store.findById(otherDefinition, user.organizationId, otherId, owner)
-            ?: throw NotFoundException("Record $otherId does not exist")
-        return LinkEnds(user, relationship, definition, recordId, otherDefinition, otherId)
+        val record =
+            store.findById(definition, user.organizationId, recordId, owner)
+                ?: throw NotFoundException("Record $recordId does not exist")
+        val other =
+            store.findById(otherDefinition, user.organizationId, otherId, owner)
+                ?: throw NotFoundException("Record $otherId does not exist")
+        return LinkEnds(user, relationship, definition, recordId, record, otherDefinition, otherId, other)
+    }
+
+    // a link is an UPDATE of both records (audit says so too): appendOnly and every guard judge each end
+    // before the join table is touched (ADR-040)
+    private suspend fun guard(
+        ends: LinkEnds,
+        linked: Boolean
+    ) {
+        listOf(
+            Triple(ends.definition, ends.record, ends.otherId),
+            Triple(ends.otherDefinition, ends.other, ends.recordId)
+        ).forEach { (definition, row, other) ->
+            guards.beforeWrite(
+                definition,
+                RecordWrite(
+                    organizationId = ends.user.organizationId,
+                    userId = ends.user.userId,
+                    objectId = definition.obj.id,
+                    objectName = definition.obj.name,
+                    recordId = row.id,
+                    kind = RecordChangeKind.UPDATED,
+                    before = row.attributes,
+                    attributes = linkChange(ends.relationship.name, other, linked).second
+                )
+            )
+        }
     }
 
     // one UPDATE on each record's history. UPDATE, not a new operation: the audit CHECK stays the one

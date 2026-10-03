@@ -71,7 +71,9 @@ class RecordService(
     private val access: AccessPolicy,
     private val workflows: WorkflowStates,
     private val types: FieldTypeRegistry,
-    private val changes: List<RecordChangeListener>
+    private val changes: List<RecordChangeListener>,
+    private val guards: RecordWriteGuards,
+    private val references: AppendOnlyReferences
 ) {
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
@@ -125,9 +127,17 @@ class RecordService(
     suspend fun create(
         objectName: String,
         request: RecordRequest
+    ): RecordResponse = create(objectName, request, viaApi = false)
+
+    // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040)
+    internal suspend fun create(
+        objectName: String,
+        request: RecordRequest,
+        viaApi: Boolean
     ): RecordResponse {
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        if (viaApi) rejectApiOnly(definition)
         caller.requirePermission(Actions.CREATE, definition.obj.id)
         rejectDisabled(definition)
         val sections = installed(request.sections)
@@ -135,6 +145,18 @@ class RecordService(
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = caller.organizationId,
+                userId = caller.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = null,
+                kind = RecordChangeKind.CREATED,
+                attributes = request.attributes
+            )
+        )
         val created =
             store.insert(
                 definition.writableBy(fieldAccess),
@@ -174,9 +196,17 @@ class RecordService(
         objectName: String,
         id: UUID,
         request: RecordRequest
+    ): RecordResponse = update(objectName, id, request, viaApi = false)
+
+    internal suspend fun update(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        viaApi: Boolean
     ): RecordResponse {
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        if (viaApi) rejectApiOnly(definition)
         caller.requirePermission(Actions.UPDATE, definition.obj.id)
         rejectDisabled(definition)
         val sections = installed(request.sections)
@@ -186,6 +216,19 @@ class RecordService(
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
                 ?: throw NotFoundException("Record $id does not exist")
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = caller.organizationId,
+                userId = caller.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = id,
+                kind = RecordChangeKind.UPDATED,
+                before = before.attributes,
+                attributes = request.attributes
+            )
+        )
         // locked fields keep their stored value: a full-replace PUT must not blank them.
         // the state is untouched here: it only moves through a transition.
         val updated =
@@ -228,14 +271,35 @@ class RecordService(
     suspend fun delete(
         objectName: String,
         id: UUID
+    ) = delete(objectName, id, viaApi = false)
+
+    internal suspend fun delete(
+        objectName: String,
+        id: UUID,
+        viaApi: Boolean
     ) {
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        if (viaApi) rejectApiOnly(definition)
         caller.requirePermission(Actions.DELETE, definition.obj.id)
         rejectDisabled(definition)
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
+        // postgres would null or drop what append-only records hold of this one (ADR-040)
+        references.rejectDelete(caller.organizationId, definition, id)
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = caller.organizationId,
+                userId = caller.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = id,
+                kind = RecordChangeKind.DELETED,
+                before = before.attributes
+            )
+        )
         store.delete(definition, caller.organizationId, id)
         audit.record(
             organizationId = caller.organizationId,

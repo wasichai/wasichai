@@ -1,5 +1,6 @@
 package wasichai.core.metadata
 
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -60,4 +61,19 @@ class MetadataMapperTest {
         assertThat(mapper.toFieldResponse(marca, null).extensions).containsEntry("tag", "red")
         assertThat(mapper.toFieldResponse(marca, null).type).isEqualTo("TAG")
     }
+
+    @Test
+    fun `the write rules show on the object and on its definition`() =
+        runTest {
+            val mapper = MetadataMapper(mock(CustomObjectRepository::class.java), FieldTypeRegistry(emptyList()))
+            val ruled = ObjectDefinition(obj.copy(appendOnly = true, apiOnly = true), emptyList())
+            val plain = ObjectDefinition(obj, emptyList())
+
+            assertThat(mapper.toObjectResponse(ruled).appendOnly).isTrue()
+            assertThat(mapper.toObjectResponse(ruled).apiOnly).isTrue()
+            assertThat(mapper.toResponse(ruled, obj.organizationId).appendOnly).isTrue()
+            assertThat(mapper.toResponse(ruled, obj.organizationId).apiOnly).isTrue()
+            assertThat(mapper.toObjectResponse(plain).appendOnly).isFalse()
+            assertThat(mapper.toResponse(plain, obj.organizationId).apiOnly).isFalse()
+        }
 }

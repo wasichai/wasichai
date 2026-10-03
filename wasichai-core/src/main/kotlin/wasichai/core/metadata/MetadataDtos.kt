@@ -36,7 +36,11 @@ data class CreateObjectRequest(
     // composite indexes, field names in index order: [["anio", "predio"]] (ADR-036)
     val indexes: List<List<String>> = emptyList(),
     // composite uniques, same shape: [["sistema_origen", "referencia_externa"]] (ADR-037)
-    val uniqueConstraints: List<List<String>> = emptyList()
+    val uniqueConstraints: List<List<String>> = emptyList(),
+    // write rules (ADR-040): no update or delete of its records, for anyone
+    val appendOnly: Boolean = false,
+    // the generic record api does not write it; only the app's own code does
+    val apiOnly: Boolean = false
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -64,7 +68,10 @@ data class UpdateObjectRequest(
     // null leaves the declared indexes as they are; a list replaces them, [] drops them all
     val indexes: List<List<String>>? = null,
     // same rule for the composite uniques (ADR-037)
-    val uniqueConstraints: List<List<String>>? = null
+    val uniqueConstraints: List<List<String>>? = null,
+    // null leaves the rule as it is: a client that predates it must not switch it off by saving a label (ADR-040)
+    val appendOnly: Boolean? = null,
+    val apiOnly: Boolean? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -104,6 +111,8 @@ data class ObjectResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
     // only written when some are declared (ADR-037)
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
+    val appendOnly: Boolean = false,
+    val apiOnly: Boolean = false,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -124,6 +133,8 @@ data class ObjectDefinitionResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
     // only written when some are declared (ADR-037)
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
+    val appendOnly: Boolean = false,
+    val apiOnly: Boolean = false,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

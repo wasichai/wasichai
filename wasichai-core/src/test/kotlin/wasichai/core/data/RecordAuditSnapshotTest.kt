@@ -158,7 +158,18 @@ class RecordAuditSnapshotTest {
         doReturn(user).`when`(currentUser).require()
         doReturn(definition).`when`(metadata).loadDefinition(user.organizationId, "predio")
         doReturn(fieldAccess).`when`(access).fieldAccess(user, definition.obj.id)
-        return RecordService(metadata, store, audit, currentUser, access, NoWorkflowStates(), FieldTypeRegistry(emptyList()), listOf(listener))
+        return RecordService(
+            metadata,
+            store,
+            audit,
+            currentUser,
+            access,
+            NoWorkflowStates(),
+            FieldTypeRegistry(emptyList()),
+            listOf(listener),
+            RecordWriteGuards(emptyList()),
+            mock(AppendOnlyReferences::class.java)
+        )
     }
 
     @Test

@@ -23,6 +23,7 @@ import wasichai.automation.WebhookSender
 import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
@@ -82,9 +83,10 @@ class WasichaiAutomationAutoConfiguration {
         audit: AuditService,
         dispatcher: AutomationDispatcher,
         webhooks: WebhookSender,
-        documents: ObjectProvider<DocumentIssuer>
+        documents: ObjectProvider<DocumentIssuer>,
+        guards: RecordWriteGuards
     ): AutomationRunner =
-        AutomationRunner(automations, runs, metadata, store, workflows, audit, dispatcher, webhooks, documents.getIfAvailable { NoDocumentIssuer() })
+        AutomationRunner(automations, runs, metadata, store, workflows, audit, dispatcher, webhooks, documents.getIfAvailable { NoDocumentIssuer() }, guards)
 
     @Bean
     @ConditionalOnMissingBean

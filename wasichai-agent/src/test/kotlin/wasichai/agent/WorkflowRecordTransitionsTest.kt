@@ -7,6 +7,7 @@ import org.mockito.Mockito.mock
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditService
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordWriteGuards
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
@@ -34,7 +35,8 @@ class WorkflowRecordTransitionsTest {
             mock(AuditService::class.java),
             mock(CurrentUser::class.java),
             mock(AccessPolicy::class.java),
-            emptyList()
+            emptyList(),
+            RecordWriteGuards(emptyList())
         ) {
             override suspend fun transitionsOf(
                 objectName: String,

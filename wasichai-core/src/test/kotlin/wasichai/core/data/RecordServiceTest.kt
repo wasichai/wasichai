@@ -120,7 +120,18 @@ class RecordServiceTest {
         doReturn(user).`when`(currentUser).require()
         doReturn(definition).`when`(metadata).loadDefinition(user.organizationId, "predio")
         doReturn(fieldAccess).`when`(access).fieldAccess(user, definition.obj.id)
-        return RecordService(metadata, fakeStore, audit, currentUser, access, NoWorkflowStates(), types, emptyList())
+        return RecordService(
+            metadata,
+            fakeStore,
+            audit,
+            currentUser,
+            access,
+            NoWorkflowStates(),
+            types,
+            emptyList(),
+            RecordWriteGuards(emptyList()),
+            mock(AppendOnlyReferences::class.java)
+        )
     }
 
     @Test
