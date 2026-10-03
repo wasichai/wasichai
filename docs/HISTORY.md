@@ -2,6 +2,20 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — RecordService joins the caller's transaction, and it is supported
+
+[caja-backend](https://github.com/wasichai/caja-backend) charges payment orders: a turno, a receipt, its lines, the
+orders and an outbox event must commit together. `RecordService` already did join a transaction the caller opened,
+because every write, the audit row and the listeners' writes go through R2DBC `DatabaseClient` and so onto the
+connection the transaction holds, but nothing in wasichai said so or tested it, and ADR-024 calls an implementation
+detail unsupported. [ADR-038](adr/0038-record-service-joins-the-callers-transaction.md) makes it supported API: an app
+wraps its calls in `TransactionalOperator.executeAndAwait { }`, and a failure at the end, in a listener or in the app's
+own code, leaves no record and no audit row. `RecordServiceTransactionTest` in wasichai-core pins it (a failing
+listener, an explicit throw, the committing case, the same writes with no transaction, the security context inside the
+block). There is no `RecordService.inTransaction { }` helper: it would only wrap Spring's operator, and an abstraction
+needs a second user. No behaviour changed; the guide ("Write several records atomically") and the architecture overview
+link the ADR.
+
 ## 2026-10-02 — Composite unique constraints, and a repeat as a 409
 
 An object can declare `uniqueConstraints: [["sistema_origen", "referencia_externa"]]`, in the shape of `indexes` and

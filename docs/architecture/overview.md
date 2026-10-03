@@ -80,7 +80,9 @@ of all of them. A package may only import the packages below it in this order; t
 
 Listener and contributor lists run in `@Order`, synchronously, inside the caller's own call: `RecordService` opens
 no transaction of its own, so a listener that needs atomicity opens one itself. An empty list means no module
-installed, not a null pointer. See [ADR-025](../adr/0025-extension-spis.md).
+installed, not a null pointer. See [ADR-025](../adr/0025-extension-spis.md). `RecordService`, its audit row and the
+listeners join the caller's transaction, so an app wraps several calls in `TransactionalOperator.executeAndAwait { }`
+and they commit or roll back together: [ADR-038](../adr/0038-record-service-joins-the-callers-transaction.md).
 
 ## Frontend packages
 
