@@ -321,22 +321,24 @@ class RecordService(
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
-        // postgres would null or drop what append-only records hold of this one (ADR-040)
-        references.rejectDelete(caller.organizationId, definition, id)
-        guards.beforeWrite(
-            definition,
-            RecordWrite(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = id,
-                kind = RecordChangeKind.DELETED,
-                before = before.attributes,
-                reason = changeReason
+        // postgres would null or drop what append-only records hold of this one (ADR-040). checked
+        // under a row lock, in one transaction with the delete, when anything append-only can (ADR-044)
+        references.deleting(caller.organizationId, definition, id) {
+            guards.beforeWrite(
+                definition,
+                RecordWrite(
+                    organizationId = caller.organizationId,
+                    userId = caller.userId,
+                    objectId = definition.obj.id,
+                    objectName = definition.obj.name,
+                    recordId = id,
+                    kind = RecordChangeKind.DELETED,
+                    before = before.attributes,
+                    reason = changeReason
+                )
             )
-        )
-        store.delete(definition, caller.organizationId, id)
+            store.delete(definition, caller.organizationId, id)
+        }
         audit.record(
             organizationId = caller.organizationId,
             userId = caller.userId,

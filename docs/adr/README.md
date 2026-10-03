@@ -57,3 +57,5 @@ supersedes it and says so in its status line.
   CRUD](0042-app-declared-actions.md)
 - [ADR-043: Service accounts sign in with client credentials, as a user row that is not a
   person](0043-service-accounts.md)
+- [ADR-044: The append-only delete check runs under a row lock, in one transaction with the
+  delete](0044-append-only-delete-check-under-a-row-lock.md)

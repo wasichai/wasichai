@@ -160,7 +160,7 @@ class RecordServicePlatformTest {
                 }
             ),
             RecordWriteGuards(emptyList()),
-            mock(AppendOnlyReferences::class.java)
+            AppendOnlyReferencesFixtures.none()
         )
     }
 
