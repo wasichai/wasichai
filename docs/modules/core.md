@@ -44,6 +44,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Dynamic records and related records: `/api/objects/{object}/records`.
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`.
 - Admin: users and roles, under `/api/users` and `/api/roles`.
+- Background work: `RecordService.asPlatform(organizationId) { }` for writes with no user, and the `ClusterLock` bean
+  (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
+  ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)).
 
 See [../api/rest.md](../api/rest.md) for the full method-by-method table.
 
@@ -136,7 +139,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
 - Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditQueryService`, `auditController`, `workflowStates`,
-  `recordStore`, `recordQueryParser`, `recordService`, `relatedRecordService`, `recordController`,
+  `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`, `relatedRecordService`, `recordController`,
   `relatedRecordController`.
 - Admin (`WasichaiAdminAutoConfiguration`): `adminService`, `userAdminController`, `roleAdminController`,
   `organizationRepository`, `organizationService`, `organizationController`.

@@ -2,6 +2,27 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Background work runs RecordService as the platform, and takes a cluster lock
+
+caja-backend publishes its outbox in-process and needs record writes with no user behind them plus one publisher per
+database, not one per replica ([#18](https://github.com/wasichai/wasichai/issues/18)). Apps used to write the physical
+tables through `DatabaseClient` and call `AuditService` with a null user, which is internal API.
+[ADR-039](adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md) adds two supported pieces to core.
+`RecordService.asPlatform(organizationId) { }` runs every `RecordService` call in the block in that organization with
+no permission check (like `ADMIN`) and no user: `created_by`, `updated_by`, the audit `user_id` and
+`RecordChange.userId` are null, as an automation's audit rows already were (ADR-016). It lives in the Reactor context
+under a key only core can name, so it composes with `TransactionalOperator` either way round (ADR-038), and it throws
+inside a request, with a token or anonymous, so a request never becomes the platform. `ClusterLock` (a
+`@ConditionalOnMissingBean` bean) wraps PostgreSQL advisory locks: `tryLock(key)` returns a lease or null without
+waiting, held on an unpooled connection and released by an explicit unlock before the close, and
+`withXactLock(key) { }` waits and holds the lock until the transaction ends, joining the caller's. Keys are strings
+hashed by SHA-256, pinned by a test. **Breaking for `RecordStore` implementers:** `RecordStore.insert`/`update` now
+take `userId: UUID?`. An app's own `RecordStore` no longer compiles until it changes those two types, and one that is
+not rebuilt gets a `NullPointerException` at runtime on the first platform write. `AutomationRunner` now runs a rule
+triggered by a platform write instead of failing it for lack of an acting user.
+`PlatformRecordServiceTest` and `ClusterLockTest` (wasichai-core) and a new case in `AutomationOnlyApiTest` pin it.
+Requests behave exactly as before; the build-your-app guide has a "Background work" section.
+
 ## 2026-10-02 — RecordService joins the caller's transaction, and it is supported
 
 [caja-backend](https://github.com/wasichai/caja-backend) charges payment orders: a turno, a receipt, its lines, the

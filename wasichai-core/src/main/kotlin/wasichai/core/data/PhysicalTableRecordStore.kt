@@ -15,6 +15,7 @@ import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.ObjectSchemaManager
+import wasichai.core.metadata.bindNullable
 import wasichai.core.platform.Rows
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
@@ -31,7 +32,7 @@ class PhysicalTableRecordStore(
     override suspend fun insert(
         definition: ObjectDefinition,
         organizationId: UUID,
-        userId: UUID,
+        userId: UUID?,
         attributes: Map<String, Any?>,
         sections: Map<String, Map<String, Any?>>,
         workflow: ObjectWorkflowState
@@ -65,7 +66,7 @@ class PhysicalTableRecordStore(
                     RETURNING ${selectList(definition, workflow.attached)}
                     """.trimIndent()
                 ).bind("organizationId", organizationId)
-                .bind("userId", userId)
+                .bindNullable("userId", userId)
         spec = bindValues(spec, "p", values)
         spec = bindValues(spec, "s", sectionValues)
         if (workflow.initialState != null) spec = spec.bind("recordState", workflow.initialState)
@@ -76,7 +77,7 @@ class PhysicalTableRecordStore(
     override suspend fun update(
         definition: ObjectDefinition,
         organizationId: UUID,
-        userId: UUID,
+        userId: UUID?,
         id: UUID,
         attributes: Map<String, Any?>,
         sections: Map<String, Map<String, Any?>>,
@@ -105,7 +106,7 @@ class PhysicalTableRecordStore(
                     """.trimIndent()
                 ).bind("id", id)
                 .bind("organizationId", organizationId)
-                .bind("userId", userId)
+                .bindNullable("userId", userId)
         spec = bindValues(spec, "p", values)
         spec = bindValues(spec, "s", sectionValues)
 

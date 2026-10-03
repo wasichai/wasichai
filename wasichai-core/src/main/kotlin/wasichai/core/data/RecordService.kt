@@ -73,22 +73,36 @@ class RecordService(
     private val types: FieldTypeRegistry,
     private val changes: List<RecordChangeListener>
 ) {
+    /**
+     * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
+     * acts in that organization, with no user. No permission or field rule applies, as for ADMIN; the
+     * writes leave `created_by`, `updated_by` and the audit `user_id` null, as an automation does
+     * (ADR-016). Composes with the caller's transaction either way round (ADR-038).
+     *
+     * Background work only. Inside a request, with a token or without one, it throws: nothing a
+     * request carries can become the platform.
+     */
+    suspend fun <T> asPlatform(
+        organizationId: UUID,
+        block: suspend () -> T
+    ): T = PlatformCaller.run(organizationId, block)
+
     suspend fun list(
         objectName: String,
         query: RecordQuery
     ): PageResponse<RecordResponse> {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.READ, definition.obj.id)
-        val fieldAccess = access.fieldAccess(user, definition.obj.id)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.READ, definition.obj.id)
+        val fieldAccess = caller.fieldAccess(definition.obj.id)
         // unreadable columns are never selected, so they cannot leak by accident
         val visible = definition.readableBy(fieldAccess)
-        val workflow = workflows.stateOf(user.organizationId, definition.obj.id)
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val page =
             store.query(
                 visible,
-                user.organizationId,
-                query.copy(createdBy = access.ownerFilter(user), withState = workflow.attached)
+                caller.organizationId,
+                query.copy(createdBy = caller.ownerFilter(), withState = workflow.attached)
             )
         return page.map { it.toResponse() }
     }
@@ -97,13 +111,13 @@ class RecordService(
         objectName: String,
         id: UUID
     ): RecordResponse {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.READ, definition.obj.id)
-        val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
-        val workflow = workflows.stateOf(user.organizationId, definition.obj.id)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.READ, definition.obj.id)
+        val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         return store
-            .findById(visible, user.organizationId, id, access.ownerFilter(user), workflow.attached)
+            .findById(visible, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
             ?.toResponse()
             ?: throw NotFoundException("Record $id does not exist")
     }
@@ -112,30 +126,30 @@ class RecordService(
         objectName: String,
         request: RecordRequest
     ): RecordResponse {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.CREATE, definition.obj.id)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.CREATE, definition.obj.id)
         rejectDisabled(definition)
         val sections = installed(request.sections)
-        val fieldAccess = access.fieldAccess(user, definition.obj.id)
+        val fieldAccess = caller.fieldAccess(definition.obj.id)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
-        val workflow = workflows.stateOf(user.organizationId, definition.obj.id)
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val created =
             store.insert(
                 definition.writableBy(fieldAccess),
-                user.organizationId,
-                user.userId,
+                caller.organizationId,
+                caller.userId,
                 request.attributes,
                 sections,
                 workflow
             )
         // audit and listeners judge the record as stored, every field (ADR-0025): the port promises
         // nothing about what insert hands back, and a locked field left out would read as cleared
-        val stored = storedRow(definition, user, created, workflow.attached)
+        val stored = storedRow(definition, caller.organizationId, created, workflow.attached)
         audit.record(
-            organizationId = user.organizationId,
-            userId = user.userId,
+            organizationId = caller.organizationId,
+            userId = caller.userId,
             objectName = objectName,
             recordId = created.id,
             operation = AuditOperation.CREATE,
@@ -143,8 +157,8 @@ class RecordService(
         )
         notify(
             RecordChange(
-                organizationId = user.organizationId,
-                userId = user.userId,
+                organizationId = caller.organizationId,
+                userId = caller.userId,
                 objectId = definition.obj.id,
                 objectName = definition.obj.name,
                 recordId = created.id,
@@ -161,34 +175,34 @@ class RecordService(
         id: UUID,
         request: RecordRequest
     ): RecordResponse {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.UPDATE, definition.obj.id)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.UPDATE, definition.obj.id)
         rejectDisabled(definition)
         val sections = installed(request.sections)
-        val fieldAccess = access.fieldAccess(user, definition.obj.id)
+        val fieldAccess = caller.fieldAccess(definition.obj.id)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
-        val workflow = workflows.stateOf(user.organizationId, definition.obj.id)
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val before =
-            store.findById(definition, user.organizationId, id, access.ownerFilter(user), workflow.attached)
+            store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
                 ?: throw NotFoundException("Record $id does not exist")
         // locked fields keep their stored value: a full-replace PUT must not blank them.
         // the state is untouched here: it only moves through a transition.
         val updated =
             store.update(
                 definition.writableBy(fieldAccess),
-                user.organizationId,
-                user.userId,
+                caller.organizationId,
+                caller.userId,
                 id,
                 request.attributes,
                 sections,
                 workflow.attached
             )
         // before is a full read; after must be one too, or every locked field reads as cleared (ADR-0025)
-        val stored = storedRow(definition, user, updated, workflow.attached)
+        val stored = storedRow(definition, caller.organizationId, updated, workflow.attached)
         audit.record(
-            organizationId = user.organizationId,
-            userId = user.userId,
+            organizationId = caller.organizationId,
+            userId = caller.userId,
             objectName = objectName,
             recordId = id,
             operation = AuditOperation.UPDATE,
@@ -197,8 +211,8 @@ class RecordService(
         )
         notify(
             RecordChange(
-                organizationId = user.organizationId,
-                userId = user.userId,
+                organizationId = caller.organizationId,
+                userId = caller.userId,
                 objectId = definition.obj.id,
                 objectName = definition.obj.name,
                 recordId = id,
@@ -215,17 +229,17 @@ class RecordService(
         objectName: String,
         id: UUID
     ) {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.DELETE, definition.obj.id)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.DELETE, definition.obj.id)
         rejectDisabled(definition)
         val before =
-            store.findById(definition, user.organizationId, id, access.ownerFilter(user))
+            store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
-        store.delete(definition, user.organizationId, id)
+        store.delete(definition, caller.organizationId, id)
         audit.record(
-            organizationId = user.organizationId,
-            userId = user.userId,
+            organizationId = caller.organizationId,
+            userId = caller.userId,
             objectName = objectName,
             recordId = id,
             operation = AuditOperation.DELETE,
@@ -233,8 +247,8 @@ class RecordService(
         )
         notify(
             RecordChange(
-                organizationId = user.organizationId,
-                userId = user.userId,
+                organizationId = caller.organizationId,
+                userId = caller.userId,
                 objectId = definition.obj.id,
                 objectName = definition.obj.name,
                 recordId = id,
@@ -250,15 +264,41 @@ class RecordService(
         objectName: String,
         query: RecordQuery
     ): Pair<ObjectDefinition, List<RecordRow>> {
-        val user = currentUser.require()
-        val definition = metadata.loadDefinition(user.organizationId, objectName)
-        currentUser.requirePermission(user, Actions.READ, definition.obj.id)
-        val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        caller.requirePermission(Actions.READ, definition.obj.id)
+        val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
         return visible to
             store
-                .query(visible, user.organizationId, query.copy(createdBy = access.ownerFilter(user)))
+                .query(visible, caller.organizationId, query.copy(createdBy = caller.ownerFilter()))
                 .content
     }
+
+    // who is calling: the token's user, or the platform inside asPlatform. user null = the platform.
+    private class Caller(
+        val organizationId: UUID,
+        val user: AuthenticatedUser?
+    ) {
+        val userId: UUID? get() = user?.userId
+    }
+
+    private suspend fun caller(): Caller {
+        PlatformCaller.current()?.let { return Caller(it, null) }
+        val user = currentUser.require()
+        return Caller(user.organizationId, user)
+    }
+
+    // the platform passes every check, as ADMIN does: no role, no field rule, no owner filter
+    private suspend fun Caller.requirePermission(
+        action: String,
+        objectId: UUID
+    ) {
+        if (user != null) currentUser.requirePermission(user, action, objectId)
+    }
+
+    private suspend fun Caller.fieldAccess(objectId: UUID): FieldAccess = if (user == null) FieldAccess.FULL else access.fieldAccess(user, objectId)
+
+    private suspend fun Caller.ownerFilter(): UUID? = if (user == null) null else access.ownerFilter(user)
 
     /**
      * The row as stored, every field, for audit and listeners (ADR-0025). Listeners get this, not the
@@ -271,12 +311,12 @@ class RecordService(
      */
     private suspend fun storedRow(
         definition: ObjectDefinition,
-        user: AuthenticatedUser,
+        organizationId: UUID,
         written: RecordRow,
         withState: Boolean
     ): RecordRow {
         if (carriesEveryField(definition, written)) return written
-        return store.findById(definition, user.organizationId, written.id, null, withState) ?: written
+        return store.findById(definition, organizationId, written.id, null, withState) ?: written
     }
 
     // a section field sits in its own section, every other field in attributes

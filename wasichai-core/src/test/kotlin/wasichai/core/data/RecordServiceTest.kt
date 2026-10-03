@@ -58,7 +58,7 @@ class RecordServiceTest {
             override suspend fun insert(
                 definition: ObjectDefinition,
                 organizationId: UUID,
-                userId: UUID,
+                userId: UUID?,
                 attributes: Map<String, Any?>,
                 sections: Map<String, Map<String, Any?>>,
                 workflow: ObjectWorkflowState
@@ -67,7 +67,7 @@ class RecordServiceTest {
             override suspend fun update(
                 definition: ObjectDefinition,
                 organizationId: UUID,
-                userId: UUID,
+                userId: UUID?,
                 id: UUID,
                 attributes: Map<String, Any?>,
                 sections: Map<String, Map<String, Any?>>,

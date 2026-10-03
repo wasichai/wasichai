@@ -297,6 +297,38 @@ transactions.executeAndAwait {
 
 `CurrentUser.require()` and the permission checks work inside the block.
 
+## Background work
+
+A job with no user behind it, an outbox publisher say, calls `RecordService` as the platform and takes a
+`ClusterLock` so that one replica does the work, not all of them
+([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)):
+
+```kotlin
+@Component
+class OutboxPublisher(
+    private val records: RecordService,
+    private val clusterLock: ClusterLock
+) {
+    @Scheduled(fixedDelay = 5_000)
+    suspend fun tick() {
+        // whoever gets the lock publishes; the other replicas skip this tick
+        clusterLock.tryLock("caja.outbox")?.use {
+            records.asPlatform(organizationId) {
+                records.list("outbox_event", pending).content.forEach { publish(it) }
+            }
+        }
+    }
+}
+```
+
+- Inside `asPlatform` every `RecordService` call acts in that organization with no permission check, like `ADMIN`,
+  and writes `created_by`, `updated_by` and the audit `user_id` as null, like an automation. Other services still need
+  a user.
+- `asPlatform` throws inside a request, with a token or without one: hand the work to a job instead.
+- `tryLock(key)` returns a lease or null, without waiting; `use { }` releases it. `withXactLock(key) { }` waits for
+  the lock and holds it until the transaction ends, joining yours if there is one.
+- Both compose with `TransactionalOperator`, either way round.
+
 ## Write your own module
 
 Backend: a library with an `@AutoConfiguration` class registered in

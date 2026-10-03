@@ -5,6 +5,8 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
+import org.springframework.transaction.ReactiveTransactionManager
+import org.springframework.transaction.reactive.TransactionalOperator
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditController
 import wasichai.core.audit.AuditQueryService
@@ -29,6 +31,7 @@ import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
+import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.WasichaiSchemas
 
 // records, audit and related records. a module that gives records a state, or stores them another
@@ -71,6 +74,14 @@ class WasichaiDataAutoConfiguration {
         schemas: WasichaiSchemas,
         types: FieldTypeRegistry
     ): RecordStore = PhysicalTableRecordStore(db, schemas, types)
+
+    // the transaction manager is looked up on first withXactLock: tryLock needs none (ADR-039)
+    @Bean
+    @ConditionalOnMissingBean
+    fun clusterLock(
+        db: DatabaseClient,
+        transactionManager: ObjectProvider<ReactiveTransactionManager>
+    ): ClusterLock = ClusterLock(db) { TransactionalOperator.create(transactionManager.getObject()) }
 
     @Bean
     @ConditionalOnMissingBean

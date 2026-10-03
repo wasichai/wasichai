@@ -28,6 +28,9 @@ happens synchronously, inside the caller's transaction; the actions run later, o
 queue by a background drain (`AutomationDrain`, polling on a timer) and executed one batch at a time
 ([ADR-016](../adr/0016-automations-queue-and-system-context.md)). Every match leaves a row in the run log, whether
 it ran, was skipped (an unmet condition or the depth cap), or failed.
+A record written by the platform (`RecordService.asPlatform`,
+[ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)) triggers rules like any other;
+with no user behind the change, the rows its actions write carry a null `created_by`/`updated_by`.
 
 Action kinds (`ActionType`): `UPDATE_FIELD`, `CREATE_RECORD`, `WEBHOOK`, `GENERATE_DOCUMENT`. `WEBHOOK` posts JSON
 to an admin-supplied URL; the URL is validated on save and again before every call, and a host that resolves to a

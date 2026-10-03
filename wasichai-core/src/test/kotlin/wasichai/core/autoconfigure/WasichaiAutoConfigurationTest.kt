@@ -27,6 +27,7 @@ import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
+import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
@@ -80,6 +81,7 @@ class WasichaiAutoConfigurationTest {
         runner.run { context ->
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(RecordService::class.java)
+            assertThat(context).hasSingleBean(ClusterLock::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)
             // order, not just size: core's twelve types, in ScalarFieldTypes.ALL's declared order
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).containsExactly(
@@ -160,6 +162,15 @@ class WasichaiAutoConfigurationTest {
                 assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
                 assertThat(context.getBeansOfType(ModuleMigration::class.java)).hasSize(2)
             }
+    }
+
+    @Test
+    fun `an app ClusterLock wins over the default`() {
+        val mine = ClusterLock(mock(DatabaseClient::class.java)) { error("not used") }
+        runner.withBean(ClusterLock::class.java, { mine }).run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(ClusterLock::class.java)).isSameAs(mine)
+        }
     }
 
     @Test
