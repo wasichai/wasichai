@@ -11,7 +11,7 @@ class SystemColumnsTest {
     @Test
     fun `core alone reserves the six always-present columns and version`() {
         assertThat(core.all.map { it.name })
-            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "version")
+            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "version", "count", "after")
         assertThat(core.names).doesNotContain("workflow_state")
     }
 
@@ -19,7 +19,7 @@ class SystemColumnsTest {
     fun `a contributed column sits between the core ones and the reserved ones`() {
         val columns = SystemColumns(listOf(SystemColumnContributor { listOf(SystemColumn("workflow_state", "TEXT", "WORKFLOW")) }))
         assertThat(columns.all.map { it.name })
-            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "workflow_state", "version")
+            .containsExactly("id", "organization_id", "created_at", "updated_at", "created_by", "updated_by", "workflow_state", "version", "count", "after")
         assertThatThrownBy { columns.requireValidFieldName("workflow_state") }.isInstanceOf(ValidationException::class.java)
     }
 

@@ -65,10 +65,16 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.database.metadata-schema` | `wasichai` | schema Flyway owns: identity, organizations, metadata |
 | `wasichai.database.data-schema` | `app_data` | schema holding one physical table per custom object (ADR-004) |
 | `wasichai.database.migrate` | `true` | `false` when the app runs migrations another way |
+| `wasichai.metadata.reconcile-indexes` | `true` | at startup, build the declared and relation indexes data tables lack (ADR-036) |
 | `wasichai.security.jwt.secret` | *(none)* | HS256 signing key, at least 32 bytes; required, a library must not ship one that works |
 | `wasichai.web.problem-base-uri` | `https://wasichai.dev/problems` | RFC 7807 `type` base; the full type is this plus `/<status>` |
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
+
+The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
+first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
+Kubernetes startup probe room for it, or switch the reconciliation off and build the indexes another way. Later
+starts find nothing missing and cost one catalog read.
 
 `wasichai.security.jwt.issuer` (default `wasichai`) and `wasichai.security.jwt.ttl` (default 8 hours) are also read from
 `JwtProperties` but rarely need changing. `metadata-schema` and `data-schema` must differ and are validated as
@@ -144,7 +150,10 @@ Migration location `classpath:db/wasichai/core`, history table `flyway_history_c
 ([ADR-026](../adr/0026-per-module-migrations.md)). Creates the `pgcrypto` extension `WITH SCHEMA public` (shared by
 every app in the database, so it outlives any one app) and, when the server ships it, `pgvector` the same way.
 Tables: `organizations`, `users`, `roles`, `user_roles`, `custom_objects`, `custom_fields`, `relationships`,
-`permissions`, `field_permissions`, `audit_log`.
+`permissions`, `field_permissions`, `audit_log`. `V3__declared_indexes.sql` adds `custom_fields.indexed` and
+`custom_objects.indexes` ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)). The indexes
+themselves sit on each data table, built by `ObjectSchemaManager`. A declared index is named
+`<physical table>_ix_<hash of its columns>`.
 
 The opt-in dev seed, `classpath:db/wasichai/core-seed` (history table `flyway_history_core_seed`, order `10`), runs
 only with `wasichai.seed.dev=true` and inserts a demo organization, an `ADMIN` role with every permission, and the
@@ -235,6 +244,8 @@ Core is always installed.
 - D14: the login form's email is empty by default, configurable with `WasichaiApp` `config.defaultLoginEmail`.
 - D16: field type names are trimmed before matching, so `" text "` is `TEXT`.
 - D21: every record list and the audit list end their `ORDER BY` with `id`, so rows tied on the sort key keep a stable order.
+- D22: declared and relation indexes, two new metadata columns, `count`/`after` reserved, `nextCursor` on pages
+  (ADR-036).
 
 ## Known limitations
 

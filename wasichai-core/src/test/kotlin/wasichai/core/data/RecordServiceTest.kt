@@ -101,8 +101,13 @@ class RecordServiceTest {
                 definition: ObjectDefinition,
                 organizationId: UUID,
                 query: RecordQuery
-            ) = PageResponse.of(emptyList<RecordRow>(), 0, 25, 0)
+            ): PageResponse<RecordRow> {
+                lastQuery = query
+                return PageResponse.of(emptyList(), 0, 25, if (query.count) 0 else null, nextCursor = "next")
+            }
         }
+
+    private var lastQuery: RecordQuery? = null
 
     // fieldAccess restricted (not FieldAccess.FULL) so the write check actually runs.
     // suspend: stubbing a suspend function means calling it, which needs a coroutine.
@@ -147,5 +152,30 @@ class RecordServiceTest {
             }
         }.isInstanceOf(ValidationException::class.java)
             .hasMessageContaining("area")
+    }
+
+    // issue 21: an in-process caller reaches count and keyset through RecordService.list too
+    @Test
+    fun `list hands count and after to the store and gives back the cursor`() {
+        lateinit var page: PageResponse<RecordResponse>
+        runTest {
+            page =
+                service(FieldAccess.FULL).list(
+                    "predio",
+                    RecordQuery(
+                        page =
+                            wasichai.core.common.PageRequest
+                                .of(0, 25),
+                        count = false,
+                        after = "c"
+                    )
+                )
+        }
+
+        assertThat(lastQuery!!.count).isFalse()
+        assertThat(lastQuery!!.after).isEqualTo("c")
+        assertThat(page.totalElements).isNull()
+        assertThat(page.totalPages).isNull()
+        assertThat(page.nextCursor).isEqualTo("next")
     }
 }

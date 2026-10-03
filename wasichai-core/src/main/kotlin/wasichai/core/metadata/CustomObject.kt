@@ -14,7 +14,9 @@ data class CustomObject(
     val enabled: Boolean,
     val physicalTable: String,
     val createdAt: Instant?,
-    val updatedAt: Instant?
+    val updatedAt: Instant?,
+    // declared composite indexes, field names in index order (ADR-036)
+    val indexes: List<List<String>> = emptyList()
 )
 
 data class CustomField(
@@ -34,7 +36,9 @@ data class CustomField(
     // what a module's field type keeps in its own custom_fields columns, by column name
     val attributes: Map<String, Any?> = emptyMap(),
     val visible: Boolean,
-    val editable: Boolean
+    val editable: Boolean,
+    // a single-column index on every organization's table (ADR-036). relations get one anyway.
+    val indexed: Boolean = false
 )
 
 // object plus its fields. what the UI needs to render anything.
@@ -43,14 +47,14 @@ data class ObjectDefinition(
     val fields: List<CustomField>
 )
 
-// what the caller may see: unreadable fields gone, unwritable ones locked.
+// what the caller may see: unreadable fields gone, unwritable ones locked, and no index naming a hidden field.
 fun ObjectDefinition.readableBy(access: FieldAccess): ObjectDefinition {
     if (access.unrestricted) return this
+    val readable = fields.filter { access.canRead(it.id) }
+    val names = readable.map { it.name }.toSet()
     return copy(
-        fields =
-            fields
-                .filter { access.canRead(it.id) }
-                .map { if (access.canWrite(it.id)) it else it.copy(editable = false) }
+        obj = obj.copy(indexes = obj.indexes.filter { set -> names.containsAll(set) }),
+        fields = readable.map { if (access.canWrite(it.id)) it else it.copy(editable = false) }
     )
 }
 

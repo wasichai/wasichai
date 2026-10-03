@@ -1,5 +1,6 @@
 package wasichai.core.data
 
+import io.r2dbc.spi.R2dbcException
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
@@ -181,34 +182,131 @@ class PhysicalTableRecordStore(
         organizationId: UUID,
         query: RecordQuery
     ): PageResponse<RecordRow> {
+        val cursor =
+            query.after?.let { raw ->
+                if (query.page.page > 0) {
+                    throw ValidationException("after cannot be combined with page", "after", "a keyset read starts at its cursor; leave page out")
+                }
+                RecordCursor.decode(raw)
+            }
         // ANY(:ids) on an empty array matches nothing anyway; skip the round trip and say so directly
-        query.ids?.let { if (it.isEmpty()) return PageResponse.of(emptyList(), query.page.page, query.page.size, 0) }
+        query.ids?.let {
+            if (it.isEmpty()) return PageResponse.of(emptyList(), query.page.page, query.page.size, if (query.count) 0 else null)
+        }
 
         val table = tableOf(definition)
         val (where, bindings) = whereClause(definition, organizationId, query)
+        val key = sortKey(definition, query)
         val order = orderBy(definition, query)
 
-        var countSpec = db.sql("SELECT COUNT(*) AS total FROM $table WHERE $where")
-        bindings.forEach { (name, value) -> countSpec = countSpec.bind(name, value) }
-        val total = countSpec.map { row, _ -> Rows.long(row, "total") }.one().awaitSingle()
+        // the total counts every match, not what is left after the cursor
+        val total =
+            if (query.count) {
+                var countSpec = db.sql("SELECT COUNT(*) AS total FROM $table WHERE $where")
+                bindings.forEach { (name, value) -> countSpec = countSpec.bind(name, value) }
+                countSpec.map { row, _ -> Rows.long(row, "total") }.one().awaitSingle()
+            } else {
+                null
+            }
 
+        val (keyset, keysetBindings) = cursor?.let { keysetCondition(definition, query, it) } ?: ("" to emptyMap())
+        val rowsWhere = if (cursor == null) where else "$where AND $keyset"
+        // one row past the page says whether another page follows, without counting anything
         var rowsSpec =
             db.sql(
-                "SELECT ${selectList(definition, query.withState)} FROM $table WHERE $where $order " +
-                    "LIMIT :limit OFFSET :offset"
+                "SELECT ${selectList(definition, query.withState)}, CAST(${key.column} AS text) AS $SORT_VALUE " +
+                    "FROM $table WHERE $rowsWhere $order LIMIT :limit OFFSET :offset"
             )
-        bindings.forEach { (name, value) -> rowsSpec = rowsSpec.bind(name, value) }
+        (bindings + keysetBindings).forEach { (name, value) -> rowsSpec = rowsSpec.bind(name, value) }
         val rows =
-            rowsSpec
-                .bind("limit", query.page.size)
-                .bind("offset", query.page.offset)
-                .map { row, _ -> mapRow(definition, row, query.withState) }
-                .all()
-                .asFlow()
-                .toList()
+            try {
+                rowsSpec
+                    .bind("limit", query.page.size + 1)
+                    .bind("offset", if (cursor == null) query.page.offset else 0L)
+                    .map { row, _ -> mapRow(definition, row, query.withState) to Rows.stringOrNull(row, SORT_VALUE) }
+                    .all()
+                    .asFlow()
+                    .toList()
+            } catch (e: Exception) {
+                // a cursor that decodes but whose value postgres cannot cast back (class 22: data exception) was
+                // not one this list returned: the caller's mistake, not ours
+                if (cursor != null && isDataException(e)) throw invalidCursorValue()
+                throw e
+            }
 
-        return PageResponse.of(rows, query.page.page, query.page.size, total)
+        val content = rows.take(query.page.size)
+        val next =
+            if (rows.size > query.page.size) {
+                content.last().let { (row, value) -> RecordCursor(key.name, query.descending, value, row.id).encode() }
+            } else {
+                null
+            }
+        return PageResponse.of(content.map { it.first }, query.page.page, query.page.size, total, next)
     }
+
+    // the sort a list runs: the name a cursor carries, the sql column, its postgres type (a cursor
+    // value comes back as text and is cast to it) and whether nulls have to be stepped around
+    internal data class SortKey(
+        val name: String,
+        val column: String,
+        val sqlType: String,
+        val nullable: Boolean
+    )
+
+    internal fun sortKey(
+        definition: ObjectDefinition,
+        query: RecordQuery
+    ): SortKey {
+        val requested = query.sort?.trim()?.lowercase()
+        return when {
+            requested.isNullOrBlank() -> SortKey("created_at", "created_at", "timestamptz", false)
+            requested == "id" -> SortKey("id", "id", "uuid", false)
+            requested == "created_at" || requested == "updated_at" -> SortKey(requested, requested, "timestamptz", false)
+            else -> {
+                val field = fieldOrFail(definition, requested)
+                // NOT NULL is kept in step with required (ObjectSchemaManager.setRequired)
+                SortKey(field.name, SqlIdentifier.quote(field.columnName), types.handler(field.type).columnType(field), !field.required)
+            }
+        }
+    }
+
+    // rows strictly after the cursor in ORDER BY order: (sort value, id), the same pair orderBy ends
+    // on, so rows tied on the sort value are split by id and none is read twice or skipped. postgres
+    // puts nulls last ascending and first descending; a nullable key steps around them the same way.
+    internal fun keysetCondition(
+        definition: ObjectDefinition,
+        query: RecordQuery,
+        cursor: RecordCursor
+    ): Pair<String, Map<String, Any>> {
+        val key = sortKey(definition, query)
+        if (cursor.sort != key.name || cursor.descending != query.descending) {
+            throw ValidationException(
+                "The cursor belongs to another sort",
+                "after",
+                "was returned for sort=${cursor.sort}&dir=${if (cursor.descending) "desc" else "asc"}; keep that sort, or start again without after"
+            )
+        }
+        val op = if (query.descending) "<" else ">"
+        val id = mapOf<String, Any>("afterId" to cursor.id)
+        if (key.name == "id") return "id $op :afterId" to id
+
+        val c = key.column
+        val v = "CAST(:afterValue AS ${key.sqlType})"
+        val value = cursor.value
+        return when {
+            // a NOT NULL key is a plain row comparison, which an index on (key, id) serves directly
+            !key.nullable -> "($c, id) $op ($v, :afterId)" to id + ("afterValue" to (value ?: throw invalidCursorValue()))
+            value == null && !query.descending -> "($c IS NULL AND id > :afterId)" to id
+            value == null -> "(($c IS NULL AND id < :afterId) OR $c IS NOT NULL)" to id
+            !query.descending -> "($c > $v OR ($c = $v AND id > :afterId) OR $c IS NULL)" to id + ("afterValue" to value)
+            else -> "($c < $v OR ($c = $v AND id < :afterId))" to id + ("afterValue" to value)
+        }
+    }
+
+    internal fun isDataException(e: Throwable): Boolean =
+        generateSequence(e) { it.cause }.any { it is R2dbcException && it.sqlState?.startsWith(DATA_EXCEPTION) == true }
+
+    private fun invalidCursorValue() = ValidationException("Invalid cursor", "after", "is not a nextCursor a record list returned")
 
     // pure, so it is tested directly: the WHERE and its bindings for one query. organization_id
     // always leads, unparenthesized; every module condition is wrapped in parens, so an "x OR y"
@@ -312,13 +410,7 @@ class PhysicalTableRecordStore(
         query: RecordQuery
     ): String {
         val direction = if (query.descending) "DESC" else "ASC"
-        val requested = query.sort?.trim()?.lowercase()
-        val column =
-            when {
-                requested.isNullOrBlank() -> "created_at"
-                requested in setOf("id", "created_at", "updated_at") -> requested
-                else -> SqlIdentifier.quote(fieldOrFail(definition, requested).columnName)
-            }
+        val column = sortKey(definition, query).column
         // id last: rows of one transaction tie on created_at, and OFFSET over a tie can repeat or skip rows
         return if (column == "id") "ORDER BY id $direction" else "ORDER BY $column $direction, id $direction"
     }
@@ -373,4 +465,12 @@ class PhysicalTableRecordStore(
                 },
             state = if (withState) Rows.stringOrNull(row, ObjectSchemaManager.STATE_COLUMN) else null
         )
+
+    companion object {
+        // the sort value as text, for the next cursor. a field name starts with a letter, so this alias never collides.
+        private const val SORT_VALUE = "__sort_value"
+
+        // sqlstate class 22: invalid_text_representation, invalid_datetime_format, numeric_value_out_of_range…
+        private const val DATA_EXCEPTION = "22"
+    }
 }

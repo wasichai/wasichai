@@ -90,13 +90,7 @@ class RecordService(
                 user.organizationId,
                 query.copy(createdBy = access.ownerFilter(user), withState = workflow.attached)
             )
-        return PageResponse(
-            content = page.content.map { it.toResponse() },
-            page = page.page,
-            size = page.size,
-            totalElements = page.totalElements,
-            totalPages = page.totalPages
-        )
+        return page.map { it.toResponse() }
     }
 
     suspend fun get(

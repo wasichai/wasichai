@@ -53,7 +53,8 @@ class ObjectSchemaManagerTest {
         unique: Boolean = false,
         enumOptions: List<String>? = null,
         relationTarget: UUID? = null,
-        attributes: Map<String, Any?> = emptyMap()
+        attributes: Map<String, Any?> = emptyMap(),
+        indexed: Boolean = false
     ) = CustomField(
         id = UUID.randomUUID(),
         objectId = obj.id,
@@ -70,7 +71,8 @@ class ObjectSchemaManagerTest {
         relationTargetObjectId = relationTarget,
         attributes = attributes,
         visible = true,
-        editable = true
+        editable = true,
+        indexed = indexed
     )
 
     @Test
@@ -101,5 +103,48 @@ class ObjectSchemaManagerTest {
         assertThat(manager().indexStatements(obj, area))
             .containsExactly("CREATE INDEX \"predio__1234abcd_area_mix\" ON \"app_data\".\"predio__1234abcd\" (\"area\")")
         assertThat(manager().indexStatements(obj, field("codigo", FieldType.TEXT))).isEmpty()
+    }
+
+    // issue 21: what the table should carry, as column lists. relations always, unique ones never twice.
+    @Test
+    fun `declared indexes are the indexed fields, the relations and the object's sets, each once`() {
+        val definition =
+            ObjectDefinition(
+                obj.copy(indexes = listOf(listOf("anio", "predio"), listOf("anio"))),
+                listOf(
+                    field("anio", FieldType.INTEGER, indexed = true),
+                    field("predio", FieldType.RELATION, relationTarget = UUID.randomUUID()),
+                    field("titular", FieldType.RELATION, relationTarget = UUID.randomUUID(), unique = true),
+                    field("codigo", FieldType.TEXT, unique = true, indexed = true),
+                    field("notas", FieldType.TEXT)
+                )
+            )
+
+        assertThat(manager().declaredIndexes(definition))
+            .containsExactlyInAnyOrder(listOf("anio"), listOf("predio"), listOf("anio", "predio"))
+    }
+
+    @Test
+    fun `a declared index is created if missing and dropped by its derived name`() {
+        val name = SqlIdentifier.fieldSetName(obj.physicalTable, listOf("anio", "predio"), "ix")
+
+        assertThat(manager().createIndexStatement(obj, listOf("anio", "predio")))
+            .isEqualTo("CREATE INDEX IF NOT EXISTS \"$name\" ON \"app_data\".\"predio__1234abcd\" (\"anio\", \"predio\")")
+        assertThat(manager().dropIndexStatement(obj, listOf("anio", "predio")))
+            .isEqualTo("DROP INDEX IF EXISTS \"app_data\".\"$name\"")
+    }
+
+    @Test
+    fun `only what changed between two definitions is created or dropped`() {
+        val fields = listOf(field("anio", FieldType.INTEGER, indexed = true), field("predio", FieldType.TEXT))
+        val before = ObjectDefinition(obj.copy(indexes = listOf(listOf("anio", "predio"))), fields)
+        val after = ObjectDefinition(obj.copy(indexes = listOf(listOf("predio", "anio"))), fields)
+
+        assertThat(manager().indexChanges(before, after))
+            .containsExactly(
+                manager().dropIndexStatement(obj, listOf("anio", "predio")),
+                manager().createIndexStatement(obj, listOf("predio", "anio"))
+            )
+        assertThat(manager().indexChanges(after, after)).isEmpty()
     }
 }

@@ -13,7 +13,7 @@ class SchemaParityTest : FullAppIntegrationTest() {
     @Autowired
     private lateinit var environment: Environment
 
-    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". today only the
+    // differences accepted on purpose: "<catalog line>" to "<reason, ADR or ruling>". the
     // user_preferences table (ADR-031 D18), one entry per catalog line. a new one needs an ADR-031 entry.
     private val knownDeviations: Map<String, String> =
         mapOf(
@@ -35,7 +35,19 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "ADR-031 D18: per-user theme and locale",
             "index user_preferences.user_preferences_pkey CREATE UNIQUE INDEX user_preferences_pkey ON META.user_preferences USING btree (user_id)" to
                 "ADR-031 D18: per-user theme and locale",
-            "table user_preferences" to "ADR-031 D18: per-user theme and locale"
+            "table user_preferences" to "ADR-031 D18: per-user theme and locale",
+            // core's V3 adds a column to custom_fields before gis adds its own, so on a fresh database
+            // the three gis columns sit one place later than in the original
+            "column custom_fields.indexed #19 boolean NOT NULL DEFAULT false" to "ADR-031 D22: declared indexes",
+            "constraint custom_fields.custom_fields_indexed_not_null NOT NULL indexed" to "ADR-031 D22: declared indexes",
+            "column custom_objects.indexes #11 jsonb NOT NULL DEFAULT '[]'::jsonb" to "ADR-031 D22: declared indexes",
+            "constraint custom_objects.custom_objects_indexes_not_null NOT NULL indexes" to "ADR-031 D22: declared indexes",
+            "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.geometry_type #20 text" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.srid #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
+            "column custom_fields.dimension #22 integer" to "ADR-031 D22: shifted by custom_fields.indexed"
         )
 
     @Test

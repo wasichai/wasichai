@@ -78,4 +78,19 @@ class SqlIdentifierTest {
     fun `literal doubles embedded quotes`() {
         assertThat(SqlIdentifier.literal("O'Brien")).isEqualTo("'O''Brien'")
     }
+
+    // issue 21: one name per column list, never ambiguous, always a quotable identifier
+    @Test
+    fun `a field set name is stable, order sensitive, unambiguous and fits postgres`() {
+        val table = "a".repeat(39) + "__1234abcd"
+        val name = SqlIdentifier.fieldSetName(table, listOf("anio", "predio"), "ix")
+
+        assertThat(name).isEqualTo(SqlIdentifier.fieldSetName(table, listOf("anio", "predio"), "ix"))
+        assertThat(name).isNotEqualTo(SqlIdentifier.fieldSetName(table, listOf("predio", "anio"), "ix"))
+        assertThat(SqlIdentifier.fieldSetName(table, listOf("a_b"), "ix")).isNotEqualTo(SqlIdentifier.fieldSetName(table, listOf("a", "b"), "ix"))
+        assertThat(name).isNotEqualTo(SqlIdentifier.fieldSetName(table, listOf("anio", "predio"), "uq"))
+        assertThat(name.length).isLessThanOrEqualTo(63)
+        assertThat(name).contains("_ix_")
+        assertThat(SqlIdentifier.quote(name)).isEqualTo("\"$name\"")
+    }
 }

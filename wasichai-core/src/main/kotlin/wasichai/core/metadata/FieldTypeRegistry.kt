@@ -159,7 +159,8 @@ class FieldTypeRegistry(
                 "enumOptions",
                 "relationTarget",
                 "visible",
-                "editable"
+                "editable",
+                "indexed"
             )
 
         // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`
@@ -173,7 +174,8 @@ class FieldTypeRegistry(
                 "enabled",
                 "createdAt",
                 "updatedAt",
-                "fields"
+                "fields",
+                "indexes"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata

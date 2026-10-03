@@ -86,6 +86,35 @@ Create request:
 }
 ```
 
+### Indexes
+
+```json
+{
+  "name": "cuota",
+  "label": "Cuota",
+  "fields": [
+    { "name": "anio", "type": "INTEGER" },
+    { "name": "mes", "type": "INTEGER" },
+    { "name": "codigo", "type": "TEXT", "indexed": true }
+  ],
+  "indexes": [["anio", "mes"]]
+}
+```
+
+`indexed: true` on a field gives its column an index of its own. `indexes` lists composite ones, field names in index
+order. Both are built on the organization's table along with the object, and every `RELATION` column gets an index
+without being asked, because PostgreSQL does not index a foreign key. `indexed` comes back on a field only when it is
+`true`, and `indexes` on an object or a definition only when there are some, so a model that declares none reads
+as before ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)).
+
+`PUT /api/objects/{object}` with `indexes` replaces the list: an index no longer listed is dropped and a new one is
+built. Without `indexes`, the list is left as it is, and `[]` drops every composite index. `PUT …/fields/{field}`
+with `indexed` adds or drops the field's own index. Sending what is already declared changes nothing. A `400` names
+`indexes` (or `indexed`) for an empty entry, more than 32 fields, an unknown field, a field named twice, or a field
+that cannot be indexed: `LONG_TEXT`, or a type that cannot be filtered on, such as a geometry. Deleting a field that a
+composite index names is a `409`, and so is deleting the relationship that owns such a field: remove it from
+`indexes` first.
+
 A geometry is a field like any other (ADR-019), so an object has as many as it needs and gains one
 after the fact through `POST …/fields`. `geometryType` is required on one, `srid` defaults to 4326
 and `dimension` to 2; `unique` and `defaultValue` are refused on one. The object's `geometry` in the
@@ -138,7 +167,8 @@ DELETE /api/metadata/objects/{object}/fields/{field}  drop the field and its col
 ```
 
 Updating applies DDL alongside the metadata, in one transaction: `required` toggles `NOT NULL`,
-`unique` adds or drops the constraint, and new `enumOptions` replace the `CHECK`.
+`unique` adds or drops the constraint, `indexed` adds or drops the field's index, and new `enumOptions` replace the
+`CHECK`.
 
 `name` and `type` are immutable: views, forms and automation rules refer to a field by name, and a
 type change may lose data. Sending either is answered with `400` naming the field — add a new field
@@ -148,6 +178,7 @@ Deleting drops the column and its data. It is refused with `409` when the field 
 to drop:
 
 - it belongs to a relationship — delete the relationship instead, which removes both sides;
+- the object's `indexes` name it — remove it from them first (see "Indexes");
 - an automation reads it, writes it, or fills it when creating a record — the response names the
   rules, because a rule that lost its field only fails the next time it fires.
 
@@ -165,7 +196,7 @@ letting the administrator find out through a `400`. Each entry is `{ name, type,
 |---|---|---|
 | `ALWAYS` | on every record table | `id`, `organization_id`, `created_at`, `updated_at`, `created_by`, `updated_by` |
 | `WORKFLOW` | only once a workflow is attached (ADR-013) | `workflow_state` |
-| `RESERVED` | refused, but no column exists — `type` is `null` | `version` |
+| `RESERVED` | refused, but no column exists — `type` is `null` | `version`, `count`, `after` |
 
 Every published name is refused as a field name with `400 … is reserved by the platform`, whatever
 the case it is sent in. SQL keywords are refused too but are not published: they are not names anyone
@@ -638,15 +669,33 @@ A record:
 that is left out of the map leaves it alone; sending it as `null` clears it. Reading lists every
 geometry the object declares, `null` included, so a missing key never means two things.
 
-A page: `{ content, page, size, totalElements, totalPages }`.
+A page: `{ content, page, size, totalElements, totalPages, nextCursor }`. `nextCursor` is present only when
+another row follows the page.
 
 Query parameters: `page`, `size` (max 200), `sort` (field name or `created_at`/`updated_at`/`id`),
-`dir` (`asc`/`desc`), `q` (case-insensitive search across text-like fields), `bbox`, `geometry`, and
-any field name for an equality filter. Unknown field names are rejected, and so is sorting or
+`dir` (`asc`/`desc`), `q` (case-insensitive search across text-like fields), `count`, `after`, `bbox`, `geometry`,
+and any field name for an equality filter. Unknown field names are rejected, and so is sorting or
 filtering by a geometry — `bbox` is how you filter one.
 
 Rows that tie on the sort key come back ordered by `id`, in the same direction, so paging through them never repeats or
 skips a row.
+
+`count=false` runs no `COUNT(*)`, and the page answers `totalElements: null` and `totalPages: null`. Use it when
+walking a large set that does not need a total. Any other value than `true` or `false` is a `400`.
+
+`after=<nextCursor>` is a keyset read: the page starts strictly after the row the cursor was taken from, by its sort
+value and `id`, so a large set costs one pass instead of a growing `OFFSET`, and every row comes back once, tied rows
+included. Keep the same `sort`, `dir` and filters, and follow `nextCursor` until a page comes without one:
+
+```http
+GET /api/objects/cuota/records?anio=2026&size=200&count=false
+GET /api/objects/cuota/records?anio=2026&size=200&count=false&after=MQpjcmVhdGVkX2F0CmEK…
+```
+
+The cursor is opaque. `after` together with a `page` above 0, a cursor issued for another `sort` or `dir`, or a value
+that is not a cursor, or whose value does not fit the sort key's type, is a `400` naming `after`. `totalElements`,
+when counted, is the whole match, not what is left after the cursor. Related-record lists take `count` and `after` the
+same way.
 
 `geometry` names the geometry field a `bbox` applies to; without it, the object's first. A `bbox` on
 an object with no geometry, or naming one it does not have, is a `400`.

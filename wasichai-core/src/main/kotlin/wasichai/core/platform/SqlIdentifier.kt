@@ -1,6 +1,7 @@
 package wasichai.core.platform
 
 import wasichai.core.common.ValidationException
+import java.security.MessageDigest
 
 // every runtime-built identifier passes here. validate, then quote. values always bound, never inlined.
 object SqlIdentifier {
@@ -14,6 +15,7 @@ object SqlIdentifier {
 
     private const val MAX_IDENTIFIER = 63
     private const val HASH_LENGTH = 8
+    private const val FIELD_SET_HASH = 10
 
     private val SQL_KEYWORDS: Set<String> =
         setOf(
@@ -153,6 +155,24 @@ object SqlIdentifier {
         if (full.length <= MAX_IDENTIFIER) return full
         val hash = Integer.toHexString(full.hashCode()).takeLast(HASH_LENGTH).padStart(HASH_LENGTH, '0')
         return full.take(MAX_IDENTIFIER - HASH_LENGTH - 1) + "_" + hash
+    }
+
+    // a name for an index (or constraint) over a column list: the same list always gets the same name,
+    // order counts, and ["a_b"] never meets ["a","b"], so the list is hashed rather than joined.
+    // "<table>_<kind>_<10 hex>" fits 63 for any physical table name (at most 49).
+    fun fieldSetName(
+        table: String,
+        columns: List<String>,
+        kind: String
+    ): String {
+        val digest =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(columns.joinToString(",").toByteArray())
+                .joinToString("") { "%02x".format(it) }
+                .take(FIELD_SET_HASH)
+        val tail = "_${kind}_$digest"
+        return table.take(MAX_IDENTIFIER - tail.length) + tail
     }
 
     fun quote(identifier: String): String {

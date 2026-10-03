@@ -85,6 +85,16 @@ These are the only intended differences. Anything else that behaves differently 
   paging through them could see a row twice and miss a sibling. Now every record list ends its `ORDER BY` with `id`, in
   the direction of the primary sort, and the audit list does the same. Tested by `PhysicalTableRecordStoreTest` and
   `RecordApiTest`.
+- **D22. Declared indexes, an optional count and keyset reads ([ADR-036](0036-declared-indexes-optional-count-and-keyset-reads.md)).**
+  The metadata schema gains `custom_fields.indexed` and `custom_objects.indexes`. On a fresh database `indexed` sits
+  before the `wasichai-gis` attribute columns, so those move one position, and `SchemaParityTest` lists the changed
+  lines. Every `RELATION` column, indexed field and declared field set gets an index on the data table, the original
+  built none of them, and a startup reconciliation adds them to existing tables. A field or relationship that a
+  composite index names cannot be deleted (`409`). `count` and `after` are reserved record-list parameters: `?count=`
+  with anything but `true`/`false` is a `400` where it used to filter a field named `count`, `?after=` is read as a
+  cursor rather than a filter, and both are refused as new field names. A default page now carries `nextCursor`
+  whenever another row follows. Tested by `DeclaredIndexApiTest`, `RecordKeysetApiTest`, `FieldApiTest` and
+  `SchemaParityTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

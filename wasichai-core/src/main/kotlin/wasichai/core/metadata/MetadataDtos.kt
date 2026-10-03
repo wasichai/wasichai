@@ -3,6 +3,7 @@ package wasichai.core.metadata
 import com.fasterxml.jackson.annotation.JsonAnyGetter
 import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 
@@ -19,6 +20,8 @@ data class FieldRequest(
     val relationTarget: String? = null,
     val visible: Boolean = true,
     val editable: Boolean = true,
+    // a single-column index on the field's column (ADR-036)
+    val indexed: Boolean = false,
     // properties only a module's field type reads. core keeps them for it. a constructor
     // parameter, not a body property, so copy()/equals/hashCode carry it like every other field.
     @get:JsonIgnore @param:JsonAnySetter val extensions: Map<String, Any?> = emptyMap()
@@ -29,7 +32,9 @@ data class CreateObjectRequest(
     @field:NotBlank val label: String,
     val pluralLabel: String? = null,
     val description: String? = null,
-    val fields: List<FieldRequest> = emptyList()
+    val fields: List<FieldRequest> = emptyList(),
+    // composite indexes, field names in index order: [["anio", "predio"]] (ADR-036)
+    val indexes: List<List<String>> = emptyList()
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -43,7 +48,8 @@ data class UpdateFieldRequest(
     val enumOptions: List<String>? = null,
     val visible: Boolean? = null,
     val editable: Boolean? = null,
-    val position: Int? = null
+    val position: Int? = null,
+    val indexed: Boolean? = null
 )
 
 data class UpdateObjectRequest(
@@ -52,7 +58,9 @@ data class UpdateObjectRequest(
     @field:NotBlank val label: String,
     val pluralLabel: String? = null,
     val description: String? = null,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    // null leaves the declared indexes as they are; a list replaces them, [] drops them all
+    val indexes: List<List<String>>? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -70,6 +78,8 @@ data class FieldResponse(
     val relationTarget: String?,
     val visible: Boolean,
     val editable: Boolean,
+    // only written when true, so a field that declares nothing reads exactly as before (ADR-036)
+    @get:JsonInclude(JsonInclude.Include.NON_DEFAULT) val indexed: Boolean = false,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -86,6 +96,8 @@ data class ObjectResponse(
     val enabled: Boolean,
     val createdAt: Instant?,
     val updatedAt: Instant?,
+    // only written when some are declared (ADR-036)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -102,6 +114,8 @@ data class ObjectDefinitionResponse(
     val description: String?,
     val enabled: Boolean,
     val fields: List<FieldResponse>,
+    // only written when some are declared (ADR-036)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

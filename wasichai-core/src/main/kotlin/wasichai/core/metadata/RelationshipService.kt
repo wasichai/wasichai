@@ -167,14 +167,24 @@ class RelationshipService(
             relationships.findByName(user.organizationId, name)
                 ?: throw NotFoundException("Relationship '$name' does not exist")
 
-        relationship.joinTable?.let { schema.dropJoinTable(it) }
-        relationship.relationFieldId?.let { fieldId ->
-            fields.findById(fieldId)?.let { field ->
-                objects.findById(user.organizationId, field.objectId)?.let { owner ->
-                    schema.dropColumn(owner, field)
-                    fields.delete(field.id)
-                }
+        val column =
+            relationship.relationFieldId?.let { fieldId ->
+                fields.findById(fieldId)?.let { field -> objects.findById(user.organizationId, field.objectId)?.let { owner -> owner to field } }
             }
+        // postgres would drop a composite index with the column while the metadata still lists it (ADR-036)
+        column?.let { (owner, field) ->
+            FieldSets.containing(field.name, owner.indexes).firstOrNull()?.let { set ->
+                throw ConflictException(
+                    "Field '${field.name}' of relationship '$name' is part of index ${set.joinToString(", ", "(", ")")} " +
+                        "of '${owner.name}'. Remove it from the object's indexes first."
+                )
+            }
+        }
+
+        relationship.joinTable?.let { schema.dropJoinTable(it) }
+        column?.let { (owner, field) ->
+            schema.dropColumn(owner, field)
+            fields.delete(field.id)
         }
         relationships.delete(relationship.id)
     }

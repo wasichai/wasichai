@@ -1,6 +1,7 @@
 package wasichai.core.data
 
 import wasichai.core.common.PageRequest
+import wasichai.core.common.ValidationException
 import wasichai.core.metadata.ObjectDefinition
 
 // a condition a module adds to a record query. values go through `bind`, which returns the
@@ -34,10 +35,20 @@ class RecordQueryParser(
             descending = params["dir"].equals("desc", ignoreCase = true),
             search = params["q"],
             filters = params.filterKeys { it !in reserved },
-            criteria = contributors.mapNotNull { it.parse(params) }
+            criteria = contributors.mapNotNull { it.parse(params) },
+            count = count(params["count"]),
+            after = params["after"]?.takeIf { it.isNotBlank() }
         )
 
+    // strict: a typo must not silently run the count the caller meant to skip
+    private fun count(raw: String?): Boolean =
+        when (raw?.trim()?.lowercase()) {
+            null, "true" -> true
+            "false" -> false
+            else -> throw ValidationException("Invalid count '$raw'", "count", "must be true or false")
+        }
+
     companion object {
-        val CORE_PARAMETERS = setOf("page", "size", "sort", "dir", "q", "limit")
+        val CORE_PARAMETERS = setOf("page", "size", "sort", "dir", "q", "limit", "count", "after")
     }
 }
