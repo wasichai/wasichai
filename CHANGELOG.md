@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.1](https://github.com/wasichai/wasichai/compare/v0.3.0...v0.3.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **core:** answer 400 for a RELATION value naming no record ([ede5e52](https://github.com/wasichai/wasichai/commit/ede5e52b7d59c6970cabf3d93cf1c170185f5176))
+* **core:** answer 400 for a RELATION value naming no record ([7d25d58](https://github.com/wasichai/wasichai/commit/7d25d58f4d594a81ffa9b51b8df9c84eb1c1ffea)), closes [#33](https://github.com/wasichai/wasichai/issues/33)
+* **core:** check RELATION targets in RecordWriteGuards, after the write rules ([b996a58](https://github.com/wasichai/wasichai/commit/b996a58cf19ec2393f31c87b1476706eba731d6e)), closes [#33](https://github.com/wasichai/wasichai/issues/33)
+
 ## [0.3.0](https://github.com/wasichai/wasichai/compare/v0.2.0...v0.3.0) (2026-10-03)
 
 
