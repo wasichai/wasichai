@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.2](https://github.com/wasichai/wasichai/compare/v0.3.1...v0.3.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **core:** a RELATION value names only a record the caller can read ([f8910f4](https://github.com/wasichai/wasichai/commit/f8910f4f16b8992546ba4b1e0016a5ece1c93714))
+* **core:** a RELATION value names only a record the caller can read ([bc13b74](https://github.com/wasichai/wasichai/commit/bc13b743d95e102ac93cbed57eda14602b35fe5a)), closes [#39](https://github.com/wasichai/wasichai/issues/39)
+* **core:** fail closed when a user's RELATION write passes no reader ([d0547ed](https://github.com/wasichai/wasichai/commit/d0547ede854f81b12568587be7381fd4fad40845)), closes [#39](https://github.com/wasichai/wasichai/issues/39)
+* **test:** bind the integration test server to 127.0.0.1 ([5ab0024](https://github.com/wasichai/wasichai/commit/5ab0024399ee413a64d455a8f6c15e38f98e33bc))
+* **test:** bind the integration test server to 127.0.0.1 ([d8f3afe](https://github.com/wasichai/wasichai/commit/d8f3afe8e73c81762881db54037df60213103f37)), closes [#34](https://github.com/wasichai/wasichai/issues/34)
+* **test:** explain a tokenless login without printing the password ([101f1dc](https://github.com/wasichai/wasichai/commit/101f1dcf5f9bbcd2eb7fae0d85a1a22d5b249885)), closes [#34](https://github.com/wasichai/wasichai/issues/34)
+
 ## [0.3.1](https://github.com/wasichai/wasichai/compare/v0.3.0...v0.3.1) (2026-10-03)
 
 
