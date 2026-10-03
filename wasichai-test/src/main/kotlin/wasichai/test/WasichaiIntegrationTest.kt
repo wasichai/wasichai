@@ -12,10 +12,6 @@ import org.springframework.test.web.reactive.server.WebTestClient
 import tools.jackson.databind.json.JsonMapper
 import java.util.UUID
 
-data class LoginBody(
-    val token: String
-)
-
 // base for api tests against a real postgres. the app under test is the @SpringBootConfiguration
 // found above the test's package: give your tests one with @EnableAutoConfiguration and no component
 // scan, so the app boots the way a real one gets wasichai. a subclass may override any property with
@@ -63,9 +59,15 @@ abstract class WasichaiIntegrationTest {
                 .exchange()
                 .expectBody(String::class.java)
                 .returnResult()
-        // every test starts here: on failure say who answered and what, the result prints url, headers and body
-        if (result.status.value() != HttpStatus.OK.value()) throw AssertionError("login as $email answered ${result.status}, expected 200 OK\n$result")
-        return "Bearer ${json.readTree(result.responseBody).get("token").asString()}"
+        // every test starts here: on failure say who answered and what. no request body, it holds the password
+        val token = runCatching { json.readTree(result.responseBody).get("token").asString() }.getOrNull()
+        if (result.status.value() != HttpStatus.OK.value() || token == null) {
+            throw AssertionError(
+                "login as $email: ${result.method} ${result.url} answered ${result.status}, expected 200 OK with a token\n" +
+                    "response headers: ${result.responseHeaders}\nresponse body: ${result.responseBody}"
+            )
+        }
+        return "Bearer $token"
     }
 
     companion object {
