@@ -3,6 +3,12 @@
 ## [0.3.1](https://github.com/wasichai/wasichai/compare/v0.3.0...v0.3.1) (2026-10-03)
 
 
+### Notes
+
+* **core:** a RELATION value naming no record, or one of another organization, now answers `400` with `errors[].field` (ADR-031 D29; it was `409` in 0.3.0).
+* **core:** `RecordWriteGuards` takes `RelationTargets` as a second constructor parameter; only code that builds it by hand (tests) changes ([#38](https://github.com/wasichai/wasichai/pull/38)).
+
+
 ### Bug Fixes
 
 * **core:** answer 400 for a RELATION value naming no record ([ede5e52](https://github.com/wasichai/wasichai/commit/ede5e52b7d59c6970cabf3d93cf1c170185f5176))
