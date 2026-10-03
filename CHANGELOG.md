@@ -3,6 +3,12 @@
 ## [0.3.2](https://github.com/wasichai/wasichai/compare/v0.3.1...v0.3.2) (2026-10-03)
 
 
+### Notes
+
+* **core:** a RELATION value set by a person or service account (not ADMIN) must name a record they can read (READ on the target object, and their own when their roles are own-records-only); otherwise it answers the same `400` as a missing record (ADR-031 D30).
+* **core:** `RecordWriteGuards.beforeWrite` and `RelationTargets.rejectMissing` take a `reader` (source compatible); a user's write that sets RELATION values without it fails ([#41](https://github.com/wasichai/wasichai/pull/41)).
+
+
 ### Bug Fixes
 
 * **core:** a RELATION value names only a record the caller can read ([f8910f4](https://github.com/wasichai/wasichai/commit/f8910f4f16b8992546ba4b1e0016a5ece1c93714))
