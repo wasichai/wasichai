@@ -2,6 +2,13 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — wasichai-ui 0.4.1 keeps the permissions its roles page does not show
+
+wasichai-ui 0.4.1 ([wasichai/wasichai-ui#25](https://github.com/wasichai/wasichai-ui/pull/25)) fixes the roles page:
+on save it keeps every permission it does not render (declared actions, denies), and it shows each object's declared
+actions in an "Acciones propias" column. This resolves the hazard ADR-031 D26 and ADR-042 describe, where saving a
+role there deleted its declared grants.
+
 ## 2026-10-03 — The append-only delete check holds a lock on the record
 
 `RecordService.delete` refused a record an append-only record points at (ADR-040), but checked and deleted in separate
