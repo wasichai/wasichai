@@ -169,7 +169,7 @@ class RecordAuditSnapshotTest {
             FieldTypeRegistry(emptyList()),
             listOf(listener),
             RecordWriteGuards(emptyList()),
-            mock(AppendOnlyReferences::class.java)
+            AppendOnlyReferencesFixtures.none()
         )
     }
 

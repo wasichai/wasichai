@@ -154,6 +154,14 @@ These are the only intended differences. Anything else that behaves differently 
   carry `serviceAccount`, a key absent for a person. A person's login, token and answers are unchanged. Tested by `ServiceAccountApiTest`,
   `ServiceAccountAutomationTest` and `JwtServiceTest`.
 
+**Because a reference can vanish under a write**
+
+- **D28. A foreign-key violation is a `409`.** The original answered a write whose foreign key no longer held (the
+  record it points at deleted meanwhile) with a `500`. Now it is a `409` problem+json, "A record this one points at
+  does not exist any more"; other integrity violations stay `500`. It is how an append-only insert that loses the race
+  against a delete answers ([ADR-044](0044-append-only-delete-check-under-a-row-lock.md)). Tested by
+  `GlobalExceptionHandlerIntegrityTest` and `WriteRulesApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

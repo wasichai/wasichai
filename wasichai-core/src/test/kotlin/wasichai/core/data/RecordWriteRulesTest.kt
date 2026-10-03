@@ -162,7 +162,7 @@ class RecordWriteRulesTest {
             FieldTypeRegistry(emptyList()),
             listOf(listener),
             RecordWriteGuards(listOf(guard)),
-            mock(AppendOnlyReferences::class.java)
+            AppendOnlyReferencesFixtures.none()
         )
     }
 

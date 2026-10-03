@@ -101,8 +101,9 @@ class WasichaiDataAutoConfiguration {
         schemas: WasichaiSchemas,
         objects: CustomObjectRepository,
         fields: CustomFieldRepository,
-        relationships: RelationshipRepository
-    ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships)
+        relationships: RelationshipRepository,
+        transactionManager: ObjectProvider<ReactiveTransactionManager>
+    ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships) { TransactionalOperator.create(transactionManager.getObject()) }
 
     @Bean
     @ConditionalOnMissingBean

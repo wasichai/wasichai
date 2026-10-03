@@ -2,6 +2,30 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — wasichai-ui 0.4.1 keeps the permissions its roles page does not show
+
+wasichai-ui 0.4.1 ([wasichai/wasichai-ui#25](https://github.com/wasichai/wasichai-ui/pull/25)) fixes the roles page:
+on save it keeps every permission it does not render (declared actions, denies), and it shows each object's declared
+actions in an "Acciones propias" column. This resolves the hazard ADR-031 D26 and ADR-042 describe, where saving a
+role there deleted its declared grants.
+
+## 2026-10-03 — The append-only delete check holds a lock on the record
+
+`RecordService.delete` refused a record an append-only record points at (ADR-040), but checked and deleted in separate
+statements: an append-only insert pointing at the record could commit in between, and the delete's `ON DELETE SET
+NULL` or join-table `CASCADE` then changed the new append-only row unaudited. Now, when an append-only object can point
+at the record, a `SELECT … FOR UPDATE` on the record, the checks, the guards and the delete run in one transaction
+(joining the caller's, opening one otherwise). A concurrent insert either commits first and is seen (`409`), or waits
+and then fails its foreign key. Objects no append-only object can point at keep the old path, with no transaction and
+no lock. Inside a caller's transaction the locked part runs inline in it, so a refusal stays the caller's to catch.
+The guards run before the lock. An insert that arrives after the lock fails its foreign key, and a foreign-key violation
+now answers `409` instead of `500` (ADR-031 D28). `AppendOnlyReferences.rejectDelete` became `deleting(…, guard) { }`,
+and its constructor takes a new `transactions: () -> TransactionalOperator` parameter (public API). New tests: both
+orders of the race, interleaved through a held transaction and `pg_blocking_pids`; a refused delete caught inside a
+caller's transaction; a `MANY_TO_MANY` link where the deleted record is the target; a `RELATION` made by a
+`ONE_TO_MANY` relationship. `AutomationDrainTest` now waits for a count of drains instead of asserting a
+count after a fixed 600 ms. Decision: [ADR-044](adr/0044-append-only-delete-check-under-a-row-lock.md).
+
 ## 2026-10-02 — Service accounts for server-to-server callers
 
 The only way in was an email and a password, so systems that post to the API server to server (caja's payment-order

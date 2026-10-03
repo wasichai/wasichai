@@ -1,8 +1,10 @@
 package wasichai.core.common
 
+import io.r2dbc.spi.R2dbcException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.reactor.mono
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
@@ -64,6 +66,24 @@ class GlobalExceptionHandler(
             problem(HttpStatus.CONFLICT, detail, violations)
         }
 
+    // a foreign key that no longer holds: the record it points at was deleted meanwhile, say by a delete
+    // that held it while this insert waited (ADR-044). the caller's conflict, like a repeated unique.
+    // any other integrity violation stays a 500. no suspend work here, so no cancellation to pass on.
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    fun handleIntegrity(ex: DataIntegrityViolationException): ProblemDetail =
+        if (sqlState(ex) == FOREIGN_KEY_VIOLATION) {
+            problem(HttpStatus.CONFLICT, "A record this one points at does not exist any more", emptyList())
+        } else {
+            handleUnexpected(ex)
+        }
+
+    // the driver's sqlState, wherever spring wrapped it
+    private fun sqlState(ex: Throwable): String? =
+        generateSequence(ex) { it.cause.takeIf { cause -> cause !== it } }
+            .filterIsInstance<R2dbcException>()
+            .firstOrNull()
+            ?.sqlState
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(ex: Exception): ProblemDetail {
         log.error("Unhandled error", ex)
@@ -82,4 +102,8 @@ class GlobalExceptionHandler(
                 setProperty("errors", violations)
             }
         }
+
+    private companion object {
+        const val FOREIGN_KEY_VIOLATION = "23503"
+    }
 }

@@ -297,6 +297,10 @@ transactions.executeAndAwait {
 
 `CurrentUser.require()` and the permission checks work inside the block.
 
+One exception to "opens no transaction": deleting a record that an append-only object can point at locks the record,
+checks and deletes in a short transaction of its own when you have none
+([ADR-044](../adr/0044-append-only-delete-check-under-a-row-lock.md)).
+
 ## Background work
 
 A job with no user behind it, an outbox publisher say, calls `RecordService` as the platform and takes a
@@ -332,9 +336,9 @@ class OutboxPublisher(
 ## Records nobody rewrites, and rules the record API cannot skip
 
 Receipts and an outbox are written once. Mark the object `appendOnly` and nobody, `ADMIN` and the platform included,
-changes or deletes its records: `409`. Mark it `apiOnly` and the generic record API refuses writes on it (`403`), so a
-user with `CREATE` cannot skip your own endpoint's numbering and locks; your code still calls `RecordService`
-([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
+changes or deletes its records, or deletes a record one of them points at: `409`. Mark it `apiOnly` and the generic
+record API refuses writes on it (`403`), so a user with `CREATE` cannot skip your own endpoint's numbering and locks;
+your code still calls `RecordService` ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
 
 ```json
 POST /api/objects
