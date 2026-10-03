@@ -234,6 +234,7 @@ Core is always installed.
 - D13: a `NAVIGATE` page action with no target links to the objects list, instead of `/undefined`.
 - D14: the login form's email is empty by default, configurable with `WasichaiApp` `config.defaultLoginEmail`.
 - D16: field type names are trimmed before matching, so `" text "` is `TEXT`.
+- D21: every record list and the audit list end their `ORDER BY` with `id`, so rows tied on the sort key keep a stable order.
 
 ## Known limitations
 

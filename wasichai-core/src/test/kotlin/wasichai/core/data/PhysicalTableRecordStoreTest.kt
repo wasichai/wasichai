@@ -69,6 +69,27 @@ class PhysicalTableRecordStoreTest {
             .isEqualTo("id, created_at, updated_at, \"codigo\", CAST(\"area\" AS text) AS \"area__txt\"")
     }
 
+    // issue 20: rows of one transaction share created_at, so OFFSET paging needs a unique last key
+    @Test
+    fun `every order ends with id in the direction of the primary sort`() {
+        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo))
+        val page = PageRequest.of(0, 10)
+
+        assertThat(store().orderBy(definition, RecordQuery(page = page))).isEqualTo("ORDER BY created_at ASC, id ASC")
+        assertThat(store().orderBy(definition, RecordQuery(page = page, sort = "codigo", descending = true)))
+            .isEqualTo("ORDER BY \"codigo\" DESC, id DESC")
+        assertThat(store().orderBy(definition, RecordQuery(page = page, sort = "updated_at")))
+            .isEqualTo("ORDER BY updated_at ASC, id ASC")
+    }
+
+    @Test
+    fun `sorting by id does not repeat id`() {
+        val definition = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo))
+
+        assertThat(store().orderBy(definition, RecordQuery(page = PageRequest.of(0, 10), sort = "id", descending = true)))
+            .isEqualTo("ORDER BY id DESC")
+    }
+
     // fix round 1, finding 1: a contributed criterion must not be able to widen the WHERE past
     // organization_id by returning an unparenthesized OR.
     @Test

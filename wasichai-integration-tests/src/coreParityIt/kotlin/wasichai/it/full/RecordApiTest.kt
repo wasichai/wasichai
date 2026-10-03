@@ -171,6 +171,39 @@ class RecordApiTest : FullAppIntegrationTest() {
             .isEqualTo(1)
     }
 
+    // issue 20: one transaction stamps every row with the same created_at; paging must still see each id once
+    @Test
+    fun `pages over rows sharing one created_at return every id exactly once`() {
+        val created = (1..7).map { createRecord("T-$it") }
+        runBlocking {
+            db
+                .sql("UPDATE app_data.\"${table()}\" SET created_at = TIMESTAMPTZ '2026-01-01 00:00:00+00'")
+                .fetch()
+                .rowsUpdated()
+                .awaitFirstOrNull()
+        }
+
+        fun readAll(query: String): List<String> =
+            (0..3).flatMap { page ->
+                val body =
+                    client
+                        .get()
+                        .uri("/api/objects/$objectName/records?page=$page&size=2$query")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .exchange()
+                        .expectStatus()
+                        .isOk
+                        .expectBody(String::class.java)
+                        .returnResult()
+                        .responseBody!!
+                Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body).map { it.groupValues[1] }.toList()
+            }
+
+        assertThat(readAll("")).containsExactlyInAnyOrderElementsOf(created).doesNotHaveDuplicates()
+        assertThat(readAll("&sort=created_at&dir=desc")).containsExactlyInAnyOrderElementsOf(created).doesNotHaveDuplicates()
+        assertThat(readAll("")).isEqualTo(created.sorted())
+    }
+
     @Test
     fun `updates and deletes a record and audits every operation`() {
         val id = createRecord("P-300")

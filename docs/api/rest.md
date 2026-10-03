@@ -645,6 +645,9 @@ Query parameters: `page`, `size` (max 200), `sort` (field name or `created_at`/`
 any field name for an equality filter. Unknown field names are rejected, and so is sorting or
 filtering by a geometry — `bbox` is how you filter one.
 
+Rows that tie on the sort key come back ordered by `id`, in the same direction, so paging through them never repeats or
+skips a row.
+
 `geometry` names the geometry field a `bbox` applies to; without it, the object's first. A `bbox` on
 an object with no geometry, or naming one it does not have, is a `400`.
 

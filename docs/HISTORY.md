@@ -2,6 +2,15 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-02 — Record lists page in a stable order
+
+A record list ordered by one key only, so rows tied on it (a receipt and its lines share `created_at`) could repeat or
+vanish between pages: PostgreSQL does not promise a consistent subset for `LIMIT/OFFSET` over a non-unique `ORDER BY`.
+`PhysicalTableRecordStore` now ends every `ORDER BY` with `id`, in the direction of the primary sort (sorting by `id`
+adds nothing), and the audit list ends with `a.id DESC`. `RelatedRecordService` pages through the same store, so it is
+covered; the admin, metadata and automation lists are not paged. ADR-031 D21 records the difference. Tested by
+`PhysicalTableRecordStoreTest` and, with more tied rows than a page, `RecordApiTest`. Closes #20.
+
 ## 2026-09-29 — Shared primitives go up to wasichai-ui, and a dev line to release them
 
 Five components srtm-ui wrote for its portal move into wasichai-ui, so caja-ui does not write them again: `ConfirmDialog`,
