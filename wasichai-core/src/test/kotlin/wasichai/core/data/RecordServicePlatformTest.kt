@@ -160,7 +160,8 @@ class RecordServicePlatformTest {
                 }
             ),
             RecordWriteGuards(emptyList()),
-            AppendOnlyReferencesFixtures.none()
+            AppendOnlyReferencesFixtures.none(),
+            RelationTargetsFixtures.none()
         )
     }
 

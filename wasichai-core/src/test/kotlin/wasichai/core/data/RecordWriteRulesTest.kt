@@ -162,7 +162,8 @@ class RecordWriteRulesTest {
             FieldTypeRegistry(emptyList()),
             listOf(listener),
             RecordWriteGuards(listOf(guard)),
-            AppendOnlyReferencesFixtures.none()
+            AppendOnlyReferencesFixtures.none(),
+            RelationTargetsFixtures.none()
         )
     }
 

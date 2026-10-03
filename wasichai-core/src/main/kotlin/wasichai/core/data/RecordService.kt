@@ -73,7 +73,8 @@ class RecordService(
     private val types: FieldTypeRegistry,
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
-    private val references: AppendOnlyReferences
+    private val references: AppendOnlyReferences,
+    private val relationTargets: RelationTargets
 ) {
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
@@ -156,6 +157,8 @@ class RecordService(
         val fieldAccess = caller.fieldAccess(definition.obj.id)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
+        // a relation naming no record is the caller's 400, not the FK's 409 (D29)
+        relationTargets.rejectMissing(caller.organizationId, definition, request.attributes)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         guards.beforeWrite(
             definition,
@@ -240,6 +243,7 @@ class RecordService(
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
                 ?: throw NotFoundException("Record $id does not exist")
+        relationTargets.rejectMissing(caller.organizationId, definition, request.attributes)
         guards.beforeWrite(
             definition,
             RecordWrite(

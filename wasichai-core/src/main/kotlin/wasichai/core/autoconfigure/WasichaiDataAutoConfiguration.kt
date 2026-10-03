@@ -24,6 +24,7 @@ import wasichai.core.data.RecordWriteGuard
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
 import wasichai.core.data.RelatedRecordService
+import wasichai.core.data.RelationTargets
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
@@ -105,6 +106,14 @@ class WasichaiDataAutoConfiguration {
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships) { TransactionalOperator.create(transactionManager.getObject()) }
 
+    // no @ConditionalOnMissingBean: a relation value naming no record is a 400 for everyone (D29)
+    @Bean
+    fun relationTargets(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        objects: CustomObjectRepository
+    ): RelationTargets = RelationTargets(db, schemas, objects)
+
     @Bean
     @ConditionalOnMissingBean
     fun recordService(
@@ -117,8 +126,10 @@ class WasichaiDataAutoConfiguration {
         types: FieldTypeRegistry,
         changes: ObjectProvider<RecordChangeListener>,
         guards: RecordWriteGuards,
-        references: AppendOnlyReferences
-    ): RecordService = RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references)
+        references: AppendOnlyReferences,
+        relationTargets: RelationTargets
+    ): RecordService =
+        RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references, relationTargets)
 
     @Bean
     @ConditionalOnMissingBean
