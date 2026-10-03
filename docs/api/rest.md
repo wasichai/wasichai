@@ -1,6 +1,6 @@
 # REST API
 
-Base path `/api`. Everything except `/api/auth/login` and `/api/health` needs
+Base path `/api`. Everything except `/api/auth/login`, `/api/auth/token` and `/api/health` needs
 `Authorization: Bearer <token>`.
 
 ## Modules and routes
@@ -27,6 +27,7 @@ A route of a module that is not installed answers `404` to an authenticated call
 
 ```http
 POST /api/auth/login        { "email": "...", "password": "..." }  →  { token, expiresAt, user }
+POST /api/auth/token        { "clientId": "...", "clientSecret": "..." }  →  { token, expiresAt, serviceAccount }
 GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
@@ -52,6 +53,47 @@ A field left out of the `PUT` keeps its current value; sending `null` for `local
 each app, not to the server; `locale` must be a BCP 47 tag. Either failing that shape answers `400`. An unknown field
 in the body is refused with `400` rather than silently ignored. A caller with no stored row yet reads the defaults
 (`{ "theme": "system", "locale": null }`) without a row ever being written for them.
+
+`GET /api/auth/me` carries `serviceAccount`, the account's name, when a [service account](#service-accounts) calls; it
+is never set for a person: the key is left out, so a person's answer is unchanged.
+
+## Service accounts
+
+A server-to-server caller of one organization ([ADR-043](../adr/0043-service-accounts.md)). It holds roles like a
+user and signs in with a client id and a secret instead of an email and a password.
+
+```http
+GET    /api/service-accounts                 the tenant's accounts
+POST   /api/service-accounts                 { "name": "rentas", "roles": ["SISTEMA_ORIGEN"] }  →  201, with clientSecret
+GET    /api/service-accounts/{id}
+PUT    /api/service-accounts/{id}            { "enabled"?: false, "roles"?: [...] }   roles replace the whole set
+POST   /api/service-accounts/{id}/secret     rotate  →  with the new clientSecret
+DELETE /api/service-accounts/{id}            →  204
+```
+
+```json
+{
+  "id": "…", "clientId": "…", "name": "rentas", "enabled": true, "roles": ["SISTEMA_ORIGEN"],
+  "createdAt": "2026-10-02T09:00:00Z", "secretRotatedAt": "2026-10-02T09:00:00Z", "clientSecret": "…"
+}
+```
+
+Every route needs `MANAGE_ORGANIZATION`, and only reaches the caller's own tenant: another tenant's account is `404`,
+as one that never existed. `clientSecret` is in the answer to create and rotate only, and is never returned again: the
+server keeps a hash. `clientId` is the account's `id`. `name` is lower case, `^[a-z][a-z0-9_-]{1,48}$`, unique in the
+tenant (`409` otherwise) and never changes. A role the tenant does not have is `400`, and so is `ADMIN`: a service
+account never administers the tenant, and a service account's token is refused (`403`) on every
+`MANAGE_ORGANIZATION` route, whatever its roles grant.
+
+`POST /api/auth/token` is public. A known, enabled account with the right secret gets a JWT carrying its roles, its
+organization and `service_account: "<name>"`, for `wasichai.security.jwt.service-account-ttl` (15 minutes by
+default); the client asks again when it runs out. Anything else, an unknown or malformed id, a wrong secret, a
+disabled or deleted account, is `401` with the same `detail`, `Invalid client credentials`. Disabling, rotating or
+deleting stops new tokens at once; a token already issued lives until it expires.
+
+The account is backed by a user row with the same id, so its writes are recorded under that id like anyone's:
+`created_by`, `updated_by` and the audit log. That user is not listed by `GET /api/users`, cannot sign in, and is
+`404` to the user routes.
 
 ## Objects (metadata)
 
@@ -878,6 +920,10 @@ GET /api/objects/{object}/records/{id}/history?limit=        one record's trail,
   "reason": "corrección del monto"
 }
 ```
+
+An entry made by a [service account](#service-accounts) also carries `serviceAccount`, its name; `userEmail` is then the
+address of its backing user, `<id>@service-accounts.invalid`. Neither survives deleting the account: disable it
+instead to keep the trail readable.
 
 `changes` holds only the fields that actually differ; `CREATE` and `DELETE` carry an empty list.
 

@@ -333,6 +333,7 @@ class AdminService(
 
     // ---------------------------------------------------------------- loading
 
+    // a service account's backing row is no person: it is managed at /api/service-accounts (ADR-043)
     private suspend fun loadUsers(
         organizationId: UUID,
         id: UUID?
@@ -347,6 +348,7 @@ class AdminService(
                 LEFT JOIN ${schemas.metadata}.roles r ON r.id = ur.role_id
                 WHERE u.organization_id = :organizationId
                   AND (:id::uuid IS NULL OR u.id = :id::uuid)
+                  AND NOT EXISTS (SELECT 1 FROM ${schemas.metadata}.service_accounts sa WHERE sa.id = u.id)
                 GROUP BY u.id, u.email, u.display_name, u.enabled, u.created_at
                 ORDER BY u.email
                 """.trimIndent()

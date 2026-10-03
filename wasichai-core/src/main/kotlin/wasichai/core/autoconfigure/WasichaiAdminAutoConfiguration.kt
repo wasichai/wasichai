@@ -7,6 +7,8 @@ import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.crypto.password.PasswordEncoder
 import wasichai.core.admin.AdminService
 import wasichai.core.admin.RoleAdminController
+import wasichai.core.admin.ServiceAccountController
+import wasichai.core.admin.ServiceAccountService
 import wasichai.core.admin.UserAdminController
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomObjectRepository
@@ -18,7 +20,7 @@ import wasichai.core.organization.OrganizationRepository
 import wasichai.core.organization.OrganizationService
 import wasichai.core.platform.WasichaiSchemas
 
-// users, roles, permissions and the tenant itself
+// users, service accounts, roles, permissions and the tenant itself
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 class WasichaiAdminAutoConfiguration {
     @Bean
@@ -62,4 +64,17 @@ class WasichaiAdminAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun organizationController(organizations: OrganizationService): OrganizationController = OrganizationController(organizations)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun serviceAccountService(
+        db: DatabaseClient,
+        passwordEncoder: PasswordEncoder,
+        currentUser: CurrentUser,
+        schemas: WasichaiSchemas
+    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun serviceAccountController(accounts: ServiceAccountService): ServiceAccountController = ServiceAccountController(accounts)
 }

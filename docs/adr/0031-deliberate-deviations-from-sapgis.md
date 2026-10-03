@@ -144,6 +144,16 @@ These are the only intended differences. Anything else that behaves differently 
   follows up. Tested by `DeclaredActionsApiTest` and `SchemaParityTest`
   ([ADR-042](0042-app-declared-actions.md)).
 
+**Because systems call it, not only people**
+
+- **D27. Service accounts.** The original's only caller was a person signing in with email and password. Now an
+  organization has service accounts that trade a client id and secret at `POST /api/auth/token` for a short-lived token
+  naming the account, managed at `/api/service-accounts` ([ADR-043](0043-service-accounts.md)). The
+  `service_accounts` table is a known schema-parity deviation. Each account has a backing `users` row that
+  `GET /api/users` leaves out and the user routes answer `404` to; audit entries it makes and its `GET /api/auth/me`
+  carry `serviceAccount`, a key absent for a person. A person's login, token and answers are unchanged. Tested by `ServiceAccountApiTest`,
+  `ServiceAccountAutomationTest` and `JwtServiceTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

@@ -24,6 +24,8 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.JwtService
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.RoleQueries
+import wasichai.core.identity.ServiceAccountTokenController
+import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.UserPreferencesController
 import wasichai.core.identity.UserPreferencesRepository
 import wasichai.core.identity.UserPreferencesService
@@ -90,7 +92,8 @@ class WasichaiSecurityAutoConfiguration {
             .cors { }
             .authorizeExchange {
                 it.pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                it.pathMatchers("/api/auth/login", "/api/health", "/actuator/health/**").permitAll()
+                // /api/auth/token: service accounts' client credentials (ADR-043)
+                it.pathMatchers("/api/auth/login", "/api/auth/token", "/api/health", "/actuator/health/**").permitAll()
                 it.anyExchange().authenticated()
             }.oauth2ResourceServer { server -> server.jwt { it.jwtDecoder(jwtDecoder) } }
             .build()
@@ -180,4 +183,18 @@ class WasichaiSecurityAutoConfiguration {
         service: UserPreferencesService,
         currentUser: CurrentUser
     ): UserPreferencesController = UserPreferencesController(service, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun serviceAccountTokenService(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        roleQueries: RoleQueries,
+        passwordEncoder: PasswordEncoder,
+        jwtService: JwtService
+    ): ServiceAccountTokenService = ServiceAccountTokenService(db, schemas, roleQueries, passwordEncoder, jwtService)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun serviceAccountTokenController(tokens: ServiceAccountTokenService): ServiceAccountTokenController = ServiceAccountTokenController(tokens)
 }
