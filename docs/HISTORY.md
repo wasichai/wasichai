@@ -4,8 +4,8 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 
 ## 2026-10-03 — A RELATION value names only a record the caller can read
 
-Since the entry below, a `RELATION` value had to name a record of the writer's organization, and nothing more: an
-own-records-only caller could point a relation at another user's record, and a caller without `READ` on the target
+Since "A RELATION value naming no record is a 400" (below), a `RELATION` value had to name a record of the writer's organization, and
+nothing more: an own-records-only caller could point a relation at another user's record, and a caller without `READ` on the target
 object at any of its records, and the accepted write told them the id existed (issue #39). Now, when a person or a
 service account who is not `ADMIN` writes, the target must also be one they can read: `READ` on the target object,
 and created by them when every role they hold is own-records-only. Both rules are folded into the same one read per
@@ -20,6 +20,16 @@ create and update; it must be the user of the `RecordWrite`, and a write with a 
 without it throws `IllegalStateException` (fail closed; links, transitions and deletes set none).
 `RelationTargets.rejectMissing` takes the same optional `reader`. Public Kotlin API: source compatible, not binary
 compatible. New tests in `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`. ADR-031 D30.
+## 2026-10-03 — Integration tests bind their server to 127.0.0.1
+
+`GeometryWireParityTest` once failed with `404` on all five cases under load (issue #34). The failing step was the
+login every test starts with, and wasichai's login never answers `404`: another process had answered. Reproduced on
+macOS: the test server listened on every address of its random port, the kernel lets another process bind
+`127.0.0.1` on that same port, and the more specific socket gets every `localhost` request. Any local HTTP server
+doing that (an IDE, a tool) turned the suite's login into its `404`. Linux refuses that bind, so CI never saw it.
+`WasichaiIntegrationTest` now sets `server.address=127.0.0.1`: a second `127.0.0.1` bind on the port is refused.
+`bearer()` fails with the URL, status, response headers and body instead of the status alone. New test:
+`TestServerPortTest` (coreOnly), which binds a `404` server on the test server's port and logs in through it.
 
 ## 2026-10-03 — A RELATION value naming no record is a 400
 

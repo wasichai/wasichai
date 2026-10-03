@@ -9,10 +9,12 @@ testImplementation("wasichai:wasichai-test")
 `WasichaiIntegrationTest` (`wasichai.test.WasichaiIntegrationTest`) is the base class for API tests against a real
 PostgreSQL. It is tagged `@Tag("integration")` and configured `@SpringBootTest(webEnvironment = RANDOM_PORT)` with
 `@AutoConfigureWebTestClient(timeout = "30s")`; a `@TestPropertySource` turns on `wasichai.seed.dev=true` (so the
-seeded `admin@wasichai.local` / `admin` user exists) and sets a fixed `wasichai.security.jwt.secret`. The app under
-test is the `@SpringBootConfiguration` found above the test's own package — give the test one with
-`@EnableAutoConfiguration` and no component scan, the same way a real app boots with wasichai. A subclass may
-override any property with its own `@TestPropertySource` (for example, other schema names).
+seeded `admin@wasichai.local` / `admin` user exists), sets a fixed `wasichai.security.jwt.secret` and binds the server
+to `127.0.0.1` (`server.address`), the address the client's `localhost` reaches: a server on every address shares its
+port with any process that binds `127.0.0.1` to it (macOS allows that), and that process then answers the tests
+(issue #34). The app under test is the `@SpringBootConfiguration` found above the test's own package — give the
+test one with `@EnableAutoConfiguration` and no component scan, the same way a real app boots with wasichai. A
+subclass may override any property with its own `@TestPropertySource` (for example, other schema names).
 
 The base class does not add `@ActiveProfiles("test")`: a profile literally named `test` can switch some
 libraries' beans off without a word (Embabel's agents, for one), so `WasichaiIntegrationTest` avoids it.
@@ -23,7 +25,9 @@ It gives a subclass:
 - `uniqueName(prefix = "obj")` — the test database is shared across the whole suite, so every test names its own
   object/record with a random suffix instead of a fixed name.
 - `bearer()` — logs in as the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) via `POST /api/auth/login` and
-  returns the `Authorization` header value (`"Bearer <token>"`).
+  returns the `Authorization` header value (`"Bearer <token>"`). A login that does not answer `200` with a token
+  fails with the method, URL, status, response headers and body (never the password), so a failure at this shared
+  step says who answered.
 - `bearer(email, password)` — the same, for a test that needs a token that is not the seeded administrator's (for
   example, one that exercises permission enforcement).
 

@@ -4,15 +4,13 @@ import org.junit.jupiter.api.Tag
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient
+import org.springframework.http.HttpStatus
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.reactive.server.WebTestClient
+import tools.jackson.databind.json.JsonMapper
 import java.util.UUID
-
-data class LoginBody(
-    val token: String
-)
 
 // base for api tests against a real postgres. the app under test is the @SpringBootConfiguration
 // found above the test's package: give your tests one with @EnableAutoConfiguration and no component
@@ -23,7 +21,16 @@ data class LoginBody(
 @Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient(timeout = "30s")
-@TestPropertySource(properties = ["wasichai.seed.dev=true", "wasichai.security.jwt.secret=${WasichaiIntegrationTest.TEST_JWT_SECRET}"])
+// server.address: the client calls localhost, i.e. 127.0.0.1. a wildcard listener lets another process bind
+// 127.0.0.1 on the same port (macOS allows it), and that process then gets every request: #34's 404s.
+// bound to 127.0.0.1 itself, the port is ours alone.
+@TestPropertySource(
+    properties = [
+        "wasichai.seed.dev=true",
+        "wasichai.security.jwt.secret=${WasichaiIntegrationTest.TEST_JWT_SECRET}",
+        "server.address=127.0.0.1"
+    ]
+)
 abstract class WasichaiIntegrationTest {
     @Autowired
     protected lateinit var client: WebTestClient
@@ -44,24 +51,31 @@ abstract class WasichaiIntegrationTest {
         email: String,
         password: String
     ): String {
-        val body =
+        val result =
             client
                 .post()
                 .uri("/api/auth/login")
                 .bodyValue(mapOf("email" to email, "password" to password))
                 .exchange()
-                .expectStatus()
-                .isOk
-                .expectBody(LoginBody::class.java)
+                .expectBody(String::class.java)
                 .returnResult()
-                .responseBody!!
-        return "Bearer ${body.token}"
+        // every test starts here: on failure say who answered and what. no request body, it holds the password
+        val token = runCatching { json.readTree(result.responseBody).get("token").asString() }.getOrNull()
+        if (result.status.value() != HttpStatus.OK.value() || token == null) {
+            throw AssertionError(
+                "login as $email: ${result.method} ${result.url} answered ${result.status}, expected 200 OK with a token\n" +
+                    "response headers: ${result.responseHeaders}\nresponse body: ${result.responseBody}"
+            )
+        }
+        return "Bearer $token"
     }
 
     companion object {
         const val ADMIN_EMAIL = "admin@wasichai.local"
         const val ADMIN_PASSWORD = "admin"
         const val TEST_JWT_SECRET = "wasichai-integration-test-secret-0123456789"
+
+        private val json = JsonMapper.builder().build()
 
         @JvmStatic
         @DynamicPropertySource
