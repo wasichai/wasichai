@@ -3,6 +3,16 @@
 ## [0.3.0](https://github.com/wasichai/wasichai/compare/v0.2.0...v0.3.0) (2026-10-03)
 
 
+### ⚠ BREAKING CHANGES
+
+* **core:** `RecordStore.insert`/`update` take `userId: UUID?`; an app's own `RecordStore` must change and be recompiled ([#26](https://github.com/wasichai/wasichai/pull/26)).
+* **core:** `PageResponse.totalElements`/`totalPages` are nullable, and `CustomObjectRepository` takes a `JsonMapper` ([#23](https://github.com/wasichai/wasichai/pull/23)).
+* **core:** `RecordService`, `RelatedRecordService`, `WorkflowService` and `AutomationRunner` take `RecordWriteGuards`; the REST controllers no longer reach an app subclass's overrides of the public write methods; a no-op link or unlink on an append-only end answers 409 instead of 204 ([#27](https://github.com/wasichai/wasichai/pull/27)).
+* **core:** `AuditService.record` takes a `reason`, and `RecordWrite` gains a trailing property (recompile) ([#28](https://github.com/wasichai/wasichai/pull/28)).
+* **core:** `AppendOnlyReferences` takes a `transactions` parameter and `rejectDelete` became `deleting { }` ([#32](https://github.com/wasichai/wasichai/pull/32)).
+* **core:** observable answers that change (ADR-031): ties in a list now order by `id` (D21); `count` and `after` are reserved parameters and field names (D22); a unique violation answers 409 with `errors[].field` (D23); a foreign-key violation answers 409 (D28).
+
+
 ### Features
 
 * **automation:** run rules triggered by a platform write ([f1eb5b8](https://github.com/wasichai/wasichai/commit/f1eb5b82d8f346255679e73ddc5f2f4831d2a0af))
