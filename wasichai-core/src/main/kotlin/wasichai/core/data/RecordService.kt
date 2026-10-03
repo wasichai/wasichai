@@ -127,14 +127,26 @@ class RecordService(
     suspend fun create(
         objectName: String,
         request: RecordRequest
-    ): RecordResponse = create(objectName, request, viaApi = false)
+    ): RecordResponse = create(objectName, request, reason = null, viaApi = false)
+
+    /**
+     * [reason]: why, as the writer says it (ADR-041). Trimmed, blank is none, stored on the write's
+     * audit row. An object with `requiresReason` refuses the write without one (400 on `reason`).
+     */
+    suspend fun create(
+        objectName: String,
+        request: RecordRequest,
+        reason: String?
+    ): RecordResponse = create(objectName, request, reason, viaApi = false)
 
     // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040)
     internal suspend fun create(
         objectName: String,
         request: RecordRequest,
+        reason: String?,
         viaApi: Boolean
     ): RecordResponse {
+        val changeReason = ChangeReason.normalize(reason)
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
         if (viaApi) rejectApiOnly(definition)
@@ -154,7 +166,8 @@ class RecordService(
                 objectName = definition.obj.name,
                 recordId = null,
                 kind = RecordChangeKind.CREATED,
-                attributes = request.attributes
+                attributes = request.attributes,
+                reason = changeReason
             )
         )
         val created =
@@ -175,7 +188,8 @@ class RecordService(
             objectName = objectName,
             recordId = created.id,
             operation = AuditOperation.CREATE,
-            after = stored.attributes
+            after = stored.attributes,
+            reason = changeReason
         )
         notify(
             RecordChange(
@@ -196,14 +210,24 @@ class RecordService(
         objectName: String,
         id: UUID,
         request: RecordRequest
-    ): RecordResponse = update(objectName, id, request, viaApi = false)
+    ): RecordResponse = update(objectName, id, request, reason = null, viaApi = false)
+
+    // reason: as for create (ADR-041)
+    suspend fun update(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String?
+    ): RecordResponse = update(objectName, id, request, reason, viaApi = false)
 
     internal suspend fun update(
         objectName: String,
         id: UUID,
         request: RecordRequest,
+        reason: String?,
         viaApi: Boolean
     ): RecordResponse {
+        val changeReason = ChangeReason.normalize(reason)
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
         if (viaApi) rejectApiOnly(definition)
@@ -226,7 +250,8 @@ class RecordService(
                 recordId = id,
                 kind = RecordChangeKind.UPDATED,
                 before = before.attributes,
-                attributes = request.attributes
+                attributes = request.attributes,
+                reason = changeReason
             )
         )
         // locked fields keep their stored value: a full-replace PUT must not blank them.
@@ -250,7 +275,8 @@ class RecordService(
             recordId = id,
             operation = AuditOperation.UPDATE,
             before = before.attributes,
-            after = stored.attributes
+            after = stored.attributes,
+            reason = changeReason
         )
         notify(
             RecordChange(
@@ -271,13 +297,22 @@ class RecordService(
     suspend fun delete(
         objectName: String,
         id: UUID
-    ) = delete(objectName, id, viaApi = false)
+    ) = delete(objectName, id, reason = null, viaApi = false)
+
+    // reason: as for create (ADR-041)
+    suspend fun delete(
+        objectName: String,
+        id: UUID,
+        reason: String?
+    ) = delete(objectName, id, reason, viaApi = false)
 
     internal suspend fun delete(
         objectName: String,
         id: UUID,
+        reason: String?,
         viaApi: Boolean
     ) {
+        val changeReason = ChangeReason.normalize(reason)
         val caller = caller()
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
         if (viaApi) rejectApiOnly(definition)
@@ -297,7 +332,8 @@ class RecordService(
                 objectName = definition.obj.name,
                 recordId = id,
                 kind = RecordChangeKind.DELETED,
-                before = before.attributes
+                before = before.attributes,
+                reason = changeReason
             )
         )
         store.delete(definition, caller.organizationId, id)
@@ -307,7 +343,8 @@ class RecordService(
             objectName = objectName,
             recordId = id,
             operation = AuditOperation.DELETE,
-            before = before.attributes
+            before = before.attributes,
+            reason = changeReason
         )
         notify(
             RecordChange(

@@ -138,7 +138,8 @@ class RecordAuditSnapshotTest {
                 operation: AuditOperation,
                 before: Any?,
                 after: Any?,
-                documentId: UUID?
+                documentId: UUID?,
+                reason: String?
             ) {
                 recorded += Recorded(operation, before, after)
             }

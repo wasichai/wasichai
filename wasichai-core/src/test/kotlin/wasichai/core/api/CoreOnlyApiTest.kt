@@ -76,7 +76,7 @@ class CoreOnlyApiTest : WasichaiIntegrationTest() {
 
         assertThat(
             keys(definition)
-        ).containsExactlyInAnyOrder("id", "name", "label", "pluralLabel", "description", "enabled", "fields", "appendOnly", "apiOnly")
+        ).containsExactlyInAnyOrder("id", "name", "label", "pluralLabel", "description", "enabled", "fields", "appendOnly", "apiOnly", "requiresReason")
         assertThat(keys(definition.get("fields").get(0))).containsExactlyInAnyOrder(
             "id",
             "name",

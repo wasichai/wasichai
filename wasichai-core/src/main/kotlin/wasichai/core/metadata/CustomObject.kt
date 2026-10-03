@@ -22,7 +22,9 @@ data class CustomObject(
     // no UPDATE, no DELETE of its records, for anyone: ADMIN and the platform included (ADR-040)
     val appendOnly: Boolean = false,
     // the generic record api does not write it; only in-process callers do (ADR-040)
-    val apiOnly: Boolean = false
+    val apiOnly: Boolean = false,
+    // every write of its records says why: no reason, nothing stored (ADR-041)
+    val requiresReason: Boolean = false
 )
 
 data class CustomField(

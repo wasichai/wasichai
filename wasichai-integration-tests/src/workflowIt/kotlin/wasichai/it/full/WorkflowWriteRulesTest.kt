@@ -8,12 +8,14 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import wasichai.core.common.ConflictException
+import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuard
 
 // ADR-040: a transition moves a record's state, so it is an UPDATE. appendOnly refuses it for ADMIN,
-// and a RecordWriteGuard sees it, with its name, before the state moves.
+// and a RecordWriteGuard sees it, with its name, before the state moves. ADR-041: requiresReason asks
+// a transition for its reason too, and the transition's audit row carries it.
 @Import(WorkflowWriteRulesTest.GuardConfig::class)
 class WorkflowWriteRulesTest : FullAppIntegrationTest() {
     @TestConfiguration
@@ -59,16 +61,57 @@ class WorkflowWriteRulesTest : FullAppIntegrationTest() {
         stateOf(name, id).isEqualTo("approved")
     }
 
+    @Test
+    fun `requires-reason refuses a transition without one, and its audit row carries it`() {
+        val name = uniqueName("wfreason")
+        createObject(name, appendOnly = false, requiresReason = true)
+        putWorkflow(name)
+        val id = createRecord(name, reason = "alta")
+
+        transition(name, id, "approve")
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("reason")
+        stateOf(name, id).isEqualTo("draft")
+
+        transition(name, id, "approve", "UTF-8''aprobado por gerencia %E2%9C%93").expectStatus().isOk
+        stateOf(name, id).isEqualTo("approved")
+        client
+            .get()
+            .uri("/api/objects/$name/records/$id/history")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.length()")
+            .isEqualTo(2)
+            .jsonPath("$[0].reason")
+            .isEqualTo("aprobado por gerencia \u2713")
+            .jsonPath("$[1].reason")
+            .isEqualTo("alta")
+    }
+
     private fun createObject(
         name: String,
-        appendOnly: Boolean
+        appendOnly: Boolean,
+        requiresReason: Boolean = false
     ) {
         client
             .post()
             .uri("/api/objects")
             .header(HttpHeaders.AUTHORIZATION, admin)
-            .bodyValue(mapOf("name" to name, "label" to "Recibo", "appendOnly" to appendOnly, "fields" to listOf(mapOf("name" to "codigo", "type" to "TEXT"))))
-            .exchange()
+            .bodyValue(
+                mapOf(
+                    "name" to name,
+                    "label" to "Recibo",
+                    "appendOnly" to appendOnly,
+                    "requiresReason" to requiresReason,
+                    "fields" to listOf(mapOf("name" to "codigo", "type" to "TEXT"))
+                )
+            ).exchange()
             .expectStatus()
             .isCreated
     }
@@ -97,11 +140,15 @@ class WorkflowWriteRulesTest : FullAppIntegrationTest() {
             .isOk
     }
 
-    private fun createRecord(name: String): String =
+    private fun createRecord(
+        name: String,
+        reason: String? = null
+    ): String =
         client
             .post()
             .uri("/api/objects/$name/records")
             .header(HttpHeaders.AUTHORIZATION, admin)
+            .headers { headers -> reason?.let { headers.set(ChangeReason.HEADER, it) } }
             .bodyValue(mapOf("attributes" to mapOf("codigo" to "R-1")))
             .exchange()
             .expectStatus()
@@ -115,11 +162,13 @@ class WorkflowWriteRulesTest : FullAppIntegrationTest() {
     private fun transition(
         name: String,
         id: String,
-        transition: String
+        transition: String,
+        reason: String? = null
     ) = client
         .post()
         .uri("/api/objects/$name/records/$id/transitions/$transition")
         .header(HttpHeaders.AUTHORIZATION, admin)
+        .headers { headers -> reason?.let { headers.set(ChangeReason.HEADER, it) } }
         .exchange()
 
     private fun stateOf(

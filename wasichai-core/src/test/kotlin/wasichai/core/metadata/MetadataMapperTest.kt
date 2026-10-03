@@ -76,4 +76,15 @@ class MetadataMapperTest {
             assertThat(mapper.toObjectResponse(plain).appendOnly).isFalse()
             assertThat(mapper.toResponse(plain, obj.organizationId).apiOnly).isFalse()
         }
+
+    @Test
+    fun `requires-reason shows on the object and on its definition`() =
+        runTest {
+            val mapper = MetadataMapper(mock(CustomObjectRepository::class.java), FieldTypeRegistry(emptyList()))
+            val ruled = ObjectDefinition(obj.copy(requiresReason = true), emptyList())
+
+            assertThat(mapper.toObjectResponse(ruled).requiresReason).isTrue()
+            assertThat(mapper.toResponse(ruled, obj.organizationId).requiresReason).isTrue()
+            assertThat(mapper.toObjectResponse(ObjectDefinition(obj, emptyList())).requiresReason).isFalse()
+        }
 }

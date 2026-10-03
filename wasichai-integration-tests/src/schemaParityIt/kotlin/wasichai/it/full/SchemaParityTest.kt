@@ -17,12 +17,16 @@ class SchemaParityTest : FullAppIntegrationTest() {
     // catalog line. a new one needs an ADR-031 entry.
     private val knownDeviations: Map<String, String> =
         mapOf(
+            "column audit_log.reason #11 text" to "ADR-031 D25: change reason on record writes",
             "column custom_objects.append_only #13 boolean NOT NULL DEFAULT false" to "ADR-031 D24: append-only and api-only objects",
             "column custom_objects.api_only #14 boolean NOT NULL DEFAULT false" to "ADR-031 D24: append-only and api-only objects",
             "constraint custom_objects.custom_objects_append_only_not_null NOT NULL append_only" to
                 "ADR-031 D24: append-only and api-only objects",
             "constraint custom_objects.custom_objects_api_only_not_null NOT NULL api_only" to
                 "ADR-031 D24: append-only and api-only objects",
+            "column custom_objects.requires_reason #15 boolean NOT NULL DEFAULT false" to "ADR-031 D25: change reason on record writes",
+            "constraint custom_objects.custom_objects_requires_reason_not_null NOT NULL requires_reason" to
+                "ADR-031 D25: change reason on record writes",
             "column user_preferences.locale #3 text" to "ADR-031 D18: per-user theme and locale",
             "column user_preferences.theme #2 text NOT NULL DEFAULT 'system'::text" to
                 "ADR-031 D18: per-user theme and locale",

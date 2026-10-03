@@ -11,11 +11,13 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import wasichai.automation.AutomationRunner
 import wasichai.core.common.ValidationException
+import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuard
 
 // ADR-040: an automation writes as the platform, through RecordStore. appendOnly and every
-// RecordWriteGuard hold it all the same; apiOnly does not, it is in-process.
+// RecordWriteGuard hold it all the same; apiOnly does not, it is in-process. ADR-041: it has no user to
+// ask for a reason, so it gives its own, "automation '<name>'", and requiresReason holds it like anyone.
 @Import(AutomationWriteRulesTest.GuardConfig::class)
 class AutomationWriteRulesTest : FullAppIntegrationTest() {
     @TestConfiguration
@@ -85,12 +87,56 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
             .value<List<String>> { assertThat(it.single()).contains("Vetoed") }
     }
 
+    @Test
+    fun `an automation writes a requires-reason object, its rows say which automation`() {
+        val source = uniqueName("autoreasonsrc")
+        val target = uniqueName("autoreasontgt")
+        createObject(source, appendOnly = false, requiresReason = true)
+        createObject(target, appendOnly = false, requiresReason = true)
+        val updater = save(source, mapOf("type" to "UPDATE_FIELD", "field" to "uso", "value" to "visto"))
+        val creator = save(source, mapOf("type" to "CREATE_RECORD", "targetObject" to target, "values" to mapOf("codigo" to "LOG-{{codigo}}")))
+
+        val id = createRecord(source, "A-1", "alta")
+        assertThat(drain()).isEqualTo(2)
+
+        runOf(source, updater).jsonPath("$[0].status").isEqualTo("SUCCEEDED")
+        runOf(source, creator).jsonPath("$[0].status").isEqualTo("SUCCEEDED")
+        history(source, id)
+            .jsonPath("$[?(@.operation == 'CREATE')].reason")
+            .isEqualTo("alta")
+            .jsonPath("$[?(@.operation == 'UPDATE')].reason")
+            .isEqualTo("automation '$updater'")
+        client
+            .get()
+            .uri("/api/audit?objectName=$target")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[0].reason")
+            .isEqualTo("automation '$creator'")
+    }
+
+    private fun history(
+        objectName: String,
+        id: String
+    ) = client
+        .get()
+        .uri("/api/objects/$objectName/records/$id/history")
+        .header(HttpHeaders.AUTHORIZATION, admin)
+        .exchange()
+        .expectStatus()
+        .isOk
+        .expectBody()
+
     private fun drain(): Int = runBlocking { runner.drainOnce(50) }
 
     private fun createObject(
         name: String,
         appendOnly: Boolean,
-        apiOnly: Boolean = false
+        apiOnly: Boolean = false,
+        requiresReason: Boolean = false
     ) {
         client
             .post()
@@ -102,6 +148,7 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
                     "label" to "Recibo",
                     "appendOnly" to appendOnly,
                     "apiOnly" to apiOnly,
+                    "requiresReason" to requiresReason,
                     "fields" to listOf(mapOf("name" to "codigo", "type" to "TEXT"), mapOf("name" to "uso", "type" to "TEXT"))
                 )
             ).exchange()
@@ -132,12 +179,14 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
 
     private fun createRecord(
         objectName: String,
-        codigo: String
+        codigo: String,
+        reason: String? = null
     ): String =
         client
             .post()
             .uri("/api/objects/$objectName/records")
             .header(HttpHeaders.AUTHORIZATION, admin)
+            .headers { headers -> reason?.let { headers.set(ChangeReason.HEADER, it) } }
             .bodyValue(mapOf("attributes" to mapOf("codigo" to codigo)))
             .exchange()
             .expectStatus()

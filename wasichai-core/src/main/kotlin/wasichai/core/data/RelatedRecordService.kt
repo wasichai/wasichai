@@ -115,7 +115,17 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID
-    ) = link(objectName, recordId, relationshipName, otherId, viaApi = false)
+    ) = link(objectName, recordId, relationshipName, otherId, reason = null, viaApi = false)
+
+    // reason: stored on both records' audit rows; either end with requiresReason asks for it (ADR-041)
+    @Transactional
+    suspend fun link(
+        objectName: String,
+        recordId: UUID,
+        relationshipName: String,
+        otherId: UUID,
+        reason: String?
+    ) = link(objectName, recordId, relationshipName, otherId, reason, viaApi = false)
 
     // viaApi: the generic related-record route, which an apiOnly end refuses (ADR-040)
     @Transactional
@@ -124,10 +134,12 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID,
+        reason: String?,
         viaApi: Boolean
     ) {
+        val changeReason = ChangeReason.normalize(reason)
         val ends = checkedEnds(objectName, recordId, relationshipName, otherId, viaApi)
-        guard(ends, linked = true)
+        guard(ends, linked = true, changeReason)
         val inserted =
             db
                 .sql(
@@ -144,7 +156,7 @@ class RelatedRecordService(
                 .rowsUpdated()
                 .awaitSingle()
         // already linked: nothing changed, nothing to record
-        if (inserted > 0) auditLink(ends, linked = true)
+        if (inserted > 0) auditLink(ends, linked = true, changeReason)
     }
 
     @Transactional
@@ -153,7 +165,16 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID
-    ) = unlink(objectName, recordId, relationshipName, otherId, viaApi = false)
+    ) = unlink(objectName, recordId, relationshipName, otherId, reason = null, viaApi = false)
+
+    @Transactional
+    suspend fun unlink(
+        objectName: String,
+        recordId: UUID,
+        relationshipName: String,
+        otherId: UUID,
+        reason: String?
+    ) = unlink(objectName, recordId, relationshipName, otherId, reason, viaApi = false)
 
     @Transactional
     internal suspend fun unlink(
@@ -161,10 +182,12 @@ class RelatedRecordService(
         recordId: UUID,
         relationshipName: String,
         otherId: UUID,
+        reason: String?,
         viaApi: Boolean
     ) {
+        val changeReason = ChangeReason.normalize(reason)
         val ends = checkedEnds(objectName, recordId, relationshipName, otherId, viaApi)
-        guard(ends, linked = false)
+        guard(ends, linked = false, changeReason)
         val deleted =
             db
                 .sql(
@@ -176,7 +199,7 @@ class RelatedRecordService(
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()
-        if (deleted > 0) auditLink(ends, linked = false)
+        if (deleted > 0) auditLink(ends, linked = false, changeReason)
     }
 
     // both records of one link, as the caller may see them
@@ -232,7 +255,8 @@ class RelatedRecordService(
     // before the join table is touched (ADR-040)
     private suspend fun guard(
         ends: LinkEnds,
-        linked: Boolean
+        linked: Boolean,
+        reason: String?
     ) {
         listOf(
             Triple(ends.definition, ends.record, ends.otherId),
@@ -248,7 +272,8 @@ class RelatedRecordService(
                     recordId = row.id,
                     kind = RecordChangeKind.UPDATED,
                     before = row.attributes,
-                    attributes = linkChange(ends.relationship.name, other, linked).second
+                    attributes = linkChange(ends.relationship.name, other, linked).second,
+                    reason = reason
                 )
             )
         }
@@ -258,7 +283,8 @@ class RelatedRecordService(
     // core and documents define (ADR-0025).
     private suspend fun auditLink(
         ends: LinkEnds,
-        linked: Boolean
+        linked: Boolean,
+        reason: String?
     ) {
         listOf(
             Triple(ends.definition, ends.recordId, ends.otherId),
@@ -272,7 +298,8 @@ class RelatedRecordService(
                 recordId = id,
                 operation = AuditOperation.UPDATE,
                 before = before,
-                after = after
+                after = after,
+                reason = reason
             )
         }
     }

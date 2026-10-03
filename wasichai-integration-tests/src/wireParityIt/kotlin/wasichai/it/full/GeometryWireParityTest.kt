@@ -110,10 +110,10 @@ class GeometryWireParityTest : FullAppIntegrationTest() {
         private const val POLYGON = """{"type":"Polygon","coordinates":[[[-77.03,-12.05],[-77.02,-12.05],[-77.02,-12.04],[-77.03,-12.04],[-77.03,-12.05]]]}"""
         private const val POINT = """{"type":"Point","coordinates":[-77.025,-12.045,150.5]}"""
 
-        // appendOnly and apiOnly are the one addition to the original's object json: ADR-031 D24
+        // appendOnly and apiOnly (ADR-031 D24) and requiresReason (ADR-031 D25) are the additions to the original's object json
         private const val DEFINITION = """
             {"id":"<uuid>","name":"<name>","label":"Predio","pluralLabel":"Predios","description":"Lote catastral","enabled":true,
-             "appendOnly":false,"apiOnly":false,
+             "appendOnly":false,"apiOnly":false,"requiresReason":false,
              "geometry":{"type":"POLYGON","srid":4326,"dimension":2},
              "fields":[
               {"id":"<uuid>","name":"codigo","label":"Codigo","type":"TEXT","required":true,"unique":false,"defaultValue":null,"description":null,
@@ -127,7 +127,7 @@ class GeometryWireParityTest : FullAppIntegrationTest() {
 
         private const val LIST_ENTRY = """
             {"id":"<uuid>","name":"<name>","label":"Predio","pluralLabel":"Predios","description":"Lote catastral","enabled":true,
-             "appendOnly":false,"apiOnly":false,
+             "appendOnly":false,"apiOnly":false,"requiresReason":false,
              "geometry":{"type":"POLYGON","srid":4326,"dimension":2},"createdAt":"<ts>","updatedAt":"<ts>"}
         """
 

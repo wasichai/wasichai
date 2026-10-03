@@ -188,7 +188,7 @@ GeoServer layer is unpublished first so no layer is left pointing at a table tha
 
 ### Write rules
 
-Two flags, both `false` unless set, both in the create request, in `PUT` and in every object response (`GET
+Three flags, all `false` unless set, all in the create request, in `PUT` and in every object response (`GET
 /api/objects`, `GET /api/objects/{object}`, `GET /api/metadata/objects/{object}`)
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)):
 
@@ -206,9 +206,13 @@ Two flags, both `false` unless set, both in the create request, in `PUT` and in 
 - `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
   end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
   are unchanged.
+- `requiresReason: true` — every write of its records must say why, in the `X-Change-Reason` header (see "Change
+  reason" under Records): without one, `POST`, `PUT`, `DELETE`, a link or unlink touching one of its records and a
+  workflow transition answer `400` on `reason`, and nothing is stored
+  ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
 
-On `PUT`, leaving either flag out keeps it as it is (unlike `enabled`, which defaults to `true`): a client that does
-not know a flag never switches it off by saving a label.
+On `PUT`, leaving any of the three flags out keeps it as it is (unlike `enabled`, which defaults to `true`): a client
+that does not know a flag never switches it off by saving a label.
 
 ## Organizations
 
@@ -318,7 +322,9 @@ DELETE /api/objects/{object}/records/{id}/related/{relationship}/{otherId}
 
 The read works from **either** end: from a plot it returns its owner, from the owner it returns their
 plots. Link and unlink apply to `MANY_TO_MANY` only — for the others, set the field on the record.
-A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`.
+A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`, `400`
+on `reason` when either end is `requiresReason` and no `X-Change-Reason` came. A reason sent is stored on both
+records' history.
 
 ## Pages
 
@@ -776,6 +782,36 @@ Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an 
 `DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
 write with its own status, `400` or `409` as a rule.
 
+### Change reason
+
+```http
+PUT /api/objects/recibo/records/{id}
+X-Change-Reason: UTF-8''correcci%C3%B3n%20del%20monto%20por%20error%20de%20digitaci%C3%B3n
+```
+
+Every record write takes an optional `X-Change-Reason` header: `POST`, `PUT` and `DELETE` here, link and unlink
+(Related records) and a workflow transition ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)). It is stored
+on that write's audit entry and comes back as `reason` from the audit API.
+
+- Trimmed; an empty or blank value is no reason. At most **500 characters**; longer is a `400` on `reason`.
+- **Send anything beyond ASCII in the RFC 8187 form**: `UTF-8''` followed by the percent-encoded UTF-8 text (in
+  JavaScript: `"UTF-8''" + encodeURIComponent(reason)`), as in the example above. A plain value is read as
+  ISO-8859-1, as for any header: a browser sends `ñ` and accents that way, but a client that writes raw UTF-8 bytes
+  (curl, most HTTP libraries) gets mojibake stored (`correcciÃ³n`). A plain value is never percent-decoded, so
+  `10% de descuento` means what it says. A malformed `UTF-8''` value (anything but `%` and two hex digits, or bytes
+  that are not UTF-8) is a `400` on `reason`.
+- Control characters are a `400` on `reason`, except tab and line breaks (`%09`, `%0A`, `%0D`), which are text: an
+  observation may span lines. In-process the same rule applies to `RecordService`'s `reason`.
+- On a `requiresReason` object a write without a reason is refused before anything is stored:
+
+```json
+{ "status": 400, "detail": "Object 'recibo' requires a reason for every change",
+  "errors": [{ "field": "reason", "message": "send the X-Change-Reason header" }] }
+```
+
+The missing reason is judged right before the write: after permissions, field rules, an unknown record (`404`) and
+`appendOnly` (`409`), before the app's `RecordWriteGuard`s. A reason over the cap is refused first of all.
+
 ## GIS
 
 Module: wasichai-gis.
@@ -800,11 +836,16 @@ GET /api/objects/{object}/records/{id}/history?limit=        one record's trail,
 {
   "id": "…", "userEmail": "ana@wasichai.local", "objectName": "predio", "recordId": "…",
   "operation": "UPDATE", "occurredAt": "2026-09-18T09:00:00Z",
-  "changes": [ { "field": "area", "before": 850.5, "after": 1200 } ]
+  "changes": [ { "field": "area", "before": 850.5, "after": 1200 } ],
+  "reason": "corrección del monto"
 }
 ```
 
 `changes` holds only the fields that actually differ; `CREATE` and `DELETE` carry an empty list.
+
+`reason` is what the write's `X-Change-Reason` said (see "Change reason" under Records), `null` when it said nothing.
+An automation's writes carry `automation '<name>'`. It is free text about the change, not a field value, so it is
+shown to whoever may read the entry ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
 
 A fourth operation, `ISSUE`, records a document being issued, and it is the only entry that points
 somewhere: it carries `documentId`, which `GET /api/documents/{id}` resolves. The other three have
@@ -860,7 +901,8 @@ Sending only one of the two stores neither — half a position is not a position
 A transition is the only way to move a record (ADR-013): the state is not a Custom Field, so no
 record payload can set it. Applying one from the wrong state answers 409 naming the current state.
 Every transition is written to the audit log, so workflow movement shows up in the history screen
-beside field changes.
+beside field changes. The transition takes an `X-Change-Reason` header like any record write, stored on its audit
+entry; on a `requiresReason` object it is required (`400` on `reason` without one).
 
 ## Automations
 
@@ -965,7 +1007,7 @@ RFC 7807 `application/problem+json`:
 
 | Status | When |
 |---|---|
-| 400 | validation: bad value, unknown field, wrong geometry type, invalid technical name |
+| 400 | validation: bad value, unknown field, wrong geometry type, invalid technical name; no change reason on a `requiresReason` object |
 | 401 | missing or invalid token |
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |

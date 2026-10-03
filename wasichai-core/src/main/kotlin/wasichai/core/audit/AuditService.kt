@@ -24,16 +24,18 @@ class AuditService(
         operation: AuditOperation,
         before: Any? = null,
         after: Any? = null,
-        documentId: UUID? = null
+        documentId: UUID? = null,
+        // why, as the writer said it (ADR-041). normalized by the caller: see ChangeReason
+        reason: String? = null
     ) {
         var spec =
             db
                 .sql(
                     """
                     INSERT INTO ${schemas.metadata}.audit_log
-                        (organization_id, user_id, object_name, record_id, operation, before_state, after_state, document_id)
+                        (organization_id, user_id, object_name, record_id, operation, before_state, after_state, document_id, reason)
                     VALUES (:organizationId, :userId, :objectName, :recordId, :operation,
-                            CAST(:before AS jsonb), CAST(:after AS jsonb), :documentId)
+                            CAST(:before AS jsonb), CAST(:after AS jsonb), :documentId, :reason)
                     """.trimIndent()
                 ).bind("organizationId", organizationId)
                 .bind("objectName", objectName)
@@ -41,6 +43,7 @@ class AuditService(
         spec = if (userId == null) spec.bindNull("userId", UUID::class.java) else spec.bind("userId", userId)
         spec = if (recordId == null) spec.bindNull("recordId", UUID::class.java) else spec.bind("recordId", recordId)
         spec = if (documentId == null) spec.bindNull("documentId", UUID::class.java) else spec.bind("documentId", documentId)
+        spec = if (reason == null) spec.bindNull("reason", String::class.java) else spec.bind("reason", reason)
         spec = bindJson(spec, "before", before)
         spec = bindJson(spec, "after", after)
         spec.fetch().rowsUpdated().awaitSingle()

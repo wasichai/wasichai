@@ -102,7 +102,8 @@ class MetadataService(
                 createdAt = null,
                 updatedAt = null,
                 appendOnly = request.appendOnly,
-                apiOnly = request.apiOnly
+                apiOnly = request.apiOnly,
+                requiresReason = request.requiresReason
             )
 
         var stored = objects.insert(obj)
@@ -290,7 +291,8 @@ class MetadataService(
                     indexes = indexes,
                     uniqueConstraints = uniques,
                     appendOnly = request.appendOnly ?: obj.appendOnly,
-                    apiOnly = request.apiOnly ?: obj.apiOnly
+                    apiOnly = request.apiOnly ?: obj.apiOnly,
+                    requiresReason = request.requiresReason ?: obj.requiresReason
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op

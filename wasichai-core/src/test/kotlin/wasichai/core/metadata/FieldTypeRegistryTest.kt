@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ValidationException
 import java.util.UUID
+import kotlin.reflect.full.primaryConstructor
 
 class FieldTypeRegistryTest {
     private val shape = FieldType("SHAPE")
@@ -189,5 +190,15 @@ class FieldTypeRegistryTest {
         assertThatThrownBy { FieldTypeRegistry(listOf(shadowing)) }
             .isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("type")
+    }
+
+    @Test
+    fun `the core object keys are exactly what the object responses carry`() {
+        val properties =
+            listOf(ObjectResponse::class, ObjectDefinitionResponse::class)
+                .flatMap { response -> response.primaryConstructor!!.parameters.map { it.name!! } }
+                .toSet() - "extensions"
+
+        assertThat(FieldTypeRegistry.CORE_OBJECT_KEYS).isEqualTo(properties)
     }
 }

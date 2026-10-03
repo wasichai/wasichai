@@ -18,7 +18,7 @@ import java.util.UUID
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
         "physical_table, created_at, updated_at, indexes::text AS indexes, unique_constraints::text AS unique_constraints, " +
-        "append_only, api_only"
+        "append_only, api_only, requires_reason"
 
 @Repository
 class CustomObjectRepository(
@@ -32,9 +32,9 @@ class CustomObjectRepository(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
                     (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes,
-                     unique_constraints, append_only, api_only)
+                     unique_constraints, append_only, api_only, requires_reason)
                 VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
-                        CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly)
+                        CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly, :requiresReason)
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
@@ -49,6 +49,7 @@ class CustomObjectRepository(
             .bind("physicalTable", obj.physicalTable)
             .bind("appendOnly", obj.appendOnly)
             .bind("apiOnly", obj.apiOnly)
+            .bind("requiresReason", obj.requiresReason)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -104,7 +105,7 @@ class CustomObjectRepository(
                 SET label = :label, plural_label = :pluralLabel, description = :description,
                     enabled = :enabled, indexes = CAST(:indexes AS jsonb),
                     unique_constraints = CAST(:uniqueConstraints AS jsonb), append_only = :appendOnly, api_only = :apiOnly,
-                    updated_at = now()
+                    requires_reason = :requiresReason, updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
@@ -118,6 +119,7 @@ class CustomObjectRepository(
             .bind("enabled", obj.enabled)
             .bind("appendOnly", obj.appendOnly)
             .bind("apiOnly", obj.apiOnly)
+            .bind("requiresReason", obj.requiresReason)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -153,7 +155,8 @@ class CustomObjectRepository(
             indexes = fieldSets(row, "indexes"),
             uniqueConstraints = fieldSets(row, "unique_constraints"),
             appendOnly = Rows.bool(row, "append_only"),
-            apiOnly = Rows.bool(row, "api_only")
+            apiOnly = Rows.bool(row, "api_only"),
+            requiresReason = Rows.bool(row, "requires_reason")
         )
 
     private fun fieldSets(

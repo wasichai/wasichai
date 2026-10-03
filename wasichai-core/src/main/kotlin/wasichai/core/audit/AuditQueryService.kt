@@ -26,7 +26,9 @@ data class AuditEntry(
     val operation: String,
     val occurredAt: Instant?,
     val changes: List<FieldChange>,
-    val documentId: String?
+    val documentId: String?,
+    // why, as the writer said it (ADR-041). null when none was given.
+    val reason: String? = null
 )
 
 // raw row. states stay as maps until we know what the caller may read.
@@ -39,7 +41,8 @@ private data class AuditRow(
     val occurredAt: Instant?,
     val before: Map<String, Any?>?,
     val after: Map<String, Any?>?,
-    val documentId: UUID?
+    val documentId: UUID?,
+    val reason: String?
 )
 
 @Service
@@ -89,7 +92,7 @@ class AuditQueryService(
             db
                 .sql(
                     """
-                    SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id,
+                    SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id, a.reason,
                            a.before_state::text AS before_state, a.after_state::text AS after_state
                     FROM ${schemas.metadata}.audit_log a
                     LEFT JOIN ${schemas.metadata}.users u ON u.id = a.user_id
@@ -115,7 +118,8 @@ class AuditQueryService(
                     occurredAt = Rows.instantOrNull(row, "occurred_at"),
                     before = parse(Rows.stringOrNull(row, "before_state")),
                     after = parse(Rows.stringOrNull(row, "after_state")),
-                    documentId = Rows.uuidOrNull(row, "document_id")
+                    documentId = Rows.uuidOrNull(row, "document_id"),
+                    reason = Rows.stringOrNull(row, "reason")
                 )
             }.all()
             .asFlow()
@@ -138,7 +142,8 @@ class AuditQueryService(
                 operation = row.operation,
                 occurredAt = row.occurredAt,
                 changes = AuditDiff.changes(filter(row.before, allowed), filter(row.after, allowed)),
-                documentId = row.documentId?.toString()
+                documentId = row.documentId?.toString(),
+                reason = row.reason
             )
         }
     }
