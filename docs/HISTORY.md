@@ -2,6 +2,22 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-03 — A RELATION value naming no record is a 400
+
+A `RELATION` value was only checked to be a UUID; the column's foreign key refused one naming no record, and since
+0.3.0 that answered `409` "…does not exist any more", meant for the append-only delete race (ADR-044), not for a client
+that sent a wrong id (issue #33). Now `RecordWriteGuards.beforeWrite`, which every write path calls before the store
+write (the record API, the platform, automation `UPDATE_FIELD` and `CREATE_RECORD`), looks the values up: one
+tenant-filtered `SELECT id … WHERE id = ANY(:ids)` per target object, only for `RELATION` values sent, not `null` and,
+on an update, different from the stored one. It runs after the built-in `appendOnly` and `requiresReason` rules and
+before the app's guards. A value naming no record of the writer's organization, or a record of another one, is
+refused with "Invalid value for '<field>'" on the field (`400` over REST, a failed run for an automation), the same
+either way, and nothing is stored. A record deleted between the check and the write still fails the foreign key with
+`409`. The link route keeps its `404` for an `otherId` that names no record. New class `RelationTargets` (bean
+`relationTargets`, no `@ConditionalOnMissingBean`); `RecordWriteGuards`' constructor takes it as a new second
+parameter (public API). New tests: `RelationTargetApiTest`, `RelationTargetsTest`, and a case in
+`AutomationWriteRulesTest`. ADR-031 D29.
+
 ## 2026-10-03 — wasichai-ui 0.4.1 keeps the permissions its roles page does not show
 
 wasichai-ui 0.4.1 ([wasichai/wasichai-ui#25](https://github.com/wasichai/wasichai-ui/pull/25)) fixes the roles page:

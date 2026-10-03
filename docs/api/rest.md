@@ -409,6 +409,10 @@ A link or unlink writes both records: `409` when either end is `appendOnly`, `40
 on `reason` when either end is `requiresReason` and no `X-Change-Reason` came. A reason sent is stored on both
 records' history.
 
+Either record missing, of another organization, or not the caller's under own-records-only is a `404` "Record … does
+not exist", `otherId` included: a link addresses both records as `PUT` addresses one. A `RELATION` value, by contrast,
+is a field of the record written, so naming no record there is a `400` on the field (see Records).
+
 ## Pages
 
 Module: wasichai-pages.
@@ -864,6 +868,25 @@ an object with no geometry, or naming one it does not have, is a `400`.
 Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an `apiOnly` one (`POST`, `PUT`,
 `DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
 write with its own status, `400` or `409` as a rule.
+
+A `RELATION` value must name a record of the caller's organization. One that names no record, or a record of another
+organization, is a `400` on the field, the same answer either way, and nothing is stored. It is checked after the
+write rules above (`appendOnly` answers its `409`, `requiresReason` its `400` on `reason`, first) and before any
+`RecordWriteGuard`, only for values sent, not `null` and, on `PUT`, different from the stored one. A value that is no
+UUID is still the usual `400` "is not a UUID":
+
+```json
+{
+  "type": "https://wasichai.dev/problems/400",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Invalid value for 'customer'",
+  "errors": [{ "field": "customer", "message": "no record with this id" }]
+}
+```
+
+The id is not echoed back. A record deleted between that check and the write still fails the database's foreign key:
+that is a `409`, "A record this one points at does not exist any more" (ADR-031 D28, D29).
 
 ### Change reason
 

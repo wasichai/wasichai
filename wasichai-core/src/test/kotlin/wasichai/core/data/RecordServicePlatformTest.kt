@@ -159,7 +159,7 @@ class RecordServicePlatformTest {
                     }
                 }
             ),
-            RecordWriteGuards(emptyList()),
+            RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none()
         )
     }

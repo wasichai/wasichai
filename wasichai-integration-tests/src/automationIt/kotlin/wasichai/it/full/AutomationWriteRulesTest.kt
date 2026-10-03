@@ -14,6 +14,7 @@ import wasichai.core.common.ValidationException
 import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuard
+import java.util.UUID
 
 // ADR-040: an automation writes as the platform, through RecordStore. appendOnly and every
 // RecordWriteGuard hold it all the same; apiOnly does not, it is in-process. ADR-041: it has no user to
@@ -116,6 +117,74 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
             .expectBody()
             .jsonPath("$[0].reason")
             .isEqualTo("automation '$creator'")
+    }
+
+    // D29: a rendered RELATION value naming no record fails the run on the field, through the same check
+    // as the record api, not on the foreign key. one naming a record still writes.
+    @Test
+    fun `an automation writing a relation that names no record fails the run on the field`() {
+        val customer = uniqueName("autocustomer")
+        val source = uniqueName("autorelsrc")
+        val target = uniqueName("autoreltgt")
+        createObject(customer, appendOnly = false)
+        createRelationObject(source, customer)
+        createRelationObject(target, customer)
+        val known = createRecord(customer, "C-1")
+        val nobody = UUID.randomUUID().toString()
+        val updater = save(source, mapOf("type" to "UPDATE_FIELD", "field" to "cliente", "value" to nobody))
+        val creator = save(source, mapOf("type" to "CREATE_RECORD", "targetObject" to target, "values" to mapOf("codigo" to "BAD", "cliente" to nobody)))
+        val linker = save(source, mapOf("type" to "CREATE_RECORD", "targetObject" to target, "values" to mapOf("codigo" to "OK", "cliente" to known)))
+
+        val id = createRecord(source, "S-1")
+        assertThat(drain()).isEqualTo(3)
+
+        runOf(source, updater)
+            .jsonPath("$[0].status")
+            .isEqualTo("FAILED")
+            .jsonPath("$[0].error")
+            .value<String> { assertThat(it).contains("Invalid value for 'cliente'") }
+        runOf(source, creator)
+            .jsonPath("$[0].status")
+            .isEqualTo("FAILED")
+            .jsonPath("$[0].error")
+            .value<String> { assertThat(it).contains("Invalid value for 'cliente'") }
+        runOf(source, linker).jsonPath("$[0].status").isEqualTo("SUCCEEDED")
+        record(source, id).jsonPath("$.attributes.cliente").isEmpty
+        client
+            .get()
+            .uri("/api/objects/$target/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.totalElements")
+            .isEqualTo(1)
+            .jsonPath("$.content[0].attributes.cliente")
+            .isEqualTo(known)
+    }
+
+    private fun createRelationObject(
+        name: String,
+        customer: String
+    ) {
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to name,
+                    "label" to name,
+                    "fields" to
+                        listOf(
+                            mapOf("name" to "codigo", "type" to "TEXT"),
+                            mapOf("name" to "cliente", "type" to "RELATION", "relationTarget" to customer)
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
     }
 
     private fun history(

@@ -56,9 +56,11 @@ interface RecordWriteGuard {
  * it too; the store port stays raw on purpose (ADR-040).
  */
 class RecordWriteGuards(
-    private val guards: List<RecordWriteGuard>
+    private val guards: List<RecordWriteGuard>,
+    private val relationTargets: RelationTargets
 ) {
-    // appendOnly first, then requiresReason: no guard is asked about a write that can never happen
+    // appendOnly first, then requiresReason, then relation targets (D29): no guard is asked about a write
+    // that can never happen
     suspend fun beforeWrite(
         definition: ObjectDefinition,
         change: RecordWrite
@@ -75,6 +77,8 @@ class RecordWriteGuards(
                 "send the ${ChangeReason.HEADER} header"
             )
         }
+        // every write path passes here, so every one checks its relation values: api, platform, automations
+        change.attributes?.let { relationTargets.rejectMissing(change.organizationId, definition, it, change.before) }
         guards.forEach { it.beforeWrite(change) }
     }
 }

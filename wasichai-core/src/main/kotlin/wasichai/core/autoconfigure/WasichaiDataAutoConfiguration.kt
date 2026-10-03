@@ -24,6 +24,7 @@ import wasichai.core.data.RecordWriteGuard
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
 import wasichai.core.data.RelatedRecordService
+import wasichai.core.data.RelationTargets
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
@@ -92,7 +93,10 @@ class WasichaiDataAutoConfiguration {
 
     // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
     @Bean
-    fun recordWriteGuards(guards: ObjectProvider<RecordWriteGuard>): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList())
+    fun recordWriteGuards(
+        guards: ObjectProvider<RecordWriteGuard>,
+        relationTargets: RelationTargets
+    ): RecordWriteGuards = RecordWriteGuards(guards.orderedStream().toList(), relationTargets)
 
     // no @ConditionalOnMissingBean: appendOnly is for everyone (ADR-040)
     @Bean
@@ -104,6 +108,14 @@ class WasichaiDataAutoConfiguration {
         relationships: RelationshipRepository,
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): AppendOnlyReferences = AppendOnlyReferences(db, schemas, objects, fields, relationships) { TransactionalOperator.create(transactionManager.getObject()) }
+
+    // no @ConditionalOnMissingBean: a relation value naming no record is a 400 for everyone, through RecordWriteGuards (D29)
+    @Bean
+    fun relationTargets(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        objects: CustomObjectRepository
+    ): RelationTargets = RelationTargets(db, schemas, objects)
 
     @Bean
     @ConditionalOnMissingBean

@@ -161,6 +161,17 @@ These are the only intended differences. Anything else that behaves differently 
   does not exist any more"; other integrity violations stay `500`. It is how an append-only insert that loses the race
   against a delete answers ([ADR-044](0044-append-only-delete-check-under-a-row-lock.md)). Tested by
   `GlobalExceptionHandlerIntegrityTest` and `WriteRulesApiTest`.
+- **D29. A `RELATION` value naming no record is a `400`.** The original stored a `RELATION` value after checking only
+  that it was a UUID, and the foreign key then failed with a `500`; 0.3.0 answered that `409` (D28). Now a write whose
+  `RELATION` value names no record of the writer's organization, or a record of another one, is refused as
+  "Invalid value for '<field>'" with `errors[].field` naming the field (`400` over REST), and nothing is stored. The
+  check sits in `RecordWriteGuards.beforeWrite`, so every write path has it: the record API, the platform, automation
+  actions. It runs after the built-in write rules (`appendOnly` `409`, `requiresReason` `400` on `reason`) and before
+  the app's guards; type and format errors (a value that is no UUID) still come from the codec at the store write. Both
+  cases answer alike, so the answer never tells whether the id exists elsewhere. A record deleted between the check and
+  the write still fails the foreign key with D28's `409`. The link route is unchanged: an `otherId` that names no
+  record stays a `404`. Tested by `RelationTargetApiTest`, `RelationTargetsTest`, `AutomationWriteRulesTest` and
+  `WriteRulesApiTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

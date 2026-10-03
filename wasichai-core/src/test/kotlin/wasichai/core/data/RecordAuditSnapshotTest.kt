@@ -168,7 +168,7 @@ class RecordAuditSnapshotTest {
             NoWorkflowStates(),
             FieldTypeRegistry(emptyList()),
             listOf(listener),
-            RecordWriteGuards(emptyList()),
+            RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none()
         )
     }
