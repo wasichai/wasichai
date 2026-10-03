@@ -16,7 +16,9 @@ data class CustomObject(
     val createdAt: Instant?,
     val updatedAt: Instant?,
     // declared composite indexes, field names in index order (ADR-036)
-    val indexes: List<List<String>> = emptyList()
+    val indexes: List<List<String>> = emptyList(),
+    // declared composite uniques, field names in constraint order, each per organization (ADR-037)
+    val uniqueConstraints: List<List<String>> = emptyList()
 )
 
 data class CustomField(
@@ -47,13 +49,17 @@ data class ObjectDefinition(
     val fields: List<CustomField>
 )
 
-// what the caller may see: unreadable fields gone, unwritable ones locked, and no index naming a hidden field.
+// what the caller may see: unreadable fields gone, unwritable ones locked, and no set naming a hidden field.
 fun ObjectDefinition.readableBy(access: FieldAccess): ObjectDefinition {
     if (access.unrestricted) return this
     val readable = fields.filter { access.canRead(it.id) }
     val names = readable.map { it.name }.toSet()
     return copy(
-        obj = obj.copy(indexes = obj.indexes.filter { set -> names.containsAll(set) }),
+        obj =
+            obj.copy(
+                indexes = obj.indexes.filter { set -> names.containsAll(set) },
+                uniqueConstraints = obj.uniqueConstraints.filter { set -> names.containsAll(set) }
+            ),
         fields = readable.map { if (access.canWrite(it.id)) it else it.copy(editable = false) }
     )
 }

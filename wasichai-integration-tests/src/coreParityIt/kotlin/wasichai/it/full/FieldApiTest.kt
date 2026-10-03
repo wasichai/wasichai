@@ -73,7 +73,13 @@ class FieldApiTest : FullAppIntegrationTest() {
             .isOk
 
         createRecord("L-1").expectStatus().isCreated
-        createRecord("L-1").expectStatus().is5xxServerError
+        // the original answered 5xx; a repeat is now the caller's 409 naming the field (ADR-031 D23)
+        createRecord("L-1")
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("codigo")
     }
 
     @Test

@@ -175,7 +175,8 @@ class FieldTypeRegistry(
                 "createdAt",
                 "updatedAt",
                 "fields",
-                "indexes"
+                "indexes",
+                "uniqueConstraints"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata

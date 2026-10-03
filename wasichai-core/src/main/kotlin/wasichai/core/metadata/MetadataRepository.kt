@@ -17,7 +17,7 @@ import java.util.UUID
 
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
-        "physical_table, created_at, updated_at, indexes::text AS indexes"
+        "physical_table, created_at, updated_at, indexes::text AS indexes, unique_constraints::text AS unique_constraints"
 
 @Repository
 class CustomObjectRepository(
@@ -30,13 +30,15 @@ class CustomObjectRepository(
             .sql(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
-                    (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes)
+                    (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes,
+                     unique_constraints)
                 VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
-                        CAST(:indexes AS jsonb))
+                        CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb))
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
             .bind("indexes", objectMapper.writeValueAsString(obj.indexes))
+            .bind("uniqueConstraints", objectMapper.writeValueAsString(obj.uniqueConstraints))
             .bind("organizationId", obj.organizationId)
             .bind("name", obj.name)
             .bind("label", obj.label)
@@ -97,12 +99,14 @@ class CustomObjectRepository(
                 """
                 UPDATE ${schemas.metadata}.custom_objects
                 SET label = :label, plural_label = :pluralLabel, description = :description,
-                    enabled = :enabled, indexes = CAST(:indexes AS jsonb), updated_at = now()
+                    enabled = :enabled, indexes = CAST(:indexes AS jsonb),
+                    unique_constraints = CAST(:uniqueConstraints AS jsonb), updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
             .bind("indexes", objectMapper.writeValueAsString(obj.indexes))
+            .bind("uniqueConstraints", objectMapper.writeValueAsString(obj.uniqueConstraints))
             .bind("organizationId", obj.organizationId)
             .bind("label", obj.label)
             .bind("pluralLabel", obj.pluralLabel)
@@ -140,10 +144,14 @@ class CustomObjectRepository(
             physicalTable = Rows.string(row, "physical_table"),
             createdAt = Rows.instantOrNull(row, "created_at"),
             updatedAt = Rows.instantOrNull(row, "updated_at"),
-            indexes =
-                Rows.stringOrNull(row, "indexes")?.let { objectMapper.readValue(it, object : TypeReference<List<List<String>>>() {}) }
-                    ?: emptyList()
+            indexes = fieldSets(row, "indexes"),
+            uniqueConstraints = fieldSets(row, "unique_constraints")
         )
+
+    private fun fieldSets(
+        row: Row,
+        column: String
+    ): List<List<String>> = Rows.stringOrNull(row, column)?.let { objectMapper.readValue(it, object : TypeReference<List<List<String>>>() {}) } ?: emptyList()
 }
 
 private const val FIELD_COLUMNS =

@@ -86,6 +86,33 @@ class FieldSetsTest {
             .isInstanceOf(ValidationException::class.java)
     }
 
+    // issue 14: a unique set is two or more fields; one field is `unique: true`
+    @Test
+    fun `a caller can ask for at least two fields per entry`() {
+        assertThat(FieldSets.normalize("indexes", listOf(listOf("anio")), fields, types)).containsExactly(listOf("anio"))
+        assertThatThrownBy { FieldSets.normalize("uniqueConstraints", listOf(listOf("anio")), fields, types, minFields = 2) }
+            .isInstanceOf(ValidationException::class.java)
+            .extracting { (it as ValidationException).violations.single() }
+            .satisfies({ violation ->
+                assertThat(violation.field).isEqualTo("uniqueConstraints")
+                assertThat(violation.message).contains("unique: true")
+            })
+    }
+
+    // a field cannot be dropped from under either list, and the refusal names which list holds it
+    @Test
+    fun `the set that blocks a delete names its kind and its list`() {
+        val obj =
+            CustomObject(UUID.randomUUID(), UUID.randomUUID(), "o", "O", "Os", null, true, "o__1", null, null)
+                .copy(indexes = listOf(listOf("anio", "predio")), uniqueConstraints = listOf(listOf("predio", "notas")))
+
+        assertThat(FieldSets.blocking("anio", obj).toString()).isEqualTo("index (anio, predio)")
+        assertThat(FieldSets.blocking("anio", obj)!!.property).isEqualTo("indexes")
+        assertThat(FieldSets.blocking("notas", obj).toString()).isEqualTo("unique constraint (predio, notas)")
+        assertThat(FieldSets.blocking("notas", obj)!!.property).isEqualTo("uniqueConstraints")
+        assertThat(FieldSets.blocking("lote", obj)).isNull()
+    }
+
     @Test
     fun `the sets a field takes part in`() {
         val sets = listOf(listOf("anio", "predio"), listOf("predio"), listOf("notas"))

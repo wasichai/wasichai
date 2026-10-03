@@ -147,4 +147,33 @@ class ObjectSchemaManagerTest {
             )
         assertThat(manager().indexChanges(after, after)).isEmpty()
     }
+
+    // issue 14: a composite unique is a named constraint over the set's columns, like a single-field one
+    @Test
+    fun `a unique set is added and dropped as a named constraint`() {
+        val name = SqlIdentifier.fieldSetName(obj.physicalTable, listOf("sistema", "referencia"), "uq")
+
+        assertThat(manager().addUniqueStatement(obj, listOf("sistema", "referencia")))
+            .isEqualTo(
+                "ALTER TABLE \"app_data\".\"predio__1234abcd\" ADD CONSTRAINT \"$name\" UNIQUE (\"sistema\", \"referencia\")"
+            )
+        assertThat(manager().dropUniqueStatement(obj, listOf("sistema", "referencia")))
+            .isEqualTo("ALTER TABLE \"app_data\".\"predio__1234abcd\" DROP CONSTRAINT IF EXISTS \"$name\"")
+    }
+
+    @Test
+    fun `only the unique sets that changed are dropped or added, drops first`() {
+        val fields = listOf(field("sistema", FieldType.TEXT), field("referencia", FieldType.TEXT), field("fecha", FieldType.DATE))
+        val before = ObjectDefinition(obj.copy(uniqueConstraints = listOf(listOf("sistema", "referencia"), listOf("fecha"))), fields)
+        val after = ObjectDefinition(obj.copy(uniqueConstraints = listOf(listOf("fecha"), listOf("referencia", "fecha"))), fields)
+
+        assertThat(manager().uniqueConstraintChanges(before, after))
+            .containsExactly(
+                manager().dropUniqueStatement(obj, listOf("sistema", "referencia")),
+                manager().addUniqueStatement(obj, listOf("referencia", "fecha"))
+            )
+        assertThat(manager().uniqueConstraintChanges(after, after)).isEmpty()
+        // a declared unique set is a constraint, not one of the plain indexes
+        assertThat(manager().declaredIndexes(after)).isEmpty()
+    }
 }

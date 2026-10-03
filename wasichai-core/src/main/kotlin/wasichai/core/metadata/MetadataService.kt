@@ -1,9 +1,11 @@
 package wasichai.core.metadata
 
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
+import wasichai.core.common.FieldViolation
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
@@ -108,7 +110,8 @@ class MetadataService(
             }
         // the sets name fields, so they are checked once the fields exist (a relation may point at this object)
         val indexes = FieldSets.normalize(INDEXES, request.indexes, storedFields, types)
-        if (indexes.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes))
+        val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types, minFields = 2)
+        if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
         return ObjectDefinition(stored, storedFields)
     }
@@ -195,7 +198,11 @@ class MetadataService(
 
         // metadata and table move together, in one transaction
         if (updated.required != existing.required) schema.setRequired(obj, existing, updated.required)
-        if (updated.unique != existing.unique) schema.setUnique(obj, existing, updated.unique)
+        if (updated.unique != existing.unique) {
+            refuseRepeats("unique", "Field '$fieldName' has repeated values; it cannot be made unique") {
+                schema.setUnique(obj, existing, updated.unique)
+            }
+        }
         // unique counts too: a unique column's constraint is its index, so a plain one comes or goes with it
         if (updated.indexed != existing.indexed || updated.unique != existing.unique) {
             val all = fields.findByObject(obj.id)
@@ -230,11 +237,9 @@ class MetadataService(
             }
         }
 
-        // postgres would drop a composite index with the column, and the metadata would still list it
-        FieldSets.containing(field.name, obj.indexes).firstOrNull()?.let { set ->
-            throw ConflictException(
-                "Field '$fieldName' is part of index ${set.joinToString(", ", "(", ")")}. Remove it from the object's indexes first."
-            )
+        // postgres would drop a composite index or unique with the column, and the metadata would still list it
+        FieldSets.blocking(field.name, obj)?.let { set ->
+            throw ConflictException("Field '$fieldName' is part of $set. Remove it from the object's ${set.property} first.")
         }
 
         val users = usages.flatMap { it.whoUses(obj, field.name) }
@@ -265,6 +270,9 @@ class MetadataService(
         }
         val objectFields = fields.findByObject(obj.id)
         val indexes = request.indexes?.let { FieldSets.normalize(INDEXES, it, objectFields, types) } ?: obj.indexes
+        val uniques =
+            request.uniqueConstraints?.let { FieldSets.normalize(UNIQUE_CONSTRAINTS, it, objectFields, types, minFields = 2) }
+                ?: obj.uniqueConstraints
         val updated =
             objects.update(
                 obj.copy(
@@ -276,11 +284,17 @@ class MetadataService(
                             .ifBlank { request.label.trim() },
                     description = request.description?.trim(),
                     enabled = request.enabled,
-                    indexes = indexes
+                    indexes = indexes,
+                    uniqueConstraints = uniques
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op
         if (indexes != obj.indexes) schema.syncIndexes(ObjectDefinition(obj, objectFields), ObjectDefinition(updated, objectFields))
+        if (uniques != obj.uniqueConstraints) {
+            refuseRepeats(UNIQUE_CONSTRAINTS, "Records of '$name' repeat a unique constraint's values; it cannot be added") {
+                schema.syncUniqueConstraints(ObjectDefinition(obj, objectFields), ObjectDefinition(updated, objectFields))
+            }
+        }
         return ObjectDefinition(updated, objectFields)
     }
 
@@ -309,6 +323,20 @@ class MetadataService(
         removals.forEach { it.objectRemoved(obj) }
         schema.dropTable(obj)
         objects.delete(user.organizationId, obj.id)
+    }
+
+    // a unique the data already breaks: the caller's 409, not a server error. thrown inside the
+    // transaction, so the metadata written before it rolls back with the DDL (ADR-037)
+    private suspend fun refuseRepeats(
+        property: String,
+        message: String,
+        ddl: suspend () -> Unit
+    ) {
+        try {
+            ddl()
+        } catch (e: DuplicateKeyException) {
+            throw ConflictException(message, listOf(FieldViolation(property, "existing records repeat these values")))
+        }
     }
 
     // relation targets are resolved to physical tables so DDL can add the FK
@@ -392,6 +420,7 @@ class MetadataService(
 
     companion object {
         private const val INDEXES = "indexes"
+        private const val UNIQUE_CONSTRAINTS = "uniqueConstraints"
         private val ENUM_OPTION = Regex("^[\\p{L}0-9 _.-]{1,64}$")
     }
 }

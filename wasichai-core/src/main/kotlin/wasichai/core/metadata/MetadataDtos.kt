@@ -34,7 +34,9 @@ data class CreateObjectRequest(
     val description: String? = null,
     val fields: List<FieldRequest> = emptyList(),
     // composite indexes, field names in index order: [["anio", "predio"]] (ADR-036)
-    val indexes: List<List<String>> = emptyList()
+    val indexes: List<List<String>> = emptyList(),
+    // composite uniques, same shape: [["sistema_origen", "referencia_externa"]] (ADR-037)
+    val uniqueConstraints: List<List<String>> = emptyList()
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -60,7 +62,9 @@ data class UpdateObjectRequest(
     val description: String? = null,
     val enabled: Boolean = true,
     // null leaves the declared indexes as they are; a list replaces them, [] drops them all
-    val indexes: List<List<String>>? = null
+    val indexes: List<List<String>>? = null,
+    // same rule for the composite uniques (ADR-037)
+    val uniqueConstraints: List<List<String>>? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -98,6 +102,8 @@ data class ObjectResponse(
     val updatedAt: Instant?,
     // only written when some are declared (ADR-036)
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
+    // only written when some are declared (ADR-037)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -116,6 +122,8 @@ data class ObjectDefinitionResponse(
     val fields: List<FieldResponse>,
     // only written when some are declared (ADR-036)
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val indexes: List<List<String>> = emptyList(),
+    // only written when some are declared (ADR-037)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val uniqueConstraints: List<List<String>> = emptyList(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

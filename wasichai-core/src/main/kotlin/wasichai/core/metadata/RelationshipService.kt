@@ -171,12 +171,12 @@ class RelationshipService(
             relationship.relationFieldId?.let { fieldId ->
                 fields.findById(fieldId)?.let { field -> objects.findById(user.organizationId, field.objectId)?.let { owner -> owner to field } }
             }
-        // postgres would drop a composite index with the column while the metadata still lists it (ADR-036)
+        // postgres would drop a composite index or unique with the column while the metadata still lists it (ADR-036, ADR-037)
         column?.let { (owner, field) ->
-            FieldSets.containing(field.name, owner.indexes).firstOrNull()?.let { set ->
+            FieldSets.blocking(field.name, owner)?.let { set ->
                 throw ConflictException(
-                    "Field '${field.name}' of relationship '$name' is part of index ${set.joinToString(", ", "(", ")")} " +
-                        "of '${owner.name}'. Remove it from the object's indexes first."
+                    "Field '${field.name}' of relationship '$name' is part of $set of '${owner.name}'. " +
+                        "Remove it from the object's ${set.property} first."
                 )
             }
         }

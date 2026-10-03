@@ -115,6 +115,51 @@ that cannot be indexed: `LONG_TEXT`, or a type that cannot be filtered on, such 
 composite index names is a `409`, and so is deleting the relationship that owns such a field: remove it from
 `indexes` first.
 
+### Unique constraints
+
+```json
+{
+  "name": "orden_de_cobro",
+  "label": "Orden de cobro",
+  "fields": [
+    { "name": "sistema_origen", "type": "TEXT" },
+    { "name": "referencia_externa", "type": "TEXT" }
+  ],
+  "uniqueConstraints": [["sistema_origen", "referencia_externa"]]
+}
+```
+
+`uniqueConstraints` lists uniqueness over two or more fields, in the same shape as `indexes` and checked the same way:
+two to 32 fields per entry. Each entry is a real `UNIQUE (a, b, …)` on the organization's own table, so two records
+of one organization cannot share the combination and another organization's records never count. A one-field entry
+is a `400` naming `uniqueConstraints`: a single field takes `unique: true`. As with `unique`, `NULL`s are
+distinct: a record with an empty field in a set never collides, so `["caja", "cajero", "fecha"]` only stops repeats
+among records that fill all three. Make the fields `required` when that matters.
+`uniqueConstraints` comes back on an object or a definition only when there are some
+([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)).
+
+`PUT /api/objects/{object}` with `uniqueConstraints` replaces the list, without it the list is left as it is, and `[]`
+drops them all. A `400` names `uniqueConstraints` for the same mistakes as `indexes`.
+Adding one the existing records already repeat is a `409` naming `uniqueConstraints`, and nothing changes, the
+object's other properties included. So is making a field `unique` over repeated values (`409` naming `unique`).
+Deleting a field that a unique constraint names, or the relationship that owns it, is a `409`.
+
+A record write that repeats a unique value, of a `unique` field or of a `uniqueConstraints` entry, answers `409` with
+one `errors[]` entry per field of the constraint. The values themselves are never echoed back:
+
+```json
+{
+  "type": "https://wasichai.dev/problems/409",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Another record already has this sistema_origen, referencia_externa",
+  "errors": [
+    { "field": "sistema_origen", "message": "must be unique together with referencia_externa" },
+    { "field": "referencia_externa", "message": "must be unique together with sistema_origen" }
+  ]
+}
+```
+
 A geometry is a field like any other (ADR-019), so an object has as many as it needs and gains one
 after the fact through `POST …/fields`. `geometryType` is required on one, `srid` defaults to 4326
 and `dimension` to 2; `unique` and `defaultValue` are refused on one. The object's `geometry` in the
@@ -178,7 +223,8 @@ Deleting drops the column and its data. It is refused with `409` when the field 
 to drop:
 
 - it belongs to a relationship — delete the relationship instead, which removes both sides;
-- the object's `indexes` name it — remove it from them first (see "Indexes");
+- the object's `indexes` or `uniqueConstraints` name it — remove it from them first (see "Indexes" and "Unique
+  constraints");
 - an automation reads it, writes it, or fills it when creating a record — the response names the
   rules, because a rule that lost its field only fails the next time it fires.
 
@@ -893,4 +939,4 @@ RFC 7807 `application/problem+json`:
 | 401 | missing or invalid token |
 | 403 | authenticated but lacking the object/action permission |
 | 404 | unknown object or record |
-| 409 | duplicate object or field name |
+| 409 | duplicate object or field name; a record that repeats a unique value, with `errors[]` naming the constraint's fields |

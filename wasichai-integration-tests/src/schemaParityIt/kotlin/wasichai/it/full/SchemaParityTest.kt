@@ -42,6 +42,9 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "constraint custom_fields.custom_fields_indexed_not_null NOT NULL indexed" to "ADR-031 D22: declared indexes",
             "column custom_objects.indexes #11 jsonb NOT NULL DEFAULT '[]'::jsonb" to "ADR-031 D22: declared indexes",
             "constraint custom_objects.custom_objects_indexes_not_null NOT NULL indexes" to "ADR-031 D22: declared indexes",
+            "column custom_objects.unique_constraints #12 jsonb NOT NULL DEFAULT '[]'::jsonb" to "ADR-031 D23: declared composite uniques",
+            "constraint custom_objects.custom_objects_unique_constraints_not_null NOT NULL unique_constraints" to
+                "ADR-031 D23: declared composite uniques",
             "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",

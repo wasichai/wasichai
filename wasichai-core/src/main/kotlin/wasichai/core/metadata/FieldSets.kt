@@ -2,9 +2,9 @@ package wasichai.core.metadata
 
 import wasichai.core.common.ValidationException
 
-// object-level lists of field sets: `indexes` today. one path to check and normalize any such list,
-// so a sibling list (unique constraints) is stored and validated the same way. names, not ids:
-// fields are never renamed. ADR-036.
+// object-level lists of field sets: `indexes` and `uniqueConstraints`. one path to check and normalize
+// both, so they are stored and validated the same way. names, not ids: fields are never renamed.
+// ADR-036, ADR-037.
 object FieldSets {
     // postgres: INDEX_MAX_KEYS
     const val MAX_FIELDS = 32
@@ -14,12 +14,21 @@ object FieldSets {
         property: String,
         sets: List<List<String>>,
         fields: List<CustomField>,
-        types: FieldTypeRegistry
+        types: FieldTypeRegistry,
+        // 2 for uniqueConstraints: one field is `unique: true`, and its constraint is the field's own (ADR-037)
+        minFields: Int = 1
     ): List<List<String>> =
         sets
             .map { raw ->
                 val set = raw.map { it.trim().lowercase() }
                 if (set.isEmpty()) throw ValidationException("An entry of $property is empty", property, "every entry names at least one field")
+                if (set.size < minFields) {
+                    throw ValidationException(
+                        "An entry of $property has ${set.size} field",
+                        property,
+                        "names at least $minFields fields; make a single field unique with unique: true"
+                    )
+                }
                 if (set.size > MAX_FIELDS) {
                     throw ValidationException("An entry of $property has ${set.size} fields", property, "at most $MAX_FIELDS fields per entry")
                 }
@@ -48,7 +57,25 @@ object FieldSets {
         }
     }
 
-    // the sets a field takes part in: it cannot be dropped while one still names it
+    // the first set of either list a field takes part in, and the list it sits in: it cannot be
+    // dropped while one still names it, or postgres would drop the set with the column
+    fun blocking(
+        field: String,
+        obj: CustomObject
+    ): Blocking? =
+        containing(field, obj.indexes).firstOrNull()?.let { Blocking("index", "indexes", it) }
+            ?: containing(field, obj.uniqueConstraints).firstOrNull()?.let { Blocking("unique constraint", "uniqueConstraints", it) }
+
+    // "index (a, b)" or "unique constraint (a, b)", and the object property to remove it from
+    data class Blocking(
+        val kind: String,
+        val property: String,
+        val set: List<String>
+    ) {
+        override fun toString(): String = "$kind ${set.joinToString(", ", "(", ")")}"
+    }
+
+    // the sets a field takes part in
     fun containing(
         field: String,
         sets: List<List<String>>
