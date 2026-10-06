@@ -214,6 +214,7 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val objects = ObjectLookup(admin.organizationId)
 
         val resolved =
             request.permissions.map { entry ->
@@ -224,14 +225,14 @@ class AdminService(
                         ?.lowercase()
                         ?.ifBlank { null }
                 // the action is judged before the object, as it always was
-                if (action !in Actions.BUILT_IN && !isDeclared(admin.organizationId, objectName, action)) {
+                if (action !in Actions.BUILT_IN && !objects.declares(objectName, action)) {
                     throw ValidationException(
                         "Unknown action '$action'",
                         "action",
                         "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
                     )
                 }
-                val objectId = objectName?.let { objectOrBadRequest(admin.organizationId, it).obj.id }
+                val objectId = objectName?.let { objects.require(it).obj.id }
                 Triple(objectId, action, entry.allowed)
             }
 
@@ -269,12 +270,13 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val objects = ObjectLookup(admin.organizationId)
 
         val touchedObjects = mutableSetOf<UUID>()
         val rows =
             request.fields.map { entry ->
                 val objectName = entry.objectName.trim().lowercase()
-                val definition = objectOrBadRequest(admin.organizationId, objectName)
+                val definition = objects.require(objectName)
                 val fieldName = entry.fieldName.trim().lowercase()
                 val field =
                     definition.fields.firstOrNull { it.name == fieldName }
@@ -473,31 +475,36 @@ class AdminService(
 
     // ---------------------------------------------------------------- helpers
 
-    // an object the payload names but the tenant does not have is a bad request, not a missing page
-    private suspend fun objectOrBadRequest(
-        organizationId: UUID,
-        objectName: String
-    ): ObjectDefinition =
-        try {
-            metadata.loadDefinition(organizationId, objectName)
-        } catch (ignored: NotFoundException) {
-            throw ValidationException("Unknown object '$objectName'", "objectName", "object does not exist")
+    // the objects one payload names, each read once however many entries name it
+    private inner class ObjectLookup(
+        private val organizationId: UUID
+    ) {
+        private val read = mutableMapOf<String, ObjectDefinition?>()
+
+        suspend fun find(objectName: String): ObjectDefinition? {
+            if (objectName in read) return read[objectName]
+            val definition =
+                try {
+                    metadata.loadDefinition(organizationId, objectName)
+                } catch (ignored: NotFoundException) {
+                    null
+                }
+            read[objectName] = definition
+            return definition
         }
 
-    // a declared action (ADR-042) exists only on the object that declares it, never tenant-wide
-    private suspend fun isDeclared(
-        organizationId: UUID,
-        objectName: String?,
-        action: String
-    ): Boolean {
-        if (objectName == null) return false
-        val objectId =
-            try {
-                metadata.loadDefinition(organizationId, objectName).obj.id
-            } catch (ignored: NotFoundException) {
-                return false
-            }
-        return actions.exists(organizationId, objectId, action)
+        // an object the payload names but the tenant does not have is a bad request, not a missing page
+        suspend fun require(objectName: String): ObjectDefinition =
+            find(objectName) ?: throw ValidationException("Unknown object '$objectName'", "objectName", "object does not exist")
+
+        // a declared action (ADR-042) exists only on the object that declares it, never tenant-wide
+        suspend fun declares(
+            objectName: String?,
+            action: String
+        ): Boolean {
+            val definition = objectName?.let { find(it) } ?: return false
+            return actions.exists(organizationId, definition.obj.id, action)
+        }
     }
 
     private fun requirePassword(password: String) {
