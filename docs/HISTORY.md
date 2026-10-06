@@ -2,6 +2,25 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-06 — Theme components with a second user go up to wasichai-ui
+
+Two components srtm-ui wrote for its `portal-tributario` theme move into wasichai-ui, because caja-ui, which copied
+them, is their second user (wasichai-ui rule 6): `Alert` in `@wasichai/ui`, a message in four tones (`success`,
+`warning`, `danger`, `notice`) with a bold title and a dismiss check, and `NavTree` in `@wasichai/core`, the foldable
+tree menu, with its nodes and the rule for the current leaf (its own route, then `alsoAt`, then the longest start of
+the path). `NavTree` lives in core because it needs `react-router`. Their names are English and their words are in
+core's bundle (`common.dismissAlert`, `common.goHome`, `common.hideMenu`); their hooks are `data-slot`s (`alert` with
+`data-tone`, `nav-tree*`), and the `portal-tributario` sheet paints them with two new partials, `alerts.css` and
+`nav.css`. Light and dark do not change. They ship in wasichai-ui 0.5.0, promoted from `dev` to `main` and released
+without a dev pre-release; srtm-ui and caja-ui adopt it and delete their copies, and caja-ui's alerts gain the
+prototype's box under the theme, which it never had copied.
+`BandaTitulo`, `PasosGalon`, `BarraInstruccion` and `useVarianteTema` stay in the apps
+([wasichai/wasichai-ui#14](https://github.com/wasichai/wasichai-ui/issues/14) stays open for them). Design and plans:
+[the spec](superpowers/specs/2026-10-06-theme-components-design.md),
+[wasichai-ui](superpowers/plans/2026-10-06-theme-components-wasichai-ui.md),
+[srtm-ui](superpowers/plans/2026-10-06-theme-components-srtm-ui.md) and
+[caja-ui](superpowers/plans/2026-10-06-theme-components-caja-ui.md).
+
 ## 2026-10-03 — A RELATION value names only a record the caller can read
 
 Since "A RELATION value naming no record is a 400" (below), a `RELATION` value had to name a record of the writer's organization, and
