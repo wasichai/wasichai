@@ -72,10 +72,12 @@ The apps rename as they adopt it:
 | `titulo`   | `title`     |
 | `onCerrar` | `onDismiss` |
 
-## `NavTree` (`@wasichai/core`, `src/shell/NavTree.tsx` and `src/shell/navTree.ts`)
+## `NavTree` (`@wasichai/core`, `src/shell/NavTree.tsx` and `src/shell/navTreeNodes.ts`)
 
 srtm-ui's `ArbolNav`, with the same markup and behaviour: a light panel headed by the way home and a button that folds
 it, a title, groups (buttons with a caret that fold their list) and leaves in the link colour, the current one marked.
+The types and helpers live in `navTreeNodes.ts`, not `navTree.ts`: on a case-insensitive file system `./NavTree` would
+resolve to `navTree.ts`.
 
 ```ts
 export interface NavTreeLeaf {
@@ -179,7 +181,7 @@ lives in core. An app that does not load core's bundle supplies the keys itself,
   `onDismiss`, the button with its label calling it.
 - **ui** `portalTributario.test.ts`: both partials imported by `index.css`, every rule inside the `@scope`, no `data-ui`
   left in the sheet, and the contrast of `nav.css`'s own colours (the four ratios above).
-- **core** `navTree.test.ts`: `isNavTreeGroup`, `navTreeLeaves`, and `currentNavTreeLeaf` (exact route over `alsoAt`,
+- **core** `navTreeNodes.test.ts`: `isNavTreeGroup`, `navTreeLeaves`, and `currentNavTreeLeaf` (exact route over `alsoAt`,
   `alsoAt` over a prefix, the longest prefix, an external leaf never current, a page with no leaf).
 - **core** `NavTree.test.tsx`, from srtm-ui's `arbolNav.test.tsx` where it tests the component: groups fold with
   `aria-expanded` and `aria-controls`, the current leaf has `aria-current` and its chevron, an external leaf is an `<a>`
