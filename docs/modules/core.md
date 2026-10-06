@@ -191,9 +191,8 @@ types (`WasichaiModule` and its contribution types), `createRegistry`, `useWasic
 for module routes, and typed helpers for every core screen) and `useAuth`. i18n namespace `core`; core's own strings
 are always reachable through `fallbackNS`. `QueryState` draws a react-query result as loading, an error (with a retry
 that refetches) or its data; `LoadingState`, `EmptyState` and `ErrorState` (a 404 or 403 shows no retry) are its
-parts, usable on their own. `NavTree` draws an app's foldable
-tree menu (groups, subgroups, leaves, the current one marked); `navTreeLeaves`, `currentNavTreeLeaf` and
-`isNavTreeGroup` read its nodes.
+parts, usable on their own. `NavTree` draws an app's foldable tree menu (groups, subgroups, leaves, the current one marked);
+`navTreeLeaves`, `currentNavTreeLeaf` and `isNavTreeGroup` read its nodes.
 
 `@wasichai/ui`: the shared primitives (`Alert`, `Button`, `Card*`, `Dialog*`, `Input`, `Textarea`, `Label`, `Select*`,
 `Table`/`Th`/`Td`/`Badge`, `Tabs`, `ConfirmDialog`, `Pagination`/`PageSizePagination`, `PdfDialog`), the `cn()` class
