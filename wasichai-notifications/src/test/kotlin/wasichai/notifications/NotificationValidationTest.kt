@@ -235,5 +235,28 @@ class NotificationValidationTest {
         assertThat(Sources.isOwnedByModule("manual")).isTrue()
         assertThat(Sources.isOwnedByModule("rule:x")).isTrue()
         assertThat(Sources.isOwnedByModule("caja")).isFalse()
+        assertThat(Sources.isManual("manual")).isTrue()
+        assertThat(Sources.isManual("rule:x")).isFalse()
+        assertThat(Sources.isManual("caja")).isFalse()
+    }
+
+    @Test
+    fun `Kotlin cuts a long title or body with an ellipsis instead of refusing`() {
+        val long = draft.copy(title = "  " + "a".repeat(250) + "  ", body = "b".repeat(5000))
+
+        val cut = NotificationValidation.check("caja", long, now, cutLongText = true).draft!!
+
+        assertThat(cut.title).hasSize(200).endsWith("a…")
+        assertThat(cut.body).hasSize(4000).endsWith("b…")
+        // within the limit nothing moves
+        assertThat(NotificationValidation.check("caja", draft.copy(title = "a".repeat(200)), now, cutLongText = true).draft!!.title).isEqualTo("a".repeat(200))
+        // code points, as postgres counts: a cut never splits a surrogate pair
+        val emoji = "\uD83D\uDE00".repeat(201)
+        val title = NotificationValidation.check("caja", draft.copy(title = emoji), now, cutLongText = true).draft!!.title
+        assertThat(title.codePointCount(0, title.length)).isEqualTo(200)
+        assertThat(title).endsWith("\uD83D\uDE00…")
+        // other rules still hold, and REST still refuses
+        assertThat(NotificationValidation.check("caja", long.copy(title = "  "), now, cutLongText = true).violations.map { it.field }).containsExactly("title")
+        assertThat(fields(long)).containsExactly("title", "body")
     }
 }

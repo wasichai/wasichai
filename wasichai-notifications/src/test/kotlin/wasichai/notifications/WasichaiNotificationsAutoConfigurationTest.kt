@@ -2,10 +2,14 @@ package wasichai.notifications
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.annotation.ImportCandidates
+import org.springframework.r2dbc.core.DatabaseClient
+import tools.jackson.databind.json.JsonMapper
 import wasichai.core.platform.ModuleMigration
+import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.autoconfigure.NotificationsProperties
 import wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
 import wasichai.test.WasichaiContextRunner
@@ -26,6 +30,24 @@ class WasichaiNotificationsAutoConfigurationTest {
             assertThat(migration.location).isEqualTo("classpath:db/wasichai/notifications")
             assertThat(migration.order).isEqualTo(ModuleMigration.MODULE_ORDER)
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name }).containsExactlyInAnyOrder("core", "notifications")
+        }
+    }
+
+    @Test
+    fun `storage, audience and the writer are beans an app may replace`() {
+        runner.run { context ->
+            assertThat(context).hasNotFailed()
+            listOf(
+                AudienceResolver::class.java,
+                NotificationPreparer::class.java,
+                NotificationRepository::class.java,
+                InboxRepository::class.java,
+                NotificationWriter::class.java
+            ).forEach { assertThat(context).hasSingleBean(it) }
+        }
+        val own = NotificationRepository(mock(DatabaseClient::class.java), JsonMapper.builder().build(), WasichaiSchemas("wasichai", "app_data"))
+        runner.withBean(NotificationRepository::class.java, { own }).run { context ->
+            assertThat(context.getBean(NotificationRepository::class.java)).isSameAs(own)
         }
     }
 
@@ -88,6 +110,8 @@ class WasichaiNotificationsAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).doesNotHaveBean("wasichaiNotificationsMigration")
             assertThat(context).doesNotHaveBean(NotificationsProperties::class.java)
+            assertThat(context).doesNotHaveBean(NotificationWriter::class.java)
+            assertThat(context).doesNotHaveBean(InboxRepository::class.java)
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name }).containsExactly("core")
         }
     }

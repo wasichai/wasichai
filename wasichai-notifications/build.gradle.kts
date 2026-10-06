@@ -13,4 +13,7 @@ dependencies {
 
     testImplementation(project(":wasichai-test"))
     testRuntimeOnly(libs.r2dbc.postgresql)
+    // flyway migrates over jdbc; the storage test also LISTENs over a plain jdbc connection
+    testImplementation(libs.postgresql.jdbc)
+    testRuntimeOnly(libs.flyway.postgresql)
 }

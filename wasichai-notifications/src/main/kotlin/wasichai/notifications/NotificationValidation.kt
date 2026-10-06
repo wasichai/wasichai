@@ -64,6 +64,7 @@ internal object NotificationValidation {
     const val ROUTE_PARAMS_MAX = 10
     const val ROUTE_PARAM_VALUE_MAX = 200
     const val URL_MAX = 2000
+    private const val ELLIPSIS = "\u2026"
 
     private val SOURCE = Regex("^[a-z][a-z0-9_.:-]{1,80}$")
     private val KEY = Regex("^[A-Za-z0-9_.:/-]{1,200}$")
@@ -78,14 +79,16 @@ internal object NotificationValidation {
     private val TAB = Regex("^[A-Z][A-Z0-9_]{0,39}$")
 
     // source and draft together. allowReservedSource: the module writing its own manual or rule: rows.
+    // cutLongText: Kotlin publish. wording never aborts a business transaction, so a long title or body is cut.
     fun check(
         source: String,
         draft: NotificationDraft,
         now: Instant,
-        allowReservedSource: Boolean = false
+        allowReservedSource: Boolean = false,
+        cutLongText: Boolean = false
     ): DraftCheck {
         val sourceViolations = checkSource(source, allowReservedSource)
-        val result = checkDraft(draft, now)
+        val result = checkDraft(draft, now, cutLongText)
         if (sourceViolations.isEmpty()) return result
         return DraftCheck(null, sourceViolations + result.violations)
     }
@@ -103,14 +106,16 @@ internal object NotificationValidation {
 
     fun checkDraft(
         draft: NotificationDraft,
-        now: Instant
+        now: Instant,
+        cutLongText: Boolean = false
     ): DraftCheck {
         val violations = mutableListOf<FieldViolation>()
 
-        val title = draft.title.trim()
+        val title = draft.title.trim().let { if (cutLongText) it.cut(TITLE_MAX) else it }
         if (title.charCount() !in 1..TITLE_MAX) violations += FieldViolation("title", "must be 1 to $TITLE_MAX characters")
 
-        if (draft.body != null && draft.body.charCount() > BODY_MAX) violations += FieldViolation("body", "must be at most $BODY_MAX characters")
+        val body = draft.body?.let { if (cutLongText) it.cut(BODY_MAX) else it }
+        if (body != null && body.charCount() > BODY_MAX) violations += FieldViolation("body", "must be at most $BODY_MAX characters")
 
         if (draft.key != null && !KEY.matches(draft.key)) violations += FieldViolation("key", "must match ${KEY.pattern}")
 
@@ -126,7 +131,7 @@ internal object NotificationValidation {
         }
 
         if (violations.isNotEmpty()) return DraftCheck(null, violations)
-        return DraftCheck(NormalizedDraft(draft.kind, title, draft.body, link, audience, draft.key, publishAt, expiresAt, dueAt), emptyList())
+        return DraftCheck(NormalizedDraft(draft.kind, title, body, link, audience, draft.key, publishAt, expiresAt, dueAt), emptyList())
     }
 
     // roles and units upper case, emails lower case. bad entries named audience[i].
@@ -239,4 +244,10 @@ internal object NotificationValidation {
 
     // characters as postgres counts them (code points), not UTF-16 units
     private fun String.charCount(): Int = codePointCount(0, length)
+
+    // at most max code points, the last one "…". never splits a surrogate pair
+    private fun String.cut(max: Int): String {
+        if (charCount() <= max) return this
+        return substring(0, offsetByCodePoints(0, max - 1)) + ELLIPSIS
+    }
 }

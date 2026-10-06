@@ -72,6 +72,9 @@ object Sources {
     fun rule(name: String): String = RULE_PREFIX + name
 
     fun isOwnedByModule(source: String): Boolean = source == MANUAL || source.startsWith(RULE_PREFIX)
+
+    // anything else is "of a source": not edited or deleted over REST, its ACTIONs not dismissed (the app resolves them)
+    fun isManual(source: String): Boolean = source == MANUAL
 }
 
 // ---- what is stored ----
@@ -252,7 +255,9 @@ data class LatestNotification(
     val id: UUID,
     val kind: NotificationKind,
     val title: String,
-    val publishAt: Instant
+    val publishAt: Instant,
+    // so the UI can link a toast. READ filtering is the caller's, as for inbox items
+    val link: LinkJson? = null
 )
 
 data class NotificationSummary(

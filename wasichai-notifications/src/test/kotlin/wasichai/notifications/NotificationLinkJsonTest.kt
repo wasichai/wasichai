@@ -100,9 +100,12 @@ class NotificationLinkJsonTest {
             """
             {"kinds":{"INFO":{"active":0,"unread":0,"overdue":0},"WARNING":{"active":0,"unread":0,"overdue":0},
              "ACTION":{"active":2,"unread":1,"overdue":1}},
-             "latest":{"id":"$id","kind":"ACTION","title":"Pagar","publishAt":"2026-10-06T12:00:00Z"}}
+             "latest":{"id":"$id","kind":"ACTION","title":"Pagar","publishAt":"2026-10-06T12:00:00Z","link":null}}
             """.trimIndent()
         assertThat(tree(summary)).isEqualTo(mapper.readTree(expected))
+        // latest carries its link, so a toast can open it
+        val linked = latest.copy(link = NotificationLink.Url("https://a.pe/x.pdf").toJson())
+        assertThat(tree(linked).get("link")).isEqualTo(mapper.readTree("""{"type":"URL","url":"https://a.pe/x.pdf"}"""))
         assertThat(tree(NotificationSummary.of(emptyMap(), null)).get("latest").isNull).isTrue()
         assertThat(
             tree(NotificationSummary.of(emptyMap(), null))
