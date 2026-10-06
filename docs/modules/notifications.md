@@ -77,7 +77,9 @@ each `NotificationSource` bean at its own interval and the date rules at `rule-i
 `ClusterLock.tryLock("wasichai.notifications.<key>")` and checks again that it is still due, so N replicas run it once
 per interval (`notification_source_runs` records the last run). It runs for every organization: a source as the
 platform (`RecordService.asPlatform`), the date rules through core's `RecordStore` port (below); a failing
-organization, source or rule is logged and the loop moves on. Once a day, under its own lock, it deletes notifications
+organization, source or rule is logged and the loop moves on. A `CancellationException` a source or rule throws (its
+own `withTimeout`, a cancelled future) is such a failure: only stopping the loop cancels it, and a tick that fails
+anyway never ends the timer. Once a day, under its own lock, it deletes notifications
 resolved or expired longer than `retention` ago. ADR-039 left loops to apps; this one is the module's own work, as the
 drain is automation's (ADR-046).
 
@@ -89,9 +91,23 @@ record and the tab. A run reads the window's records through core's `RecordStore
 with no permission check, so it works the same inside a request (`POST`, `PUT`, `run`) and in the loop;
 `RecordService.asPlatform` would refuse inside a request. A run is capped at `rule-max-notifications` records per rule
 and organization, earliest dates first, with a WARN past the cap. A record change re-evaluates that record at once
-(the cap does not apply to that one record), so a renewed licence stops saying "vence" without waiting for the next
-run; a deleted record resolves its notification. Disabling or deleting a rule resolves its notifications; deleting the
-object resolves what its rules published (`NotificationRuleCleanup`), then deletes the rules.
+and updates or resolves the rule's **open** notification of it, so a renewed licence stops saying "vence" without
+waiting for the next run; a deleted record resolves its notification. Creating a notification, or reopening a resolved
+one, is left to the next run (`POST` and `PUT` run the rule at once, the loop every `rule-interval`): only a run sees
+the cap, so a record past it never flaps between a write that publishes it and a run that resolves it. A rule whose
+field is no longer a date field is skipped with one WARN per run, not an error per record. A `POST` or `PUT` saves
+and runs in one transaction: a run that fails leaves the rule as it was. Disabling or deleting a rule resolves its
+notifications; deleting the object resolves what its rules published (`NotificationRuleCleanup`), then deletes the
+rules.
+
+**Writers of one source take turns.** Every write to an (organization, source) — a publish, a resolve, a reconcile,
+the rule listener, an admin edit — holds `ClusterLock.withXactLock("wasichai.notifications.<org>.<source>")` until its
+transaction ends, so a rule run and a record write, or a source run and a `publish`, never interleave their read and
+their write. A run reads outside any transaction, so the lock alone cannot stop it from writing what it read before a
+newer write: the reconcile therefore leaves alone every row written after its read began (`updated_at` later than the
+run's start), neither updating, reopening nor resolving it; the next run catches up. A write that committed after the
+read began but was stamped just before it (the moment between the listener's write and its commit) can still be
+undone by that run; the next write or run puts it right.
 
 **The rule zone** is where a day starts for date rules: `wasichai.notifications.zone`; unset, the zone of the app's
 `Clock` bean when it has exactly one; else the system's, with a WARN at start. It is settled once, when the
@@ -102,7 +118,7 @@ object resolves what its rules published (`NotificationRuleCleanup`), then delet
 | Property | Default | Meaning |
 |---|---|---|
 | `wasichai.notifications.enabled` | `true` | `false` removes the notifications beans, routes, loop, stream and migration |
-| `wasichai.notifications.tick` | `30s` | how often the loop looks for due sources; `0s` turns the loop off (tests) |
+| `wasichai.notifications.tick` | `30s` | how often the loop looks for due sources; `0s` turns the loop off, for tests only (they drive it with `runSource`) |
 | `wasichai.notifications.rule-interval` | `15m` | how often date rules run; must be positive, or the start fails |
 | `wasichai.notifications.rule-max-notifications` | `100` | cap per rule and organization, 1–200; out of range fails the start |
 | `wasichai.notifications.retention` | `90d` | resolved or expired notifications older than this are purged |
@@ -146,7 +162,8 @@ notifications.resolve(organizationId, "caja.pagos", "pago-$pagoId")
 
 - **Transactions.** Every call joins the caller's transaction ([ADR-038](../adr/0038-record-service-joins-the-callers-transaction.md)),
   or runs in its own. A rollback takes the notification with it; the live signal goes out only with the commit.
-- **`source`** names the producer: `^[a-z][a-z0-9_.:-]{1,80}$`. `manual` and `rule:…` are the module's own and refused.
+- **`source`** names the producer: `^[a-z][a-z0-9_.:-]{1,80}$`. `manual` and `rule:…` are the module's own and refused;
+  so are `purge` and `rules`, the loop's own keys, by `publish`, `resolve` and `resolveAll` alike.
 - **`key`** (`^[A-Za-z0-9_.:/-]{1,200}$`) makes `publish` an upsert on (organization, source, key); without one every
   call inserts a new notification. `resolve` answers `false` when no open notification has that key.
 - **Lenient about people.** An unknown user, email, role or unit is dropped with a WARN, so a person who left never
@@ -154,7 +171,9 @@ notifications.resolve(organizationId, "caja.pagos", "pago-$pagoId")
 - **Lenient about length.** A title over 200 characters or a body over 4000 is cut, ending in "…".
 - **Strict about format.** A bad key, route, URL or tab, an expiry before the publication (or, without `publishAt`, not
   in the future), or a `RECORD` link to an object the organization does not have is an `IllegalArgumentException`: a
-  bug in the app. Role names and unit codes are trimmed and upper-cased, emails trimmed and lower-cased.
+  bug in the app. So is re-publishing a key without `publishAt` (which keeps the stored one) with an `expiresAt` not
+  after that stored publication: `expiresAt must be after publishAt`, never a database error. Role names and unit
+  codes are trimmed and upper-cased, emails trimmed and lower-cased.
 
 The audience is `Audience.All`, `User(id)`, `Email(email)`, `Role(name)` or `Unit(code)`; the link
 `NotificationLink.Record(objectName, recordId, tab)`, `Route(route, params, tab)` or `Url(url)`. A route key is
@@ -203,8 +222,10 @@ class TurnosAbiertos(
   and writes are scoped to the organization with no permission check; services that ask `CurrentUser` still refuse.
   Only the reconcile that follows is a transaction, one per organization.
 - `key` is the notifications' `source`: the same format as above, not `manual`, not `rule:…`, not `purge` or `rules`
-  (the loop's own items), unique among the app's sources, and the interval must be positive; otherwise the app does
-  not start.
+  (the loop's own keys, refused with that reason), unique among the app's sources, and the interval must be positive;
+  otherwise the app does not start.
+- The reconcile is refused for the organization (logged), like a malformed draft, when a draft without `publishAt`
+  would expire before the publication its stored notification keeps.
 - Do not also `Notifications.publish` under a source's key: the source would resolve what `publish` wrote.
 - **Aggregate.** "12 permits expire this week" with a link to the list, not one notification per record: an inbox
   that floods is ignored. Here the title carries the count, so a new count updates the notification in place and
@@ -214,7 +235,8 @@ class TurnosAbiertos(
 `wasichai.notifications.tick=0s`) and manual runs. It answers `false` when another replica holds the source's lock.
 
 **Implements:** `wasichai.core.data.RecordChangeListener`, for date rules (`NotificationRuleListener`, last in order:
-a changed record is evaluated against its rules at once, inside the writer's transaction; a deleted one resolves);
+a changed record is evaluated against its rules at once, inside the writer's transaction, and its open notification
+updated or resolved; a deleted one resolves; creating and reopening wait for the next run);
 `wasichai.core.metadata.ObjectRemovalListener`, for date rules (`NotificationRuleCleanup`: deleting an object resolves
 what its rules published, in the delete's transaction, before the rules go with the object);
 `wasichai.core.metadata.FieldUsage`, for date rules (`NotificationRuleFieldUsage`: a rule, disabled ones included,
@@ -251,7 +273,7 @@ data:{"kinds":{"INFO":{"active":2,"unread":1,"overdue":0},"WARNING":{…},"ACTIO
   commit and dropped on rollback. The payload is ids only, `{"o":"<org>"}` for a change to notifications and
   `{"o":"<org>","u":"<user>"}` for one person's receipts, so another person's reads never wake my stream. A payload
   that is not one of these is ignored. The channel name must fit PostgreSQL's 63 characters, which bounds the
-  metadata schema's name to 49.
+  metadata schema's name to 49; a longer one fails the start, with or without the listener.
 - **`NotificationListener`** holds one `LISTEN` connection per replica, outside the pool (`Connections.unpooled`), and
   feeds every open stream of that replica. It reconnects with backoff (1 s up to 30 s), checks the connection with
   `SELECT 1` every 60 s (one that takes over 10 s counts as lost), and after every (re)connect tells every stream to

@@ -1254,8 +1254,9 @@ never changed: `PUT` and `DELETE` answer `409 Notification is owned by its sourc
 
 The list filters, each optional and case-insensitive: `source` (exact), `kind`, `unit` (a code: those addressed to that
 unit, so a client can warn before deleting it) and `status`: `open` (not resolved, in its window), `scheduled` (not
-resolved, `publishAt` ahead) or `ended` (resolved or expired). An unknown `kind`, `status` or `unit` is `400` on that
-parameter. The newest created come first (`createdAt`, not `publishAt`). Paging is core's `PageResponse`.
+resolved, `publishAt` ahead) or `ended` (resolved or expired). A blank one is no filter, as in the inbox. An unknown
+`kind`, `status` or `unit` is `400` on that parameter. The newest created come first (`createdAt`, not `publishAt`).
+Paging is core's `PageResponse`.
 
 ## My notifications
 
@@ -1401,14 +1402,19 @@ object or rule is `404`.
   most `untilDays`; `fromDays` and `untilDays` are within ±365. A bad rule is one `400 Invalid notification rule` naming
   every field (`stages[1].fromDays`, `conditions[0].value`, `audience[2]`, `tab`…).
 - **`PUT`** replaces the whole rule; a body `name` other than the path's is `400` (a rule is not renamed). Enabled, it
-  runs at once; disabled, its notifications are resolved in the same transaction. **`run`** on a disabled rule is
-  `409 Notification rule '<name>' is disabled`: enabling it is the way to run it.
+  runs at once; disabled, its notifications are resolved. Either way the save and what follows are one transaction:
+  a run that fails (`500`) leaves the rule as it was, and so does a `POST` (no rule is left behind). **`run`** on a
+  disabled rule is `409 Notification rule '<name>' is disabled`: enabling it is the way to run it.
 - **What it gives.** Each record in the window is one notification of source `rule:<name>`, keyed by the record id,
   with the rule's audience and a `RECORD` link to the record and `tab`. A run takes at most
   `wasichai.notifications.rule-max-notifications` records (100), earliest dates first; a record that left the window
-  has its notification resolved. The rules also run every `wasichai.notifications.rule-interval` (15 minutes), and a
-  record write re-evaluates that record at once (that one record, whatever the cap); deleting the record resolves its
-  notification. A run reads records as the module, with no permission or record-level scope.
+  has its notification resolved. The rules also run every `wasichai.notifications.rule-interval` (15 minutes). A
+  record write re-evaluates that record at once, but only touches a notification the rule has **open**: it updates it
+  in place, or resolves it when the record left the window or a condition stopped holding; deleting the record
+  resolves it. A record that enters the window, or comes back to it, appears on the next run (`POST`, `PUT`, `run`,
+  or the loop): only a run sees the cap, so a record past it never comes and goes with each write. A run reads
+  records as the module, with no permission or record-level scope. A rule whose field is no longer a `DATE` or
+  `DATETIME` field is skipped with a WARN.
 - **Lifecycle.** Disabling or deleting a rule resolves its notifications (a delete in one transaction with them).
   Deleting the object resolves what its rules published, then deletes the rules. A field a rule reads, disabled rules
   included, cannot be deleted: `409 Field '…' is used by notification rule '<name>'`. Its notifications are not

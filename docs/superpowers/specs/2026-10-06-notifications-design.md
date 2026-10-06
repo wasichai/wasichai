@@ -393,7 +393,12 @@ change its fingerprint as time passes.
 | (no key) | — | always insert |
 
 Two writers racing on one key meet on the unique constraint: insert with `ON CONFLICT DO NOTHING`, and on conflict go
-the update path with the row locked (`FOR UPDATE`). Every change is followed by one `pg_notify` (section D).
+the update path with the row locked (`FOR UPDATE`). Every change is followed by one `pg_notify` (section D). Writers of
+one (organization, source) also take turns: each write holds
+`ClusterLock.withXactLock("wasichai.notifications.<org>.<source>")` until its transaction ends (section C, the
+reconciler). A draft without `publishAt` keeps the stored one (or takes now); an `expiresAt` not after that is an
+`IllegalArgumentException` (`expiresAt must be after publishAt`) before anything is written, never the table's window
+check failing.
 
 `resolve` sets `resolved_at = now()` on the open row with that key; `resolveAll` on every open row of the source.
 
@@ -458,9 +463,11 @@ dismissible}`. `overdue` = `due_at < now`. `latest` is the newest active notific
 ### The loop (`NotificationLoop`, a `SmartLifecycle` built like `AutomationDrain`)
 
 Work items: every `NotificationSource` bean (`ObjectProvider<NotificationSource>.orderedStream()`), plus the module's
-own `rules` item at `rule-interval`. Two items with the same key fail the start, so a source cannot take `rules`; nor
-`purge`, the purge's run key. A source's `interval` (and `rule-interval`) must be positive, or the start fails. Each tick
-(`tick`, `0s` = off):
+own `rules` item at `rule-interval`. Two items with the same key fail the start. `rules` and `purge` (the purge's run
+key) are the loop's own keys: a source keyed with either fails the start saying so, and `Notifications.publish`,
+`resolve` and `resolveAll` refuse them as sources (`IllegalArgumentException`). A source's `interval` (and
+`rule-interval`) must be positive, or the start fails. Each tick (`tick`; `0s` = off, for tests only, which drive the
+loop with `runSource`):
 
 1. A work item is due when `notification_source_runs.last_run_at` is missing or older than its interval.
 2. A due item runs under `ClusterLock.tryLock("wasichai.notifications.<key>")`; inside, it re-checks due-ness, so N
@@ -469,7 +476,10 @@ own `rules` item at `rule-interval`. Two items with the same key fail the start,
    `drafts = source.currentNotifications(org, now)` **outside any transaction** (a source may call remote systems), then
    the reconcile, which is the only transactional step. The `rules` item runs every enabled rule of the organization
    (below); one failing rule is logged and the others still run.
-4. `last_run_at` is upserted. A failing organization or source is logged and the loop moves on.
+4. `last_run_at` is upserted. A failing organization or source is logged and the loop moves on. A
+   `CancellationException` from a source or rule (its own `withTimeout`, a cancelled future) is such a failure: only
+   the loop's own cancellation (`stop`) propagates. A tick that fails anyway is logged and the next one still comes:
+   an error never reaches `Flux.interval`.
 
 Daily, under `tryLock("wasichai.notifications.purge")`, notifications resolved or expired longer than `retention` ago
 are deleted.
@@ -488,6 +498,16 @@ ADR-039 left loops to apps because no library work needed one. This loop is the 
   reopen or skip per draft (the upsert table above) and resolves every open row whose key is not among the drafts,
   keyless open rows of the source included.
 - One `pg_notify` per organization when anything changed. Answers `{created, updated, reopened, resolved}`.
+- **Writers take turns.** The reconcile, like every write of the source (`publish`, `resolve`, `resolveAll`, the rule
+  listener, an admin `PUT` or `DELETE`), holds `ClusterLock.withXactLock("wasichai.notifications.<org>.<source>")`
+  until its transaction ends. The lock alone is not enough: the drafts were read before it, outside any transaction.
+  So the reconcile takes the instant its read began (`readStart`, the run's `now`) and leaves alone every row whose
+  `updated_at` is later: someone who saw newer data wrote it (the listener, a publish). Such a row is neither updated,
+  reopened nor resolved; the next run catches up. Equal is not later: a frozen test clock stamps the run's own instant.
+  What remains is a write stamped before the read began but committed after it (the moment between the listener's
+  write and its commit); a run can undo it, and the next write or run puts it right.
+- A draft that would expire before the publication its stored row keeps refuses the batch (logged), like a malformed
+  draft.
 
 Mixing `Notifications.publish` and a `NotificationSource` under the same source key is unsupported (the source would
 resolve what `publish` wrote); documented.
@@ -498,8 +518,8 @@ resolve what `publish` wrote); documented.
 |---|---|
 | `GET /api/notification-rules` | every rule of the organization, with its object (`MANAGE_METADATA`), by object name, then rule name |
 | `GET /api/objects/{object}/notification-rules` | the object's rules, by name |
-| `POST /api/objects/{object}/notification-rules` | `201`; runs the rule at once when enabled; a name the organization already has is `409` |
-| `GET`, `PUT`, `DELETE /api/objects/{object}/notification-rules/{name}` | `PUT` replaces (a body `name` other than the path's is `400`: a rule is not renamed); enabled it runs, disabled it resolves its notifications in the same transaction; `DELETE` → `204`, deleting and resolving in one transaction |
+| `POST /api/objects/{object}/notification-rules` | `201`; runs the rule at once when enabled, in one transaction with the insert; a name the organization already has is `409` |
+| `GET`, `PUT`, `DELETE /api/objects/{object}/notification-rules/{name}` | `PUT` replaces (a body `name` other than the path's is `400`: a rule is not renamed); enabled it runs, disabled it resolves its notifications, in one transaction with the save; `DELETE` → `204`, deleting and resolving in one transaction |
 | `POST /api/objects/{object}/notification-rules/{name}/run` | `{created, updated, reopened, resolved}`; `409` for a disabled rule |
 
 Every answer is `{object, name, label, enabled, field, stages, untilDays, conditions, audience, title, body, tab}`:
@@ -549,10 +569,17 @@ the normalised rule (stages by `fromDays`, the audience normalised) and the name
   title template is 1–200 characters and the body at most 4000; the audience is strict; the tab passes its format
   (its violation is named `tab`).
 - **On record change** (`NotificationRuleListener : RecordChangeListener`, last in order): for an object with enabled
-  rules, the changed record is evaluated against `change.after` by the same pure evaluator and its one key is upserted
-  or resolved; `DELETED` resolves. A renewed licence stops saying "vence" at once instead of at the next run. The cap
-  does not apply here: it is one record. Evaluation errors are logged and skipped; SQL errors propagate (the writer's
+  rules, the changed record is evaluated against `change.after` by the same pure evaluator, and only a key the rule has
+  **open** is touched: updated in place, or resolved when the record left the window; `DELETED` resolves. A renewed
+  licence stops saying "vence" at once instead of at the next run. Creating a notification, or reopening a resolved
+  one, is left to the next run (`POST` and `PUT` run the rule at once, the loop every `rule-interval`): only the run
+  sees the cap, so a record past it does not flap (published by a write, resolved by the run, reopened by the next
+  write, its receipts wiped each time). Evaluation errors are logged and skipped; SQL errors propagate (the writer's
   transaction is aborted anyway).
+- **A stale rule.** Saving checks the field, and core refuses to delete one a rule reads; should the field still be
+  missing or no longer `DATE`/`DATETIME`, the run and the listener skip that rule with one WARN, never an error per
+  record. In the loop, each rule runs on its own: an object whose definition does not load fails its own rules only.
+- **`POST` and `PUT`** save and run (or resolve) in one transaction: a run that fails leaves the rule as it was.
 - **Lifecycle:** disabling or deleting a rule resolves its notifications. Deleting the object resolves what its rules
   published first (`NotificationRuleCleanup : ObjectRemovalListener`, in the delete's transaction), then the cascade
   removes the rules. `NotificationRuleFieldUsage : FieldUsage` names "notification rule '<name>'", disabled rules
@@ -565,8 +592,8 @@ age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
 
 - **NOTIFY.** `SELECT pg_notify(:channel, :payload)` through `DatabaseClient`, inside the writing transaction: delivered
   on commit, dropped on rollback. The channel is `<metadataSchema>_notifications`, at most 63 characters (PostgreSQL
-  would truncate it), so the metadata schema's name is effectively at most 49; the length is checked when the listener
-  is built and on every notify. The payload is ids only: `{"o":"<org>"}` for a change to
+  would truncate it), so the metadata schema's name is effectively at most 49; the length is checked when the
+  repositories are built (so a long name fails the start, listener or not) and on every notify. The payload is ids only: `{"o":"<org>"}` for a change to
   notifications, `{"o":"<org>","u":"<user>"}` for one person's receipts. PostgreSQL folds identical payloads within one
   transaction, so a batch notifies once.
 - **`NotificationListener`** (`SmartLifecycle`): one connection under the pool (`Connections.unpooled`), cast to
