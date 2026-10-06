@@ -75,19 +75,27 @@ every `MANAGE_ORGANIZATION` route, ADR-043).
 **The loop.** `NotificationLoop`, a `SmartLifecycle` built like automation's drain, looks every `tick` for due work:
 each `NotificationSource` bean at its own interval and the date rules at `rule-interval`. A due item runs under
 `ClusterLock.tryLock("wasichai.notifications.<key>")` and checks again that it is still due, so N replicas run it once
-per interval (`notification_source_runs` records the last run). It runs for every organization, as the platform
-(`RecordService.asPlatform`); a failing organization or source is logged and the loop moves on. Once a day, under its
-own lock, it deletes notifications resolved or expired longer than `retention` ago. ADR-039 left loops to apps; this one
-is the module's own work, as the drain is automation's (ADR-046).
+per interval (`notification_source_runs` records the last run). It runs for every organization: a source as the
+platform (`RecordService.asPlatform`), the date rules through core's `RecordStore` port (below); a failing
+organization, source or rule is logged and the loop moves on. Once a day, under its own lock, it deletes notifications
+resolved or expired longer than `retention` ago. ADR-039 left loops to apps; this one is the module's own work, as the
+drain is automation's (ADR-046).
 
 **Date rules** (`definition` of a rule, [../api/rest.md#notification-rules](../api/rest.md#notification-rules)): a
 `DATE` or `DATETIME` field, 1–5 stages (`fromDays` → kind), an `untilDays`, conditions (`EQ`, `EMPTY`, `NOT_EMPTY`,
 all of them must hold), an audience, a title and body with `{{field}}`, `{{days}}`, `{{date}}` and `{{object}}`, and a
 tab. Each record in the window gives one notification of source `rule:<name>`, keyed by the record id, linking to the
-record and the tab. A run is capped at `rule-max-notifications` records per rule and organization, earliest dates
-first, with a WARN past the cap. A record change re-evaluates that record at once, so a renewed licence stops saying
-"vence" without waiting for the next run; a deleted record resolves its notification. Disabling or deleting a rule
-resolves its notifications; deleting the object deletes its rules.
+record and the tab. A run reads the window's records through core's `RecordStore` port, outside any transaction and
+with no permission check, so it works the same inside a request (`POST`, `PUT`, `run`) and in the loop;
+`RecordService.asPlatform` would refuse inside a request. A run is capped at `rule-max-notifications` records per rule
+and organization, earliest dates first, with a WARN past the cap. A record change re-evaluates that record at once
+(the cap does not apply to that one record), so a renewed licence stops saying "vence" without waiting for the next
+run; a deleted record resolves its notification. Disabling or deleting a rule resolves its notifications; deleting the
+object resolves what its rules published (`NotificationRuleCleanup`), then deletes the rules.
+
+**The rule zone** is where a day starts for date rules: `wasichai.notifications.zone`; unset, the zone of the app's
+`Clock` bean when it has exactly one; else the system's, with a WARN at start. It is settled once, when the
+`ruleNotifications` bean is built.
 
 ## Configuration
 
@@ -95,7 +103,7 @@ resolves its notifications; deleting the object deletes its rules.
 |---|---|---|
 | `wasichai.notifications.enabled` | `true` | `false` removes the notifications beans, routes, loop, stream and migration |
 | `wasichai.notifications.tick` | `30s` | how often the loop looks for due sources; `0s` turns the loop off (tests) |
-| `wasichai.notifications.rule-interval` | `15m` | how often date rules run |
+| `wasichai.notifications.rule-interval` | `15m` | how often date rules run; must be positive, or the start fails |
 | `wasichai.notifications.rule-max-notifications` | `100` | cap per rule and organization, 1–200; out of range fails the start |
 | `wasichai.notifications.retention` | `90d` | resolved or expired notifications older than this are purged |
 | `wasichai.notifications.snooze-max` | `30d` | the furthest a snooze may reach |
@@ -103,7 +111,7 @@ resolves its notifications; deleting the object deletes its rules.
 | `wasichai.notifications.stream-refresh` | `60s` | every stream recomputes this often, whatever it heard |
 | `wasichai.notifications.stream-heartbeat` | `25s` | a comment line keeps proxies from closing an idle stream |
 | `wasichai.notifications.stream-debounce` | `500ms` | signals closer than this cost one recompute |
-| `wasichai.notifications.zone` | unset | the zone date rules count days in; unset: the app's unique `Clock` bean's zone, else the system's |
+| `wasichai.notifications.zone` | unset | the zone date rules count days in; unset: the app's unique `Clock` bean's zone, else the system's (WARN) |
 | `wasichai.notifications.date-pattern` | `dd/MM/yyyy` | how `{{date}}` and `DATE` values print in rule templates |
 
 Env form: `WASICHAI_NOTIFICATIONS_ENABLED`. The module reads "now" from the app's `Clock` bean when it has exactly one
@@ -194,8 +202,9 @@ class TurnosAbiertos(
 - It runs **outside any transaction**, so it may call remote systems, and **as the platform**: `RecordService` reads
   and writes are scoped to the organization with no permission check; services that ask `CurrentUser` still refuse.
   Only the reconcile that follows is a transaction, one per organization.
-- `key` is the notifications' `source`: the same format as above, not `manual`, not `rule:…`, not `purge` (the loop's
-  own), unique among the app's sources, and the interval must be positive; otherwise the app does not start.
+- `key` is the notifications' `source`: the same format as above, not `manual`, not `rule:…`, not `purge` or `rules`
+  (the loop's own items), unique among the app's sources, and the interval must be positive; otherwise the app does
+  not start.
 - Do not also `Notifications.publish` under a source's key: the source would resolve what `publish` wrote.
 - **Aggregate.** "12 permits expire this week" with a link to the list, not one notification per record: an inbox
   that floods is ignored. Here the title carries the count, so a new count updates the notification in place and
@@ -204,16 +213,21 @@ class TurnosAbiertos(
 `NotificationLoop.runSource(key)` runs one source now, due or not, for every organization: for an app's tests (with
 `wasichai.notifications.tick=0s`) and manual runs. It answers `false` when another replica holds the source's lock.
 
-**Implements:** `wasichai.core.data.RecordChangeListener`, for date rules (a changed record is evaluated against its
-rules at once, inside the writer's transaction; a deleted one resolves); `wasichai.core.metadata.FieldUsage`, for date
-rules (a rule names itself, "notification rule '<name>'", as a user of a field it reads, so a field delete warns about
-it). It uses core's ports, never core's tables: `OrgUnitDirectory`, `UserDirectory`, `OrganizationRepository.ids()`,
-`ClusterLock` and `Connections.unpooled`.
+**Implements:** `wasichai.core.data.RecordChangeListener`, for date rules (`NotificationRuleListener`, last in order:
+a changed record is evaluated against its rules at once, inside the writer's transaction; a deleted one resolves);
+`wasichai.core.metadata.ObjectRemovalListener`, for date rules (`NotificationRuleCleanup`: deleting an object resolves
+what its rules published, in the delete's transaction, before the rules go with the object);
+`wasichai.core.metadata.FieldUsage`, for date rules (`NotificationRuleFieldUsage`: a rule, disabled ones included,
+names itself, "notification rule '<name>'", as a user of a field it reads, so deleting that field is a `409`). It uses
+core's ports, never core's tables: `OrgUnitDirectory`, `UserDirectory`, `RoleDirectory`, `RecordStore`,
+`OrganizationRepository.ids()`, `ClusterLock` and `Connections.unpooled`.
 
 **Overridable beans:** `audienceResolver`, `notificationPreparer`, `notificationRepository`, `inboxRepository`,
 `notificationWriter`, `inboxService`, `inboxController`, `notifications`, `notificationAdminService`,
 `notificationAdminController`, `notificationLoop`, `notificationSignals`, `notificationListener`,
-`notificationStreamController` — all `@ConditionalOnMissingBean`, so an app can replace any of them. The migration bean
+`notificationStreamController`, and for date rules `notificationRuleRepository`, `ruleNotifications`,
+`notificationRuleService`, `notificationRuleController`, `notificationRuleListener`, `notificationRuleCleanup` and
+`notificationRuleFieldUsage` — all `@ConditionalOnMissingBean`, so an app can replace any of them. The migration bean
 (`wasichaiNotificationsMigration`) is not: core's own `ModuleMigration` would always back off first.
 
 ## Live delivery
@@ -240,9 +254,10 @@ data:{"kinds":{"INFO":{"active":2,"unread":1,"overdue":0},"WARNING":{…},"ACTIO
   metadata schema's name to 49.
 - **`NotificationListener`** holds one `LISTEN` connection per replica, outside the pool (`Connections.unpooled`), and
   feeds every open stream of that replica. It reconnects with backoff (1 s up to 30 s), checks the connection with
-  `SELECT 1` every 60 s, and after every (re)connect tells every stream to recompute, so a gap costs one recompute and
-  loses nothing. It is not created with `listen=false` or without the r2dbc-postgresql driver on the classpath, and it
-  turns itself off with a WARN when the connection is not PostgreSQL's.
+  `SELECT 1` every 60 s (one that takes over 10 s counts as lost), and after every (re)connect tells every stream to
+  recompute, so a gap costs one recompute and loses nothing. It is not created with `listen=false` or without the
+  r2dbc-postgresql driver on the classpath. A connection that is not PostgreSQL's is the one failure it does not
+  retry: it turns itself off with a WARN.
 - **The refresh floor.** Every stream recomputes every `stream-refresh` whatever it heard: a window that opens, or an
   expiry, writes nothing and notifies nobody. Signals closer than `stream-debounce` cost one recompute. With `LISTEN`
   down, the stream degrades to polling at the floor, never to silence.

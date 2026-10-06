@@ -131,7 +131,7 @@ class OrgUnitDirectory(db: DatabaseClient, schemas: WasichaiSchemas) {
     suspend fun closureOf(organizationId: UUID, userId: UUID): Set<UUID>
     suspend fun idsByCode(organizationId: UUID, codes: Collection<String>): Map<String, UUID>
     suspend fun codesById(organizationId: UUID, ids: Collection<UUID>): Map<UUID, String>
-    suspend fun unitsOf(organizationId: UUID, userId: UUID): List<OrgUnitRef>   // direct units, path root -> unit
+    suspend fun unitsOf(organizationId: UUID, userId: UUID): List<OrgUnitRef>   // direct units, path root -> unit, by label, code
 }
 
 class UserDirectory(db: DatabaseClient, schemas: WasichaiSchemas) {
@@ -139,6 +139,7 @@ class UserDirectory(db: DatabaseClient, schemas: WasichaiSchemas) {
     suspend fun idsByEmail(organizationId: UUID, emails: Collection<String>): Map<String, UUID>
     // enabled people of the tenant among ids
     suspend fun existing(organizationId: UUID, ids: Collection<UUID>): Set<UUID>
+    // any user of the tenant, disabled ones too: shows who an alert named
     suspend fun emailsById(organizationId: UUID, ids: Collection<UUID>): Map<UUID, String>
 }
 ```
@@ -157,18 +158,20 @@ Also in core:
 
 | Route | Body / answer |
 |---|---|
-| `GET /api/org-units` | `[{code, label, parentCode, memberCount}]`, sorted by label; the UI builds the tree |
-| `POST /api/org-units` | `{code, label, parentCode?}` → `201` `{code, label, parentCode, memberCount}`; `409` repeated code; `400` bad code or label, unknown parent |
-| `GET /api/org-units/{code}` | `{code, label, parentCode, members: [{id, email, displayName}]}`; `404` unknown |
-| `PUT /api/org-units/{code}` | a map, as `PUT /api/auth/me/preferences`: `label` sets it; `parentCode` moves (`null` = root); a missing key keeps; an unknown key is `400` |
+| `GET /api/org-units` | `[{code, label, parentCode, memberCount}]`, sorted by label, then code; the UI builds the tree |
+| `POST /api/org-units` | `{code, label, parentCode?}` → `201` `{code, label, parentCode, memberCount}`; a missing or blank `parentCode` is a root; `409` repeated code; `400` bad code or label, unknown parent, too deep |
+| `GET /api/org-units/{code}` | `{code, label, parentCode, members: [{id, email, displayName}]}`, members by email; `404` unknown |
+| `PUT /api/org-units/{code}` | a map, as `PUT /api/auth/me/preferences`: `label` sets it; `parentCode` moves (`null` or blank = root); a missing key keeps; an unknown key is `400` |
 | `DELETE /api/org-units/{code}` | `204`; `409` when it has sub-units or members |
-| `PUT /api/users/{id}/org-units` | `{units: [codes]}` replaces the user's set → `AdminUserResponse`; `400` unknown code; `404` unknown user or a service account |
-| `GET /api/auth/me/org-units` | any signed-in caller: `[{code, label, path}]`, the caller's direct units |
+| `PUT /api/users/{id}/org-units` | `{units: [codes]}` replaces the user's set (a body without `units` empties it) → `AdminUserResponse`; `400` unknown code; `404` unknown user or a service account |
+| `GET /api/auth/me/org-units` | any signed-in caller: `[{code, label, path}]`, the caller's direct units by label, then code; a service account reads `[]` |
 
-- **Moves** run under `ClusterLock.withXactLock("wasichai.org-units.<org>")` inside the service's transaction, so two
-  moves cannot cross into a cycle. A move under the unit itself or one of its descendants is `400`. Depth (root = 1) is
-  capped at 10, counting the moved subtree's height.
-- `AdminUserResponse` gains `orgUnits: List<String>` (codes, sorted). `GET /api/auth/me` does not change.
+- The path `{code}` is normalised as a code is (`trim().uppercase()`).
+- **Every write** (create, update, delete, a user's set) runs under `ClusterLock.withXactLock("wasichai.org-units.<org>")`
+  inside the service's transaction, so two moves cannot cross into a cycle, a child cannot land on a unit being
+  deleted, and depth holds against a concurrent move. A move under the unit itself or one of its descendants is `400`.
+  Depth (root = 1) is capped at 10 on create and on move, a move counting the moved subtree's height.
+- `AdminUserResponse` gains `orgUnits: List<String>` (codes, sorted by code). `GET /api/auth/me` does not change.
 
 ## B. Module `wasichai-notifications` (ADR-046, D32)
 
@@ -187,8 +190,8 @@ Also in core:
 |---|---|---|
 | `enabled` | `true` | the module's switch |
 | `tick` | `30s` | how often the loop looks for due sources; `0s` turns the loop off (tests) |
-| `rule-interval` | `15m` | how often date rules run |
-| `rule-max-notifications` | `100` | cap per rule and organization, at most 200 |
+| `rule-interval` | `15m` | how often date rules run; must be positive, or the start fails |
+| `rule-max-notifications` | `100` | cap per rule and organization, 1–200; out of range fails the start |
 | `retention` | `90d` | resolved or expired notifications older than this are purged |
 | `snooze-max` | `30d` | the furthest a snooze may reach |
 | `listen` | `true` | open the `LISTEN` connection |
@@ -327,6 +330,7 @@ class Notifications {
 }
 
 // an app's computed states. everything that should be open now, each with a key; what is missing next time is resolved.
+// key: a source format, not manual, rule:…, purge or rules (the loop's own items), unique; interval positive. else no start.
 interface NotificationSource {
     val key: String
     val interval: Duration get() = Duration.ofMinutes(15)
@@ -356,23 +360,23 @@ Audience over REST: `{"type": "ALL"}`, `{"type": "USER", "value": "<uuid>"}`, `{
 | `body` | at most 4000 characters, plain text (the UI never renders it as HTML) |
 | `source` | `^[a-z][a-z0-9_.:-]{1,80}$`; `manual` and anything starting with `rule:` are the module's own |
 | `key` | `^[A-Za-z0-9_.:/-]{1,200}$` |
-| `audience` | not empty; a role name is trimmed and upper-cased; a unit code too; an email is trimmed and lower-cased |
+| `audience` | not empty; a role name and a unit code are trimmed, upper-cased and must match `^[A-Z][A-Z0-9_]{1,48}$`; an email is trimmed, lower-cased and not blank |
 | `link.route` | `^[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+$`, at most 10 params, each key `^[A-Za-z][A-Za-z0-9_]{0,39}$`, each value ≤ 200 |
 | `link.tab` | trimmed, upper-cased, `^[A-Z][A-Z0-9_]{0,39}$` (the TAB key format, section E); not checked against pages |
-| `link.url` | `http` or `https`, at most 2000 characters |
+| `link.url` | absolute `http` or `https` with a host, at most 2000 characters |
 | `link.object` | an object of the organization (`MetadataService.loadDefinition`); its id is stored in `link_object_id` |
-| window | `expiresAt > publishAt` when both are known (`publishAt` defaults to now) |
+| window | `expiresAt > publishAt`; without `publishAt`, `expiresAt` in the future |
 
 **What "of a source" means:** any `source` other than `manual` (`rule:*`, an app's `NotificationSource` key, or a
 key an app only publishes under). Such a notification cannot be edited or deleted over REST, and its ACTIONs cannot be
 dismissed: the app resolves them (`resolve`, or by leaving them out of its source) or gives them an `expiresAt`.
 
 **REST is strict, Kotlin is lenient about recipients and length.** From Kotlin a title over 200 characters or a body
-over 4000 is cut with "…" rather than refused, so wording never aborts a business transaction.
- Over REST an unknown user, email, role or unit is a `400` naming
-`audience[i]`. From Kotlin an unknown recipient is dropped with a WARN, so a person who left never rolls back the
-business transaction the notification was published in; if none is left, `publish` answers `null` and writes nothing.
-A malformed draft (format, an unknown object) is an `IllegalArgumentException` from Kotlin: that is a bug in the app.
+over 4000 is cut with "…" rather than refused, so wording never aborts a business transaction. Over REST an unknown
+user, email, role or unit is a `400` naming `audience[i]`. From Kotlin an unknown recipient is dropped with a WARN, so
+a person who left never rolls back the business transaction the notification was published in; if none is left,
+`publish` answers `null` and writes nothing. A malformed draft (format, an unknown object) is an
+`IllegalArgumentException` from Kotlin: that is a bug in the app.
 
 **Fingerprint:** SHA-256 (hex) over a canonical rendering of `kind`, `title`, `body`, `link`, the draft's own
 `publishAt` (null stays null), `expiresAt`, `dueAt` and the sorted resolved targets. A draft with no `publishAt` does not
@@ -418,31 +422,32 @@ WHERE n.organization_id = :org
 ### REST
 
 **Administration** — `MANAGE_ORGANIZATION`; manual notifications only (a notification of a source or a rule answers
-`409` "owned by its source" to `PUT` and `DELETE`):
+`409 Notification is owned by its source` to `PUT` and `DELETE`):
 
 | Route | |
 |---|---|
-| `GET /api/notifications?source&kind&unit&status=open\|scheduled\|ended&page&size` | `PageResponse` of the admin view, newest first; `unit` (a code) keeps those addressed to that unit, so the UI can warn before deleting it |
+| `GET /api/notifications?source&kind&unit&status=open\|scheduled\|ended&page&size` | `PageResponse` of the admin view, by `created_at DESC, id DESC`; `unit` (a code) keeps those addressed to that unit, so the UI can warn before deleting it; `kind`, `status` and `unit` are case-insensitive, an unknown one is `400` |
 | `POST /api/notifications` | `{kind, title, body?, link?, audience, publishAt?, expiresAt?, dueAt?}` → `201`; `source` = `manual`, `created_by` = the caller |
 | `GET /api/notifications/{id}` | the admin view |
-| `PUT /api/notifications/{id}` | same body, full replace, same receipt rule as an upsert |
+| `PUT /api/notifications/{id}` | same body, full replace, same receipt rule as an upsert; without `publishAt` the stored one stays, and `expiresAt` must follow it while it is ahead |
 | `DELETE /api/notifications/{id}` | `204` |
 
 Admin view: `{id, kind, title, body, link, audience: [{type, value, email?}], publishAt, expiresAt, dueAt, source,
 key, resolvedAt, createdAt, updatedAt, readCount}`. `status`: `open` = not resolved and in its window; `scheduled` = not
 resolved, `publish_at > now`; `ended` = resolved or expired.
 
-**My notifications** — any person; a service account gets `403` (it is not a person); a notification the caller cannot
-see, or of another tenant, is `404`:
+**My notifications** — any person; a service account gets `403 A service account has no notifications`; a notification
+the caller cannot see, or of another tenant, is `404`. Receipts do not hide an item from these routes: a dismissed one
+can still be read.
 
 | Route | |
 |---|---|
-| `GET /api/auth/me/notifications?kind&state=active\|unread\|snoozed&page&size` | `PageResponse` of inbox items |
+| `GET /api/auth/me/notifications?kind&state=active\|unread\|snoozed&page&size` | `PageResponse` of inbox items; `kind` and `state` are case-insensitive, an unknown one is `400` |
 | `GET /api/auth/me/notifications/summary` | `{kinds: {INFO: {active, unread, overdue}, WARNING: {…}, ACTION: {…}}, latest: {id, kind, title, publishAt, link} \| null}` |
 | `POST /api/auth/me/notifications/{id}/read` | `204` |
-| `POST /api/auth/me/notifications/{id}/dismiss` | `204`; `409` for an ACTION of a source or a rule: it leaves when the work is done |
+| `POST /api/auth/me/notifications/{id}/dismiss` | `204`; `409 This notification leaves when its work is done` for an ACTION of a source or a rule |
 | `POST /api/auth/me/notifications/{id}/snooze` | `{until}` → `204`; `400` unless `now < until ≤ now + snooze-max` |
-| `POST /api/auth/me/notifications/read-all` | `{kind?}` → `204` |
+| `POST /api/auth/me/notifications/read-all` | `{kind?}` → `204`; marks active unread items only (snoozed and dismissed stay) |
 | `GET /api/auth/me/notifications/stream` | `text/event-stream`, section D |
 
 Inbox item: `{id, kind, title, body, link, publishAt, expiresAt, dueAt, overdue, source, read, snoozedUntil,
@@ -452,15 +457,18 @@ dismissible}`. `overdue` = `due_at < now`. `latest` is the newest active notific
 
 ### The loop (`NotificationLoop`, a `SmartLifecycle` built like `AutomationDrain`)
 
-Work items: every `NotificationSource` bean (`ObjectProvider<NotificationSource>.orderedStream()`; two with the same key
-fail the start), plus the module's own `rules` item at `rule-interval`. Each tick (`tick`, `0s` = off):
+Work items: every `NotificationSource` bean (`ObjectProvider<NotificationSource>.orderedStream()`), plus the module's
+own `rules` item at `rule-interval`. Two items with the same key fail the start, so a source cannot take `rules`; nor
+`purge`, the purge's run key. A source's `interval` (and `rule-interval`) must be positive, or the start fails. Each tick
+(`tick`, `0s` = off):
 
 1. A work item is due when `notification_source_runs.last_run_at` is missing or older than its interval.
 2. A due item runs under `ClusterLock.tryLock("wasichai.notifications.<key>")`; inside, it re-checks due-ness, so N
    replicas run it once.
-3. For every `OrganizationRepository.ids()`, inside `runCatching`, inside `RecordService.asPlatform(org)`:
+3. For every `OrganizationRepository.ids()`, each on its own: a source runs inside `RecordService.asPlatform(org)`,
    `drafts = source.currentNotifications(org, now)` **outside any transaction** (a source may call remote systems), then
-   `NotificationReconciler.apply(org, source.key, drafts)`, which is the only transactional step.
+   the reconcile, which is the only transactional step. The `rules` item runs every enabled rule of the organization
+   (below); one failing rule is logged and the others still run.
 4. `last_run_at` is upserted. A failing organization or source is logged and the loop moves on.
 
 Daily, under `tryLock("wasichai.notifications.purge")`, notifications resolved or expired longer than `retention` ago
@@ -473,10 +481,12 @@ ADR-039 left loops to apps because no library work needed one. This loop is the 
 
 `apply(org, source, drafts)` runs in one transaction per organization:
 
-- Validates every draft (strict format, lenient recipients). A draft without a key, or two drafts with one key, refuse
-  the whole batch for that organization (logged): a source's output is a set keyed by `key`.
+- Validates every draft (strict format, lenient recipients). A malformed draft, a draft without a key, or two drafts
+  with one key, refuse the whole batch for that organization (logged): a source's output is a set keyed by `key`. A
+  draft whose recipients are all unknown is left out of the batch, so its stored notification resolves.
 - Loads the source's open rows plus resolved rows with the drafts' keys, then a pure `diff` decides insert, update,
-  reopen or skip per draft (the upsert table above) and resolves every open row whose key is not among the drafts.
+  reopen or skip per draft (the upsert table above) and resolves every open row whose key is not among the drafts,
+  keyless open rows of the source included.
 - One `pg_notify` per organization when anything changed. Answers `{created, updated, reopened, resolved}`.
 
 Mixing `Notifications.publish` and a `NotificationSource` under the same source key is unsupported (the source would
@@ -486,11 +496,14 @@ resolve what `publish` wrote); documented.
 
 | Route | |
 |---|---|
-| `GET /api/notification-rules` | every rule of the organization, with its object (`MANAGE_METADATA`) |
-| `GET /api/objects/{object}/notification-rules` | the object's rules |
-| `POST /api/objects/{object}/notification-rules` | `201`; runs the rule at once |
-| `GET`, `PUT`, `DELETE /api/objects/{object}/notification-rules/{name}` | `PUT` replaces and runs; `DELETE` → `204` and resolves its notifications |
-| `POST /api/objects/{object}/notification-rules/{name}/run` | `{created, updated, reopened, resolved}` |
+| `GET /api/notification-rules` | every rule of the organization, with its object (`MANAGE_METADATA`), by object name, then rule name |
+| `GET /api/objects/{object}/notification-rules` | the object's rules, by name |
+| `POST /api/objects/{object}/notification-rules` | `201`; runs the rule at once when enabled; a name the organization already has is `409` |
+| `GET`, `PUT`, `DELETE /api/objects/{object}/notification-rules/{name}` | `PUT` replaces (a body `name` other than the path's is `400`: a rule is not renamed); enabled it runs, disabled it resolves its notifications in the same transaction; `DELETE` → `204`, deleting and resolving in one transaction |
+| `POST /api/objects/{object}/notification-rules/{name}/run` | `{created, updated, reopened, resolved}`; `409` for a disabled rule |
+
+Every answer is `{object, name, label, enabled, field, stages, untilDays, conditions, audience, title, body, tab}`:
+the normalised rule (stages by `fromDays`, the audience normalised) and the name of its object.
 
 ```json
 {
@@ -506,29 +519,44 @@ resolve what `publish` wrote); documented.
 }
 ```
 
+- **Zone.** The rule zone is `wasichai.notifications.zone`; unset, the app's unique `Clock` bean's zone; else the
+  system's, with a WARN when the bean is built.
 - **Offset** = today − the field's date, in days, in the rule zone (`DATETIME`: its date in that zone). The record is
   in the window while `min(stages.fromDays) ≤ offset ≤ untilDays`; its kind is the stage with the largest
-  `fromDays ≤ offset`. `fromDays` and `untilDays` are within ±365, `stages` holds 1–5 entries with distinct `fromDays`.
+  `fromDays ≤ offset`. `fromDays` and `untilDays` are within ±365, `stages` holds 1–5 entries with distinct `fromDays`,
+  each at most `untilDays`.
 - **Due:** a `DATE` field is due at the start of the next day in the zone (the date itself still counts); a `DATETIME`
   at its value. A notification is `overdue` once that passes.
-- **Query:** `records.asPlatform(org) { records.rows(object, RecordQuery(page = PageRequest(0, cap), sort = field,
-  filters = <EQ conditions>, criteria = [window, EMPTY / NOT_EMPTY], count = false)) }`. The window is a
-  `RecordCriterion` on the quoted column with bound bounds. Earliest dates first; more than `cap` records in the window
-  log a WARN (an app that needs hundreds should aggregate in a `NotificationSource`).
+- **Query:** through core's `RecordStore` port, `store.query(definition, org, RecordQuery(page = PageRequest(0, cap +
+  1), sort = field, filters = <EQ conditions>, criteria = [window, EMPTY / NOT_EMPTY], count = false))`, outside any
+  transaction. Not `RecordService.asPlatform { rows }`: `POST`, `PUT` and `run` run a rule inside a request, where
+  `asPlatform` throws; the port works there and in the loop alike. No permission or record-level scope applies. The
+  window is a `RecordCriterion` on the quoted column with bound bounds. Earliest dates first; more than `cap` records
+  in the window log a WARN and only the first `cap` are notified (an app that needs hundreds should aggregate in a
+  `NotificationSource`). A record whose date does not read is logged and left out.
 - **Each record** gives a draft: key = record id, source = `rule:<name>`, kind by stage, link
   `Record(object, id, tab)`, the rule's audience, `dueAt` as above, title and body rendered.
-- **Templates:** `{{<field>}}`, `{{days}}` (date − today, may be negative), `{{date}}` and `{{object}}` (the object's
-  label). A DATE value prints with `date-pattern`, others as they come, null as empty. An unknown placeholder is a
-  `400` on save. The rendered title is cut at 200 characters with "…". Templates print field values without field
-  permissions: the author is a metadata administrator, and that is documented.
-- **On save:** the field exists and is `DATE` or `DATETIME`; condition fields exist; `op` is `EQ`, `EMPTY` or
-  `NOT_EMPTY`; an `EQ` value passes the field's codec; the audience is strict; the tab passes its format.
-- **On record change** (`NotificationRuleListener : RecordChangeListener`): for an object with enabled rules, the
-  changed record is evaluated against `change.after` by the same pure evaluator and its one key is upserted or
-  resolved; `DELETED` resolves. A renewed licence stops saying "vence" at once instead of at the next run. Evaluation
-  errors are logged and skipped; SQL errors propagate (the writer's transaction is aborted anyway).
-- **Lifecycle:** disabling or deleting a rule resolves its notifications; deleting the object cascades its rules.
-  `NotificationRuleFieldUsage : FieldUsage` names "notification rule '<name>'" when a field it reads is about to go.
+- **Templates:** `{{<field>}}` (a field of a core type), `{{days}}` (date − today, may be negative), `{{date}}` and
+  `{{object}}` (the object's label); the three built-ins win over a field of the same name. A DATE value prints with
+  `date-pattern`, a DATETIME as `<date-pattern> HH:mm` in the rule zone, others as they come, null as empty. An unknown
+  placeholder is a `400` on save. A title that renders blank falls back to the rule's label; the rendered title is cut
+  at 200 characters and the body at 4000, with "…"; a body that renders blank is none. Templates print field values
+  without field permissions: the author is a metadata administrator, and that is documented.
+- **On save:** `name` matches `^[a-z][a-z0-9_]{1,48}$`; `label` is trimmed, 1–120 characters; the field exists and is
+  `DATE` or `DATETIME`; at most 10 conditions, each on a field of a core type (a module type such as a geometry is
+  refused); `op` is `EQ`, `EMPTY` or `NOT_EMPTY`; one `EQ` per field; an `EQ` value passes the field's codec, `EMPTY` and
+  `NOT_EMPTY` take none; on a text field (`TEXT`, `LONG_TEXT`, `ENUM`, `EMAIL`, `URL`) blank counts as empty; the
+  title template is 1–200 characters and the body at most 4000; the audience is strict; the tab passes its format
+  (its violation is named `tab`).
+- **On record change** (`NotificationRuleListener : RecordChangeListener`, last in order): for an object with enabled
+  rules, the changed record is evaluated against `change.after` by the same pure evaluator and its one key is upserted
+  or resolved; `DELETED` resolves. A renewed licence stops saying "vence" at once instead of at the next run. The cap
+  does not apply here: it is one record. Evaluation errors are logged and skipped; SQL errors propagate (the writer's
+  transaction is aborted anyway).
+- **Lifecycle:** disabling or deleting a rule resolves its notifications. Deleting the object resolves what its rules
+  published first (`NotificationRuleCleanup : ObjectRemovalListener`, in the delete's transaction), then the cascade
+  removes the rules. `NotificationRuleFieldUsage : FieldUsage` names "notification rule '<name>'", disabled rules
+  included, so deleting a field a rule reads is core's `409`.
 
 Deferred (no user yet): an audience taken from the record (`created_by`, an email field), rules on a workflow state's
 age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
@@ -536,16 +564,18 @@ age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
 ## D. Live delivery: SSE over LISTEN/NOTIFY (ADR-047)
 
 - **NOTIFY.** `SELECT pg_notify(:channel, :payload)` through `DatabaseClient`, inside the writing transaction: delivered
-  on commit, dropped on rollback. The channel is `<metadataSchema>_notifications` (the schema name is validated at
-  boot; the channel is checked to be at most 63 characters). The payload is ids only: `{"o":"<org>"}` for a change to
+  on commit, dropped on rollback. The channel is `<metadataSchema>_notifications`, at most 63 characters (PostgreSQL
+  would truncate it), so the metadata schema's name is effectively at most 49; the length is checked when the listener
+  is built and on every notify. The payload is ids only: `{"o":"<org>"}` for a change to
   notifications, `{"o":"<org>","u":"<user>"}` for one person's receipts. PostgreSQL folds identical payloads within one
   transaction, so a batch notifies once.
 - **`NotificationListener`** (`SmartLifecycle`): one connection under the pool (`Connections.unpooled`), cast to
   `io.r2dbc.postgresql.api.PostgresqlConnection`, `LISTEN "<channel>"`, then `getNotifications()` into
   `NotificationSignals` (a `Sinks.many().multicast().directBestEffort()` hub). It reconnects with backoff (1 s up to
-  30 s), checks the connection with `SELECT 1` every 60 s, and emits a wildcard signal after every (re)connect so a gap
-  costs one recompute and loses nothing. Off with `listen=false`, and off with a WARN when the connection is not
-  PostgreSQL's.
+  30 s), checks the connection with `SELECT 1` every 60 s (a check that takes over 10 s counts as lost), and emits a
+  wildcard signal after every (re)connect so a gap costs one recompute and loses nothing. The bean is absent with
+  `listen=false` or without the r2dbc-postgresql driver on the classpath; a connection that is not PostgreSQL's turns it
+  off with a WARN (the one failure it does not retry).
 - **`GET /api/auth/me/notifications/stream`** (`produces = text/event-stream`):
   - The user is resolved in the `suspend` controller method before the `Flux` is built.
   - Triggers: an initial one; this user's and this organization's signals (and wildcards), `sample`d at
@@ -566,7 +596,10 @@ age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
   component without one); `PageComponentRequest.key` too.
 - Only a `TAB` may carry it (`400` "key is only for TAB"); trimmed and upper-cased; `^[A-Z][A-Z0-9_]{0,39}$`; unique in
   the whole page (nested tab strips included), so `?tab=KEY` is never ambiguous.
-- Generated pages key their tabs `DETAILS`, `RELATED`, `HISTORY` and each module tab (`MAP`) with its title.
+- Generated pages key their tabs `DETAILS`, `RELATED`, `HISTORY` and each module tab (`MAP`) with its title. The three
+  built-in keys are taken first, `RELATED` even on an object with no related tab; a module tab whose title repeats a
+  taken key keeps its tab without a key. A module tab title that is not a valid key throws `IllegalArgumentException`
+  when its `GeneratedComponent` is built, that is when the page is generated (the module's own tests catch it).
 - A `PUT` without a definition keeps the keys.
 - `?tab=KEY` in `PageRenderer` and key editing in the page builder belong to the wasichai-ui plan.
 
@@ -623,3 +656,19 @@ age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
 - **Rule conditions are ANDed equalities and emptiness**; "one of" (`IN`) and "equal or empty" wait for a second
   user (srtm needs two rules for `estado` VIGENTE or empty). A value that is replaced by a new row, not edited (a fee
   renewal), needs a source, not a rule.
+
+## As built
+
+Details the sections above leave out, as the code has them:
+
+- **Org-unit answers:** `409 Organizational unit '<code>' already exists`, `… has sub-units`, `… has members`;
+  `400 A unit cannot move under itself`, `400 Too deep`, `400 Unknown organizational unit '<code>'` on `parentCode`,
+  `400 Invalid organizational unit` with each bad field (an unknown `PUT` key: `is not a unit property`).
+- **Rule answers:** `409 Notification rule '<name>' already exists`, `409 Notification rule '<name>' is disabled`,
+  `404 Object '<object>' has no notification rule '<name>'`; a bad rule is `400 Invalid notification rule` naming each
+  field (`stages[i].fromDays`, `conditions[i].value`, `audience[i]`, `tab`…).
+- **Beans:** the date rules add `notificationRuleRepository`, `ruleNotifications` (holds the settled zone),
+  `notificationRuleService`, `notificationRuleController`, `notificationRuleListener`, `notificationRuleCleanup` and
+  `notificationRuleFieldUsage`, each `@ConditionalOnMissingBean`. `notificationRuleCleanup` is a bean of its own:
+  `MetadataService` collects its removal listeners when it is built, and the record listener needs `MetadataService`.
+- **Rule rows:** `name`, `label` and `enabled` are columns and also sit in `definition`; the columns win on read.

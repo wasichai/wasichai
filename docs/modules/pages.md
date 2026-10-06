@@ -56,10 +56,11 @@ whole page, tabs of nested strips included, so `?tab=KEY` never names two tabs: 
 re-emits the stored tree and keeps its keys.
 
 A generated page keys each tab with its title: `DETAILS`, `RELATED` and `HISTORY` (`GeneratedTab`), and each module
-tab with the `tab` its `PageComponentProvider` returns (`MAP` from wasichai-gis). The built-in keys are taken first:
-a module tab whose title repeats a taken key keeps its tab, without a key, so the generated page stays valid.
-`GeneratedComponent` refuses a `tab` that is not a valid key, which the module's own tests catch before a page is
-ever generated.
+tab with the `tab` its `PageComponentProvider` returns (`MAP` from wasichai-gis). The built-in keys are taken first,
+`RELATED` even on an object without relationships: a module tab whose title repeats a taken key keeps its tab, without
+a key, so the generated page stays valid. `GeneratedComponent` refuses a `tab` that is not a valid key with an
+`IllegalArgumentException` when it is built, that is when a page is generated; the module's own tests are where that
+should surface.
 
 The server checks a key's format and uniqueness only. Opening a tab from `?tab=`, with a fallback to the first tab
 when the page has no such key, and editing keys in the builder belong to wasichai-ui. See

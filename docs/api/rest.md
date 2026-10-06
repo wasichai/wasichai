@@ -130,7 +130,8 @@ Units are addressed by `code`, never by id: it is what apps bind to (`model/org_
 audience), and it never changes. A `code` is trimmed and upper-cased, then must match `^[A-Z][A-Z0-9_]{1,48}$`; it is
 unique in the tenant (`409 Organizational unit 'SGFT' already exists`). The path `{code}` is normalised the same way,
 so `/api/org-units/sgft` is the same unit. `label` is trimmed text of 1 to 120 characters and may change. A unit with
-no `parentCode` is a root. The list is flat, sorted by label then code; the client builds the tree from `parentCode`.
+no `parentCode`, or a blank one, is a root. The list is flat, sorted by label then code; the client builds the tree
+from `parentCode`.
 
 `PUT /api/org-units/{code}` takes a map, as `PUT /api/auth/me/preferences` does: `label` renames; `parentCode` moves
 the unit under another one, and `null` (or blank) moves it to the root; a key left out keeps its value. Any other key,
@@ -166,8 +167,8 @@ token is refused (`403`) whatever its roles grant, as on every `MANAGE_ORGANIZAT
 field in `errors[]` (`code`, `label`, a `parentCode` that is not text, an unknown key); a parent the tenant does not
 have is `400 Unknown organizational unit '…'` on `parentCode`.
 
-`GET /api/auth/me/org-units` needs only a token. It answers the caller's direct units, sorted by label, each with
-`path`, the codes from the root down to the unit itself; no id, since apps bind to the code. A service account sits
+`GET /api/auth/me/org-units` needs only a token. It answers the caller's direct units, sorted by label then code, each
+with `path`, the codes from the root down to the unit itself; no id, since apps bind to the code. A service account sits
 in no unit and reads `[]`.
 
 ```json
@@ -632,9 +633,10 @@ without the property, never as `null`, so a page that uses no keys reads exactly
 `definition` keeps the stored keys.
 
 A generated page keys its tabs with their titles: `DETAILS`, `RELATED`, `HISTORY`, and each module tab its own
-(`MAP` from wasichai-gis). The built-in keys come first: a module tab whose title repeats a key already taken keeps its
-tab but gets no key. Opening a tab from `?tab=` and editing keys in the builder belong to wasichai-ui; there a key the
-page lacks falls back to the first tab (ADR-046). The server never checks a link's tab against pages.
+(`MAP` from wasichai-gis). The built-in keys come first, `RELATED` even on an object without a related tab: a module tab
+whose title repeats a key already taken keeps its tab but gets no key. Opening a tab from `?tab=` and editing keys in
+the builder belong to wasichai-ui; there a key the page lacks falls back to the first tab (ADR-046). The server never
+checks a link's tab against pages.
 
 ### Component types
 
@@ -1185,7 +1187,7 @@ everyone, a user, a role or an [organizational unit](#organizational-units), wit
 tenant's notification is `404`).
 
 ```http
-GET    /api/notifications?source&kind&unit&status&page&size   the admin view, newest first
+GET    /api/notifications?source&kind&unit&status&page&size   the admin view, newest created first
 POST   /api/notifications            { kind, title, body?, link?, audience, publishAt?, expiresAt?, dueAt? }  →  201
 GET    /api/notifications/{id}
 PUT    /api/notifications/{id}       the same body, a full replace
@@ -1218,12 +1220,12 @@ DELETE /api/notifications/{id}       →  204
   A `RECORD` names an object of the tenant (`400` on `link.object` otherwise). A `ROUTE` names a route key the UI
   knows, `^[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+$`, with at most 10 `params` (keys `^[A-Za-z][A-Za-z0-9_]{0,39}$`, values at
   most 200 characters); they fill the route's path parameters first and the rest go to the query string. A `URL` is an
-  absolute `http` or `https` address of at most 2000 characters.
+  absolute `http` or `https` address with a host, of at most 2000 characters.
 - `audience` is not empty: `{"type": "ALL"}`, `{"type": "USER", "value": "<uuid>"}`, `{"type": "EMAIL", "value":
   "a@b.pe"}`, `{"type": "ROLE", "value": "CAJERO"}` or `{"type": "UNIT", "value": "SGFT"}`. A role name and a unit code
-  are trimmed and upper-cased, an email trimmed and lower-cased; an `EMAIL` is stored as the `USER` it names. A user,
-  email, role or unit the tenant does not have is `400` naming `audience[i]` (`unknown role 'CAJERO'`); a service
-  account is never found by email.
+  are trimmed and upper-cased and must match `^[A-Z][A-Z0-9_]{1,48}$`, an email trimmed and lower-cased; an `EMAIL` is
+  stored as the `USER` it names. A user, email, role or unit the tenant does not have is `400` naming `audience[i]`
+  (`unknown role 'CAJERO'`); a service account is never found by email.
 - `publishAt` defaults to now; before it, nobody sees the notification. `expiresAt` must be after `publishAt` (in the
   future, without one); `dueAt` is when an `ACTION` becomes overdue.
 - A malformed body is one `400 Invalid notification`, with every offending field in `errors[]` (`kind`, `title`,
@@ -1253,7 +1255,7 @@ never changed: `PUT` and `DELETE` answer `409 Notification is owned by its sourc
 The list filters, each optional and case-insensitive: `source` (exact), `kind`, `unit` (a code: those addressed to that
 unit, so a client can warn before deleting it) and `status`: `open` (not resolved, in its window), `scheduled` (not
 resolved, `publishAt` ahead) or `ended` (resolved or expired). An unknown `kind`, `status` or `unit` is `400` on that
-parameter. Paging is core's `PageResponse`.
+parameter. The newest created come first (`createdAt`, not `publishAt`). Paging is core's `PageResponse`.
 
 ## My notifications
 
@@ -1347,11 +1349,11 @@ Module: wasichai-notifications. A date rule watches a `DATE` or `DATETIME` field
 notification per record in its window, linking to the record and a tab. Rules need `MANAGE_METADATA` on their object.
 
 ```http
-GET    /api/notification-rules                              every rule of the tenant, with its object
-GET    /api/objects/{object}/notification-rules             the object's rules
-POST   /api/objects/{object}/notification-rules             →  201, and runs the rule at once
+GET    /api/notification-rules                              every rule of the tenant, by object, then name
+GET    /api/objects/{object}/notification-rules             the object's rules, by name
+POST   /api/objects/{object}/notification-rules             →  201, and runs the rule at once when enabled
 GET    /api/objects/{object}/notification-rules/{name}
-PUT    /api/objects/{object}/notification-rules/{name}      replace, and run
+PUT    /api/objects/{object}/notification-rules/{name}      replace, and run (or resolve, when disabled)
 DELETE /api/objects/{object}/notification-rules/{name}      →  204, and resolves its notifications
 POST   /api/objects/{object}/notification-rules/{name}/run  →  { created, updated, reopened, resolved }
 ```
@@ -1370,29 +1372,47 @@ POST   /api/objects/{object}/notification-rules/{name}/run  →  { created, upda
 }
 ```
 
-- **Window and kind.** The offset is today minus the field's date, in days, in the rule zone
-  (`wasichai.notifications.zone`; a `DATETIME` counts its date in that zone). A record is in the window while
+Every answer is the rule as stored, normalised (stages by `fromDays`, role names and unit codes upper-cased), with the
+name of its object first: `{object, name, label, enabled, field, stages, untilDays, conditions, audience, title, body,
+tab}`. `GET /api/notification-rules` needs `MANAGE_METADATA`; the object routes need it on the object, and an unknown
+object or rule is `404`.
+
+- **Window and kind.** The offset is today minus the field's date, in days, in the rule zone (a `DATETIME` counts its
+  date in that zone). The zone is `wasichai.notifications.zone`; unset, the app's `Clock` bean's zone when it has
+  exactly one; else the system's, with a WARN at start. A record is in the window while
   `min(stages.fromDays) ≤ offset ≤ untilDays`; its kind is the stage with the largest `fromDays` not after the offset.
   Here a licence warns from 15 days before its date, asks for action from that day on, and leaves once 3 days have
   passed.
 - **Due.** A `DATE` is due at the start of the next day in the zone (the date itself still counts), a `DATETIME` at its
   value; past that the notification is `overdue`.
-- **Conditions** must all hold: `EQ` (with a `value` the field's type accepts), `EMPTY` or `NOT_EMPTY` (without one).
+- **Conditions** must all hold, at most 10: `EQ` (with a `value` the field's type accepts, one per field), `EMPTY` or
+  `NOT_EMPTY` (without a `value`). On a text field (`TEXT`, `LONG_TEXT`, `ENUM`, `EMAIL`, `URL`) blank counts as empty.
 - **Templates.** `{{<field>}}` prints a field of the record, `{{days}}` the date minus today (negative once passed),
-  `{{date}}` the date and `{{object}}` the object's label. A `DATE` prints with `wasichai.notifications.date-pattern`
-  (`dd/MM/yyyy`), a null as nothing. An unknown placeholder is `400` on save. The rendered title is cut at 200
-  characters with "…". Values print without field permissions: the author is a metadata administrator.
-- **On save** the field must exist and be `DATE` or `DATETIME`; condition fields must exist; the audience is checked
-  as for [notifications](#notifications) (an unknown recipient is `400`); the `tab` has the TAB key format. `name` is
-  `^[a-z][a-z0-9_]{1,48}$`, unique in the tenant; `stages` holds 1 to 5 entries with distinct `fromDays`; `fromDays`
-  and `untilDays` are within ±365.
+  `{{date}}` the date and `{{object}}` the object's label; these three win over a field of the same name. A `DATE`
+  prints with `wasichai.notifications.date-pattern` (`dd/MM/yyyy`), a `DATETIME` as that pattern plus ` HH:mm` in the
+  rule zone, a null as nothing. An unknown placeholder is `400` on save. A title that renders blank becomes the rule's
+  `label`; the rendered title is cut at 200 characters and the body at 4000, with "…"; a body that renders blank is
+  none. Values print without field permissions: the author is a metadata administrator.
+- **On save** the field must exist and be `DATE` or `DATETIME`; condition and placeholder fields must exist and have
+  a core type (not a module's, such as a geometry); the audience is checked as for [notifications](#notifications) (an
+  unknown recipient is `400`); the `tab` has the TAB key format. `name` is `^[a-z][a-z0-9_]{1,48}$`, unique in the
+  tenant (`409 Notification rule '<name>' already exists`); `label` is trimmed, 1 to 120 characters; the `title`
+  template 1 to 200, the `body` template at most 4000; `stages` holds 1 to 5 entries with distinct `fromDays`, each at
+  most `untilDays`; `fromDays` and `untilDays` are within ±365. A bad rule is one `400 Invalid notification rule` naming
+  every field (`stages[1].fromDays`, `conditions[0].value`, `audience[2]`, `tab`…).
+- **`PUT`** replaces the whole rule; a body `name` other than the path's is `400` (a rule is not renamed). Enabled, it
+  runs at once; disabled, its notifications are resolved in the same transaction. **`run`** on a disabled rule is
+  `409 Notification rule '<name>' is disabled`: enabling it is the way to run it.
 - **What it gives.** Each record in the window is one notification of source `rule:<name>`, keyed by the record id,
   with the rule's audience and a `RECORD` link to the record and `tab`. A run takes at most
   `wasichai.notifications.rule-max-notifications` records (100), earliest dates first; a record that left the window
   has its notification resolved. The rules also run every `wasichai.notifications.rule-interval` (15 minutes), and a
-  record write re-evaluates that record at once; deleting the record resolves its notification.
-- **Lifecycle.** Disabling or deleting a rule resolves its notifications; deleting the object deletes its rules. Its
-  notifications are not edited or deleted by hand (`409`), and its `ACTION`s are not dismissed.
+  record write re-evaluates that record at once (that one record, whatever the cap); deleting the record resolves its
+  notification. A run reads records as the module, with no permission or record-level scope.
+- **Lifecycle.** Disabling or deleting a rule resolves its notifications (a delete in one transaction with them).
+  Deleting the object resolves what its rules published, then deletes the rules. A field a rule reads, disabled rules
+  included, cannot be deleted: `409 Field '…' is used by notification rule '<name>'`. Its notifications are not
+  edited or deleted by hand (`409`), and its `ACTION`s are not dismissed.
 
 ## AI assistant
 
