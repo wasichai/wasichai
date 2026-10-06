@@ -24,6 +24,7 @@ import wasichai.gis.GEOMETRY
 import wasichai.gis.MapPageComponent
 import wasichai.gis.autoconfigure.WasichaiGisAutoConfiguration
 import wasichai.gis.autoconfigure.WasichaiGisPagesAutoConfiguration
+import wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
 import wasichai.pages.ComponentType
 import wasichai.pages.PageComponentTypes
 import wasichai.pages.autoconfigure.WasichaiPagesAutoConfiguration
@@ -57,7 +58,8 @@ class AllModulesWiringTest {
                     WasichaiGisAutoConfiguration::class.java,
                     WasichaiGisPagesAutoConfiguration::class.java,
                     WasichaiAgentAutoConfiguration::class.java,
-                    WasichaiAgentWorkflowAutoConfiguration::class.java
+                    WasichaiAgentWorkflowAutoConfiguration::class.java,
+                    WasichaiNotificationsAutoConfiguration::class.java
                 )
             ).withPropertyValues("wasichai.automation.poll-interval=0s")
 
@@ -66,7 +68,7 @@ class AllModulesWiringTest {
         runner.run { context ->
             assertThat(context).hasNotFailed()
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name })
-                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis")
+                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "notifications")
             assertThat(context.getBean(FieldTypeRegistry::class.java).types.last()).isEqualTo(GEOMETRY)
             assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(WorkflowStatesAdapter::class.java)
