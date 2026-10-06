@@ -117,15 +117,18 @@ class InboxRepository(
                 .toMap()
         val latest =
             db
-                .sql("SELECT n.id, n.kind, n.title, n.publish_at, n.link::text AS link $visible $active ORDER BY n.publish_at DESC, n.id LIMIT 1")
-                .reader(reader, now)
+                .sql(
+                    "SELECT n.id, n.kind, n.title, n.publish_at, n.link::text AS link, n.link_object_id " +
+                        "$visible $active ORDER BY n.publish_at DESC, n.id LIMIT 1"
+                ).reader(reader, now)
                 .map { row, _ ->
                     LatestNotification(
                         id = Rows.uuid(row, "id"),
                         kind = NotificationKind.valueOf(Rows.string(row, "kind")),
                         title = Rows.string(row, "title"),
                         publishAt = Rows.instantOrNull(row, "publish_at")!!,
-                        link = link(row)
+                        link = link(row),
+                        linkObjectId = Rows.uuidOrNull(row, "link_object_id")
                     )
                 }.one()
                 .awaitFirstOrNull()

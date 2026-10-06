@@ -1,5 +1,6 @@
 package wasichai.notifications
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import wasichai.core.common.FieldViolation
@@ -228,7 +229,8 @@ fun List<AudienceJson>.toAudiences(field: String = "audience"): List<Audience> {
     return audience
 }
 
-private const val LINK_RECORD = "RECORD"
+// the inbox drops a RECORD link its reader may not open
+internal const val LINK_RECORD = "RECORD"
 private const val LINK_ROUTE = "ROUTE"
 private const val LINK_URL = "URL"
 
@@ -257,7 +259,9 @@ data class LatestNotification(
     val title: String,
     val publishAt: Instant,
     // so the UI can link a toast. READ filtering is the caller's, as for inbox items
-    val link: LinkJson? = null
+    val link: LinkJson? = null,
+    // what that filter needs; never on the wire
+    @get:JsonIgnore val linkObjectId: UUID? = null
 )
 
 data class NotificationSummary(

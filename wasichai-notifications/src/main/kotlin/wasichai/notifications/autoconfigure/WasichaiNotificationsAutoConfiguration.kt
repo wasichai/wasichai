@@ -11,6 +11,7 @@ import org.springframework.transaction.ReactiveTransactionManager
 import org.springframework.transaction.reactive.TransactionalOperator
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
+import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.UserDirectory
@@ -18,7 +19,9 @@ import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.AudienceResolver
+import wasichai.notifications.InboxController
 import wasichai.notifications.InboxRepository
+import wasichai.notifications.InboxService
 import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
 import wasichai.notifications.NotificationWriter
@@ -76,4 +79,22 @@ class WasichaiNotificationsAutoConfiguration {
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): NotificationWriter =
         NotificationWriter(repository, clock.getIfUnique { Clock.systemUTC() }) { TransactionalOperator.create(transactionManager.getObject()) }
+
+    // my notifications (task 9)
+    @Bean
+    @ConditionalOnMissingBean
+    fun inboxService(
+        inbox: InboxRepository,
+        currentUser: CurrentUser,
+        units: OrgUnitDirectory,
+        clock: ObjectProvider<Clock>,
+        properties: NotificationsProperties
+    ): InboxService = InboxService(inbox, currentUser, units, clock.getIfUnique { Clock.systemUTC() }, properties.snoozeMax)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun inboxController(
+        service: InboxService,
+        currentUser: CurrentUser
+    ): InboxController = InboxController(service, currentUser)
 }
