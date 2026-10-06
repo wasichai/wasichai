@@ -2,6 +2,7 @@ package wasichai.notifications.autoconfigure
 
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -19,6 +20,7 @@ import wasichai.core.identity.UserDirectory
 import wasichai.core.metadata.MetadataService
 import wasichai.core.organization.OrganizationRepository
 import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.Connections
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.AudienceResolver
@@ -27,10 +29,14 @@ import wasichai.notifications.InboxRepository
 import wasichai.notifications.InboxService
 import wasichai.notifications.NotificationAdminController
 import wasichai.notifications.NotificationAdminService
+import wasichai.notifications.NotificationChannel
+import wasichai.notifications.NotificationListener
 import wasichai.notifications.NotificationLoop
 import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
+import wasichai.notifications.NotificationSignals
 import wasichai.notifications.NotificationSource
+import wasichai.notifications.NotificationStreamController
 import wasichai.notifications.NotificationWriter
 import wasichai.notifications.Notifications
 import wasichai.notifications.SourceRunRepository
@@ -162,4 +168,31 @@ class WasichaiNotificationsAutoConfiguration {
             properties,
             clock.getIfUnique { Clock.systemUTC() }
         )
+
+    // live stream (task 11)
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationSignals(): NotificationSignals = NotificationSignals()
+
+    // the driver is the app's (compileOnly here): without it there is nothing to LISTEN on
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnClass(name = ["io.r2dbc.postgresql.api.PostgresqlConnection"])
+    @ConditionalOnProperty(prefix = "wasichai.notifications", name = ["listen"], havingValue = "true", matchIfMissing = true)
+    fun notificationListener(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        signals: NotificationSignals
+    ): NotificationListener = NotificationListener({ Connections.unpooled(db.connectionFactory) }, NotificationChannel.name(schemas), signals)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationStreamController(
+        currentUser: CurrentUser,
+        units: OrgUnitDirectory,
+        inbox: InboxService,
+        signals: NotificationSignals,
+        properties: NotificationsProperties,
+        clock: ObjectProvider<Clock>
+    ): NotificationStreamController = NotificationStreamController(currentUser, units, inbox, signals, properties, clock.getIfUnique { Clock.systemUTC() })
 }
