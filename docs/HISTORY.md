@@ -2,6 +2,37 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-06 — Notifications for people, roles and organizational units
+
+Municipal staff learned what they had to do only by opening the right screen, and the urgent cases were log lines
+nobody read. Now wasichai tells them, by person, role or unit, within a window, and the UI will call it "Alertas".
+Core gains **organizational units** ([ADR-045](adr/0045-organizational-units.md), ADR-031 D31): a tree per
+organization (migration `V9`, tables `org_units` and `user_org_units`), membership many to many, codes that never
+change, routes `/api/org-units`, `PUT /api/users/{id}/org-units` and `GET /api/auth/me/org-units`, and `orgUnits` on
+every user answer. Units grant nothing and are not in the token. Modules reach them through two ports,
+`OrgUnitDirectory` and `UserDirectory`, and background work gets `OrganizationRepository.ids()` and
+`Connections.unpooled`. The pages module lets a `TAB` carry a **key** (ADR-031 D33), unique in its page, and generated
+pages key theirs `DETAILS`, `RELATED`, `HISTORY` and `MAP`, so a link can name a tab. The new opt-in module
+**`wasichai-notifications`** ([ADR-046](adr/0046-notifications-module.md), ADR-031 D32) stores `INFO`, `WARNING` and
+`ACTION` notifications whose audience (everyone, a user, an email, a role, a unit and its subtree) is matched when the
+inbox is read, with a link to a record and tab, a route or a URL. Four producers write the same table: administrators
+over `/api/notifications`, app code through the `Notifications` bean (inside the caller's transaction, lenient about
+people, strict about format), `NotificationSource` beans run by the module's own loop once per cluster and per
+interval, and date rules over `DATE`/`DATETIME` fields at `/api/objects/{object}/notification-rules`. What a source or
+a rule produces is keyed: the same content writes nothing, and what it stops reporting is resolved. People read,
+dismiss, snooze and read-all at `/api/auth/me/notifications`, and get their summary **live over Server-Sent Events**
+([ADR-047](adr/0047-server-push-over-sse-and-listen-notify.md)): writers `pg_notify` inside their transaction, one
+`LISTEN` connection per replica wakes the streams, and a 60-second refresh floor keeps them right when it cannot. The
+stream takes its token from the `Authorization` header only and ends at the token's expiry. Without the module every
+notifications route is `404`. New tests: `OrgUnitApiTest`, `OrgUnitDirectoryTest`, the `notificationsIt` suite
+(`InboxApiTest`, `NotificationsAdminApiTest`, `NotificationsPublishTest`, `NotificationSourceTest`,
+`NotificationStreamApiTest`). Docs: [modules/notifications.md](modules/notifications.md). Design and plans:
+[the spec](superpowers/specs/2026-10-06-notifications-design.md),
+[backend](superpowers/plans/2026-10-06-notifications-backend.md),
+[wasichai-ui](superpowers/plans/2026-10-06-notifications-wasichai-ui.md),
+[srtm](superpowers/plans/2026-10-06-notifications-srtm-adoption.md) and
+[caja](superpowers/plans/2026-10-06-notifications-caja-adoption.md).
+
 ## 2026-10-06 — Theme components with a second user go up to wasichai-ui
 
 Two components srtm-ui wrote for its `portal-tributario` theme move into wasichai-ui, because caja-ui, which copied

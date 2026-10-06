@@ -111,6 +111,31 @@ be put in a unit (`404`). Any signed-in caller reads their own units, with their
 `GET /api/auth/me/org-units`; a service account sits in none and reads `[]`. See
 [../api/rest.md#organizational-units](../api/rest.md#organizational-units).
 
+## Long-lived streams
+
+With wasichai-notifications, `GET /api/auth/me/notifications/stream` keeps its answer open, sending the caller's
+notification summary as it changes ([ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md)). It is
+authenticated like every route, and a few rules keep a connection that lives for hours from outliving its token:
+
+- **Bearer header only.** The token travels in `Authorization: Bearer …`, never in the URL, where access logs, proxies
+  and browser history would keep it. `?access_token=` is not read: without the header the stream is `401`. That is
+  why the UI uses a `fetch`-based SSE client rather than `EventSource`, which cannot send a header.
+- **Refused before it starts.** The caller is resolved before the first event, so a missing or invalid token is a
+  plain `401` and a service account a plain `403`, not a broken stream. A service account is not a person: every route
+  under `/api/auth/me/notifications/**` answers it `403`, and it is never a recipient by email.
+- **It ends with the token.** The stream completes at the token's `exp`. The UI reconnects with the token it holds
+  then, or signs out on the `401` (ADR-031 D11). Roles are the token's for the stream's life; units are re-read on every
+  summary, as on every inbox read.
+- **The same checks as the inbox.** The stream sends what `GET /api/auth/me/notifications/summary` answers, with the
+  same visibility and the same `RECORD` link filtering; the UI fetches the notifications themselves through the usual
+  routes. What wakes a stream is a `pg_notify` payload of ids only, matched against the caller's organization and
+  user; the summary is always recomputed from the database, so a payload anyone sends on the channel can cause a
+  recompute and nothing else.
+
+Who publishes is coarse in v1: a manual notification needs `MANAGE_ORGANIZATION` (so never a service account), a date
+rule `MANAGE_METADATA` on its object, and app code publishes as it sees fit through the `Notifications` bean. See
+[../modules/notifications.md](../modules/notifications.md).
+
 ## The security chain
 
 Core declares one `SecurityWebFilterChain` at `@Order(0)`. Spring Boot's reactive resource-server auto-configuration

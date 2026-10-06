@@ -17,6 +17,7 @@ installed (its starter is on the classpath and `wasichai.<module>.enabled` is no
 | workflow | `/api/objects/{object}/workflow`, `/api/objects/{object}/records/{id}/transitions/**` | [workflow.md](../modules/workflow.md) |
 | automation | `/api/automation-runs`, `/api/objects/{object}/automations/**` | [automation.md](../modules/automation.md) |
 | documents | `/api/documents/{id}`, `/api/objects/{object}/{document-types,records/{id}/documents}/**` | [documents.md](../modules/documents.md) |
+| notifications | `/api/{,auth/me/}notifications/**`, `/api/{,objects/{object}/}notification-rules/**` | [notifications.md](../modules/notifications.md) |
 | gis | `/api/gis/layers/**`, `/api/gis/services`, `/api/gis/objects/{object}/features/**` | [gis.md](../modules/gis.md) |
 | agent | `/api/agent/status`, `/api/agent/ask` | [agent.md](../modules/agent.md) |
 
@@ -31,6 +32,7 @@ POST /api/auth/token        { "clientId": "...", "clientSecret": "..." }  →  {
 GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
 GET  /api/auth/me/org-units     the caller's own organizational units (see below)
+GET  /api/auth/me/notifications  the caller's notifications, with wasichai-notifications (see below)
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
 PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
@@ -1173,6 +1175,224 @@ The actions run off the request (ADR-016), so every rule that matched leaves a r
 
 `SKIPPED` carries the reason in `error` — the condition that did not hold, or the depth limit that
 stopped a chain of rules feeding each other.
+
+## Notifications
+
+Module: wasichai-notifications ([notifications.md](../modules/notifications.md)). What people must know or do, for
+everyone, a user, a role or an [organizational unit](#organizational-units), within a window
+([ADR-046](../adr/0046-notifications-module.md)). These routes manage the manual ones: every route needs
+`MANAGE_ORGANIZATION`, so a service account is refused (`403`), and reaches the caller's own tenant only (another
+tenant's notification is `404`).
+
+```http
+GET    /api/notifications?source&kind&unit&status&page&size   the admin view, newest first
+POST   /api/notifications            { kind, title, body?, link?, audience, publishAt?, expiresAt?, dueAt? }  →  201
+GET    /api/notifications/{id}
+PUT    /api/notifications/{id}       the same body, a full replace
+DELETE /api/notifications/{id}       →  204
+```
+
+```json
+{
+  "kind": "INFO",
+  "title": "Ordenanza 006-2026",
+  "body": "Nuevo TUPA desde el lunes.",
+  "link": { "type": "URL", "url": "https://www.munixyz.gob.pe/ordenanzas/2026-006.pdf" },
+  "audience": [{ "type": "ROLE", "value": "CAJERO" }, { "type": "UNIT", "value": "SGFT" }],
+  "publishAt": "2026-10-07T13:00:00Z",
+  "expiresAt": "2026-10-31T23:59:59Z"
+}
+```
+
+- `kind` is `INFO`, `WARNING` or `ACTION`. `title` is trimmed, 1 to 200 characters; `body` at most 4000, plain text.
+  Over REST nothing is cut: too long is `400`.
+- `link` is one of three shapes. A `tab` is trimmed, upper-cased and must have the [TAB key](#component-fields) format,
+  `^[A-Z][A-Z0-9_]{0,39}$`; it is not checked against the object's pages.
+
+  ```json
+  { "type": "RECORD", "object": "tasa", "recordId": "7c1…", "tab": "VIGENCIA" }
+  { "type": "ROUTE", "route": "caja:pagos-sin-entregar", "params": { "fecha": "2026-10-06" }, "tab": null }
+  { "type": "URL", "url": "https://www.munixyz.gob.pe/ordenanzas/2026-006.pdf" }
+  ```
+
+  A `RECORD` names an object of the tenant (`400` on `link.object` otherwise). A `ROUTE` names a route key the UI
+  knows, `^[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+$`, with at most 10 `params` (keys `^[A-Za-z][A-Za-z0-9_]{0,39}$`, values at
+  most 200 characters); they fill the route's path parameters first and the rest go to the query string. A `URL` is an
+  absolute `http` or `https` address of at most 2000 characters.
+- `audience` is not empty: `{"type": "ALL"}`, `{"type": "USER", "value": "<uuid>"}`, `{"type": "EMAIL", "value":
+  "a@b.pe"}`, `{"type": "ROLE", "value": "CAJERO"}` or `{"type": "UNIT", "value": "SGFT"}`. A role name and a unit code
+  are trimmed and upper-cased, an email trimmed and lower-cased; an `EMAIL` is stored as the `USER` it names. A user,
+  email, role or unit the tenant does not have is `400` naming `audience[i]` (`unknown role 'CAJERO'`); a service
+  account is never found by email.
+- `publishAt` defaults to now; before it, nobody sees the notification. `expiresAt` must be after `publishAt` (in the
+  future, without one); `dueAt` is when an `ACTION` becomes overdue.
+- A malformed body is one `400 Invalid notification`, with every offending field in `errors[]` (`kind`, `title`,
+  `link.type`, `link.url`, `audience`, `audience[2]`, `expiresAt`…).
+
+The answer, and every admin view:
+
+```json
+{
+  "id": "…", "kind": "INFO", "title": "Ordenanza 006-2026", "body": "Nuevo TUPA desde el lunes.",
+  "link": { "type": "URL", "url": "https://www.munixyz.gob.pe/ordenanzas/2026-006.pdf" },
+  "audience": [{ "type": "ROLE", "value": "CAJERO" }, { "type": "USER", "value": "…", "email": "ana@muni.pe" }],
+  "publishAt": "2026-10-07T13:00:00Z", "expiresAt": "2026-10-31T23:59:59Z", "dueAt": null,
+  "source": "manual", "key": null, "resolvedAt": null,
+  "createdAt": "2026-10-06T15:00:00Z", "updatedAt": "2026-10-06T15:00:00Z", "readCount": 0
+}
+```
+
+`audience` shows a unit by its code and a user with its email. `readCount` is how many people read it. A `POST` stores
+`source: "manual"` and the caller as its author.
+
+`PUT` replaces every field. Without `publishAt` it keeps the stored one, and a publication still ahead is what
+`expiresAt` must follow. Who read it keeps having read it, unless `kind` changed: then everyone sees it again. The same
+content writes nothing. A notification of any other source (an app's, or a rule's `rule:<name>`) is shown here but
+never changed: `PUT` and `DELETE` answer `409 Notification is owned by its source`; the app resolves it.
+
+The list filters, each optional and case-insensitive: `source` (exact), `kind`, `unit` (a code: those addressed to that
+unit, so a client can warn before deleting it) and `status`: `open` (not resolved, in its window), `scheduled` (not
+resolved, `publishAt` ahead) or `ended` (resolved or expired). An unknown `kind`, `status` or `unit` is `400` on that
+parameter. Paging is core's `PageResponse`.
+
+## My notifications
+
+Module: wasichai-notifications. What the caller sees and does with it. Any signed-in person; a service account gets
+`403 A service account has no notifications`.
+
+```http
+GET  /api/auth/me/notifications?kind&state&page&size   the inbox, a PageResponse
+GET  /api/auth/me/notifications/summary                counts per kind and the newest one
+GET  /api/auth/me/notifications/stream                 the summary, live (text/event-stream)
+POST /api/auth/me/notifications/{id}/read              →  204
+POST /api/auth/me/notifications/{id}/dismiss           →  204
+POST /api/auth/me/notifications/{id}/snooze            { "until": "2026-10-07T08:00:00Z" }  →  204
+POST /api/auth/me/notifications/read-all               { "kind"?: "INFO" }  →  204
+```
+
+A person sees a notification of their tenant that is not resolved, inside its window (`publishAt` passed, `expiresAt`
+not yet), and addressed to everyone, to them, to one of their token's roles, or to one of their units or a unit above
+one (a unit reaches its whole subtree). Anything else, another tenant's id included, is `404` on every route here, as
+one that never existed.
+
+```json
+{
+  "id": "…", "kind": "ACTION", "title": "Firmar el acta 12-2026", "body": "Vence hoy.",
+  "link": { "type": "RECORD", "object": "acta", "recordId": "…", "tab": "RESOLUCIONES" },
+  "publishAt": "2026-10-06T09:00:00Z", "expiresAt": null, "dueAt": "2026-10-07T05:00:00Z", "overdue": false,
+  "source": "rule:acta_sin_ris", "read": false, "snoozedUntil": null, "dismissible": false
+}
+```
+
+- `state`: `active` (the default: not dismissed, not snoozed past now), `unread` (active and never read) or `snoozed`
+  (snoozed past now, not dismissed). `kind` keeps one kind. An unknown value is `400` on that parameter.
+- Order: newest `publishAt` first; with `kind=ACTION`, a to-do list: earliest `dueAt` first, the undated last.
+- `overdue` is `dueAt` passed. `dismissible` is `false` only for an `ACTION` of a source or a rule.
+- A `RECORD` link is `null` for a reader without `READ` on its object, and for everyone once the object is deleted.
+  `ROUTE` and `URL` links are kept: the UI guards its routes. Record-level scope (`own_records_only`) is not checked:
+  the record route still answers `404`.
+
+`read` marks the item read and keeps the first time. `dismiss` hides it for good; an `ACTION` of a source or a rule is
+`409 This notification leaves when its work is done`. A dismissed item is still the caller's, so reading it again is
+`204`. `snooze` hides it until `until`, which must be after now and at most `wasichai.notifications.snooze-max` (30
+days) ahead, else `400` on `until`; a later snooze replaces it. `read-all` marks every active unread item, of one
+`kind` or, without a body, of every kind; snoozed and dismissed ones are left as they are.
+
+The summary counts the caller's active items per kind, and names the newest active one (`latest`, by `publishAt`, or
+`null`), its link filtered as above. Every kind is present, zeros included:
+
+```json
+{
+  "kinds": {
+    "INFO": { "active": 2, "unread": 1, "overdue": 0 },
+    "WARNING": { "active": 1, "unread": 1, "overdue": 0 },
+    "ACTION": { "active": 3, "unread": 2, "overdue": 1 }
+  },
+  "latest": {
+    "id": "…", "kind": "ACTION", "title": "Firmar el acta 12-2026", "publishAt": "2026-10-06T09:00:00Z",
+    "link": { "type": "RECORD", "object": "acta", "recordId": "…", "tab": "RESOLUCIONES" }
+  }
+}
+```
+
+### The stream
+
+`GET /api/auth/me/notifications/stream` (`Accept: text/event-stream`) sends the summary, live
+([ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md)):
+
+```
+event:summary
+data:{"kinds":{"INFO":{"active":2,"unread":1,"overdue":0},"WARNING":{…},"ACTION":{…}},"latest":{…}}
+
+:ping
+
+event:summary
+data:{"kinds":{…},"latest":{…}}
+
+```
+
+- The first `summary` comes at once. Another comes only when the summary changed: after a write that concerns the
+  caller, on any replica (PostgreSQL `LISTEN/NOTIFY`), and at the latest every `stream-refresh` (60 s), which also
+  catches a window that opens or ends.
+- `:ping` is a comment line, every `stream-heartbeat` (25 s), so proxies do not close an idle connection. The answer
+  carries `X-Accel-Buffering: no`.
+- The token travels in the `Authorization` header like any route; `?access_token=` is not read (`401`). Without a
+  token it is `401`, for a service account `403`, before any event.
+- The stream completes at the token's `exp`. The client reconnects with the token it holds then; a `401` means sign
+  in again.
+
+## Notification rules
+
+Module: wasichai-notifications. A date rule watches a `DATE` or `DATETIME` field of an object and gives one
+notification per record in its window, linking to the record and a tab. Rules need `MANAGE_METADATA` on their object.
+
+```http
+GET    /api/notification-rules                              every rule of the tenant, with its object
+GET    /api/objects/{object}/notification-rules             the object's rules
+POST   /api/objects/{object}/notification-rules             →  201, and runs the rule at once
+GET    /api/objects/{object}/notification-rules/{name}
+PUT    /api/objects/{object}/notification-rules/{name}      replace, and run
+DELETE /api/objects/{object}/notification-rules/{name}      →  204, and resolves its notifications
+POST   /api/objects/{object}/notification-rules/{name}/run  →  { created, updated, reopened, resolved }
+```
+
+```json
+{
+  "name": "licencia_por_vencer", "label": "Licencias por vencer", "enabled": true,
+  "field": "vigencia_hasta",
+  "stages": [{ "fromDays": -15, "kind": "WARNING" }, { "fromDays": 0, "kind": "ACTION" }],
+  "untilDays": 3,
+  "conditions": [{ "field": "estado", "op": "EQ", "value": "VIGENTE" }, { "field": "baja", "op": "EMPTY" }],
+  "audience": [{ "type": "ROLE", "value": "TESORERIA" }],
+  "title": "La licencia {{numero}} vence el {{date}}",
+  "body": "Quedan {{days}} días.",
+  "tab": "VIGENCIA"
+}
+```
+
+- **Window and kind.** The offset is today minus the field's date, in days, in the rule zone
+  (`wasichai.notifications.zone`; a `DATETIME` counts its date in that zone). A record is in the window while
+  `min(stages.fromDays) ≤ offset ≤ untilDays`; its kind is the stage with the largest `fromDays` not after the offset.
+  Here a licence warns from 15 days before its date, asks for action from that day on, and leaves once 3 days have
+  passed.
+- **Due.** A `DATE` is due at the start of the next day in the zone (the date itself still counts), a `DATETIME` at its
+  value; past that the notification is `overdue`.
+- **Conditions** must all hold: `EQ` (with a `value` the field's type accepts), `EMPTY` or `NOT_EMPTY` (without one).
+- **Templates.** `{{<field>}}` prints a field of the record, `{{days}}` the date minus today (negative once passed),
+  `{{date}}` the date and `{{object}}` the object's label. A `DATE` prints with `wasichai.notifications.date-pattern`
+  (`dd/MM/yyyy`), a null as nothing. An unknown placeholder is `400` on save. The rendered title is cut at 200
+  characters with "…". Values print without field permissions: the author is a metadata administrator.
+- **On save** the field must exist and be `DATE` or `DATETIME`; condition fields must exist; the audience is checked
+  as for [notifications](#notifications) (an unknown recipient is `400`); the `tab` has the TAB key format. `name` is
+  `^[a-z][a-z0-9_]{1,48}$`, unique in the tenant; `stages` holds 1 to 5 entries with distinct `fromDays`; `fromDays`
+  and `untilDays` are within ±365.
+- **What it gives.** Each record in the window is one notification of source `rule:<name>`, keyed by the record id,
+  with the rule's audience and a `RECORD` link to the record and `tab`. A run takes at most
+  `wasichai.notifications.rule-max-notifications` records (100), earliest dates first; a record that left the window
+  has its notification resolved. The rules also run every `wasichai.notifications.rule-interval` (15 minutes), and a
+  record write re-evaluates that record at once; deleting the record resolves its notification.
+- **Lifecycle.** Disabling or deleting a rule resolves its notifications; deleting the object deletes its rules. Its
+  notifications are not edited or deleted by hand (`409`), and its `ACTION`s are not dismissed.
 
 ## AI assistant
 

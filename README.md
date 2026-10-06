@@ -22,7 +22,7 @@ dependencies {
 Frontend: `<WasichaiApp config={{ apiBaseUrl: '/api' }} modules={[documentsModule()]} />` from `@wasichai/core`, see
 [wasichai-ui](https://github.com/wasichai/wasichai-ui). Step by step, minimal to full:
 [docs/guides/build-your-app.md](docs/guides/build-your-app.md). Modules: views, forms, pages, workflow, automation,
-documents, gis, agent — one page each in [docs/modules](docs/modules/README.md).
+documents, gis, agent, notifications — one page each in [docs/modules](docs/modules/README.md).
 
 ## Layout
 
