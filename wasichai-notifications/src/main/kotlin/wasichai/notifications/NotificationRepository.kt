@@ -21,7 +21,11 @@ data class StoredRow(
     val key: String?,
     val kind: NotificationKind,
     val fingerprint: String,
-    val resolvedAt: Instant?
+    val resolvedAt: Instant?,
+    // a draft without publishAt keeps it: the window is checked against it before writing
+    val publishAt: Instant,
+    // the reconciler leaves alone a row written after its read began
+    val updatedAt: Instant
 )
 
 enum class UpsertOutcome { CREATED, UPDATED, REOPENED, UNCHANGED }
@@ -68,6 +72,11 @@ class NotificationRepository(
 ) {
     private val m = schemas.metadata
 
+    init {
+        // an over-long channel fails the start, LISTEN or not: not the first business write
+        NotificationChannel.name(schemas)
+    }
+
     // the admin view: a row and how many read it
     private val columns =
         "n.id, n.kind, n.title, n.body, n.link::text AS link, n.link_object_id, n.publish_at, n.expires_at, n.due_at, " +
@@ -111,34 +120,39 @@ class NotificationRepository(
         now: Instant
     ): UpsertOutcome {
         if (row.resolvedAt != null) {
+            requireWindow(prepared, prepared.publishAt ?: now)
             update(organizationId, row.id, prepared, prepared.publishAt ?: now, now, reopen = true)
             deleteReceipts(organizationId, row.id)
             return UpsertOutcome.REOPENED
         }
         if (row.fingerprint == prepared.fingerprint) return UpsertOutcome.UNCHANGED
         // a null publishAt keeps the stored one
+        requireWindow(prepared, prepared.publishAt ?: row.publishAt)
         update(organizationId, row.id, prepared, prepared.publishAt, now, reopen = false)
         // WARNING -> ACTION is news: everyone sees it again
         if (row.kind != prepared.kind) deleteReceipts(organizationId, row.id)
         return UpsertOutcome.UPDATED
     }
 
-    // admin PUT: a full replace with the upsert's receipt rule. null: no such notification here
+    // admin PUT: a full replace with the upsert's receipt rule. null: no such notification of source here
     suspend fun replace(
         organizationId: UUID,
+        source: String,
         id: UUID,
         prepared: PreparedNotification,
         now: Instant
     ): UpsertOutcome? {
         val row =
             db
-                .sql("SELECT $ROW_COLUMNS FROM $m.notifications WHERE organization_id = :org AND id = :id FOR UPDATE")
+                .sql("SELECT $ROW_COLUMNS FROM $m.notifications WHERE organization_id = :org AND source = :source AND id = :id FOR UPDATE")
                 .bind("org", organizationId)
+                .bind("source", source)
                 .bind("id", id)
                 .map(::row)
                 .one()
                 .awaitFirstOrNull() ?: return null
         if (row.fingerprint == prepared.fingerprint) return UpsertOutcome.UNCHANGED
+        requireWindow(prepared, prepared.publishAt ?: row.publishAt)
         update(organizationId, id, prepared, prepared.publishAt, now, reopen = false)
         if (row.kind != prepared.kind) deleteReceipts(organizationId, id)
         return UpsertOutcome.UPDATED
@@ -159,11 +173,13 @@ class NotificationRepository(
     // targets and receipts go with it (ON DELETE CASCADE)
     suspend fun delete(
         organizationId: UUID,
+        source: String,
         id: UUID
     ): Boolean =
         db
-            .sql("DELETE FROM $m.notifications WHERE organization_id = :org AND id = :id")
+            .sql("DELETE FROM $m.notifications WHERE organization_id = :org AND source = :source AND id = :id")
             .bind("org", organizationId)
+            .bind("source", source)
             .bind("id", id)
             .fetch()
             .rowsUpdated()
@@ -343,7 +359,8 @@ class NotificationRepository(
         userId: UUID? = null
     ) = db.pgNotify(schemas, organizationId, userId)
 
-    private suspend fun lockByKey(
+    // the row of one key, open or resolved, locked until the transaction ends
+    suspend fun lockByKey(
         organizationId: UUID,
         source: String,
         key: String
@@ -366,6 +383,7 @@ class NotificationRepository(
         now: Instant,
         onConflictNothing: Boolean
     ): UUID? {
+        requireWindow(prepared, prepared.publishAt ?: now)
         val conflict = if (onConflictNothing) "ON CONFLICT (organization_id, source, source_key) DO NOTHING" else ""
         val id =
             db
@@ -465,6 +483,15 @@ class NotificationRepository(
         spec.fetch().rowsUpdated().awaitSingle()
     }
 
+    // the table's window check, said first. a draft without publishAt keeps the stored one or takes now, which
+    // validation never saw: an IllegalArgumentException (a refused batch, a publish that throws), not an integrity error
+    private fun requireWindow(
+        prepared: PreparedNotification,
+        publishAt: Instant
+    ) {
+        require(prepared.expiresAt == null || prepared.expiresAt > publishAt) { "expiresAt must be after publishAt ($publishAt)" }
+    }
+
     // a reset: everyone reads it as new again
     private suspend fun deleteReceipts(
         organizationId: UUID,
@@ -501,7 +528,9 @@ class NotificationRepository(
             key = Rows.stringOrNull(row, "source_key"),
             kind = NotificationKind.valueOf(Rows.string(row, "kind")),
             fingerprint = Rows.string(row, "fingerprint"),
-            resolvedAt = Rows.instantOrNull(row, "resolved_at")
+            resolvedAt = Rows.instantOrNull(row, "resolved_at"),
+            publishAt = Rows.instantOrNull(row, "publish_at")!!,
+            updatedAt = Rows.instantOrNull(row, "updated_at")!!
         )
 
     private fun notification(
@@ -529,7 +558,7 @@ class NotificationRepository(
         )
 
     private companion object {
-        const val ROW_COLUMNS = "id, source_key, kind, fingerprint, resolved_at"
+        const val ROW_COLUMNS = "id, source_key, kind, fingerprint, resolved_at, publish_at, updated_at"
     }
 }
 

@@ -244,30 +244,52 @@ class NotificationRuleApiTest : FullAppIntegrationTest() {
     }
 
     @Test
-    fun `record writes keep the notification in step, without a run`() {
+    fun `record writes keep an open notification in step, without a run`() {
         val obj = tenant.createObject(fields)
         val leaving = record(obj, "L-1", "2026-10-10")
-        val arriving = record(obj, "L-2", "2026-12-31")
+        val changing = record(obj, "L-2", "2026-10-12")
         val deleted = record(obj, "L-3", "2026-10-12")
         val name = unique()
         call("POST", "/api/objects/$obj/notification-rules", rule(name), HttpStatus.CREATED)
-        assertThat(open(name).keys).containsExactlyInAnyOrder(leaving, deleted)
+        assertThat(open(name).keys).containsExactlyInAnyOrder(leaving, changing, deleted)
 
-        // renewed: out of the window
+        // renewed: out of the window, resolved at once
         update(obj, leaving, "L-1", "2027-10-10")
-        update(obj, arriving, "L-2", "2026-10-07")
-        assertThat(open(name).keys).containsExactlyInAnyOrder(arriving, deleted)
-        assertThat(open(name).getValue(arriving).get("title").asString()).isEqualTo("La licencia L-2 vence el 07/10/2026")
+        assertThat(open(name).keys).containsExactlyInAnyOrder(changing, deleted)
+
+        // still in the window: the content changes in place
+        update(obj, changing, "L-2", "2026-10-07")
+        assertThat(open(name).getValue(changing).get("title").asString()).isEqualTo("La licencia L-2 vence el 07/10/2026")
+        assertThat(open(name).getValue(changing).get("kind").asString()).isEqualTo("WARNING")
 
         // a condition that stops holding resolves too
-        update(obj, arriving, "L-2", "2026-10-07", estado = "ANULADA")
+        update(obj, changing, "L-2", "2026-10-07", estado = "ANULADA")
         assertThat(open(name).keys).containsExactly(deleted)
 
         call("DELETE", "/api/objects/$obj/records/$deleted", null, HttpStatus.NO_CONTENT)
         assertThat(open(name)).isEmpty()
-        // a new record in the window is published at once
-        val created = record(obj, "L-4", "2026-10-15")
-        assertThat(open(name).keys).containsExactly(created)
+    }
+
+    // a write never creates or reopens: the run does, and only the run sees the cap
+    @Test
+    fun `a record that enters the window appears on the next run, not on the write`() {
+        val obj = tenant.createObject(fields)
+        val arriving = record(obj, "N-1", "2026-12-31")
+        val returning = record(obj, "N-2", "2026-10-10")
+        val name = unique()
+        call("POST", "/api/objects/$obj/notification-rules", rule(name), HttpStatus.CREATED)
+        assertThat(open(name).keys).containsExactly(returning)
+
+        update(obj, arriving, "N-1", "2026-10-07")
+        // out and back in: the write resolves, the next one does not reopen
+        update(obj, returning, "N-2", "2027-10-10")
+        update(obj, returning, "N-2", "2026-10-11")
+        val created = record(obj, "N-3", "2026-10-15")
+        assertThat(open(name)).isEmpty()
+
+        assertThat(run(obj, name)).isEqualTo(Counts(created = 2, updated = 0, reopened = 1, resolved = 0))
+        assertThat(open(name).keys).containsExactlyInAnyOrder(arriving, returning, created)
+        assertThat(open(name).getValue(returning).get("title").asString()).isEqualTo("La licencia N-2 vence el 11/10/2026")
     }
 
     @Test
@@ -307,15 +329,42 @@ class NotificationRuleApiTest : FullAppIntegrationTest() {
     }
 
     @Test
-    fun `a rule notifies the earliest records up to the cap`() {
+    fun `a rule notifies the earliest records up to the cap, and a write beyond it does not flap`() {
         val obj = tenant.createObject(fields)
         val earliest = listOf("2026-10-04", "2026-10-06", "2026-10-09").mapIndexed { i, date -> record(obj, "C-$i", date) }
-        record(obj, "C-late", "2026-10-20")
+        val late = record(obj, "C-late", "2026-10-20")
         val name = unique()
 
         call("POST", "/api/objects/$obj/notification-rules", rule(name), HttpStatus.CREATED)
 
         assertThat(open(name).keys).containsExactlyInAnyOrderElementsOf(earliest)
+        // beyond the cap: a write publishes nothing, so the next run has nothing to resolve
+        update(obj, late, "C-late", "2026-10-19")
+        assertThat(open(name).keys).containsExactlyInAnyOrderElementsOf(earliest)
+        assertThat(run(obj, name)).isEqualTo(Counts(0, 0, 0, 0))
+    }
+
+    // the save and its run are one transaction: a run that fails leaves the rule as it was.
+    // a trigger refuses the rule's notifications, as a database error mid-run would.
+    @Test
+    fun `a POST or PUT whose run fails leaves the rule as it was`() {
+        val obj = tenant.createObject(fields)
+        record(obj, "F-1", "2026-10-10")
+        val created = unique()
+        val replaced = unique()
+        call("POST", "/api/objects/$obj/notification-rules", rule(replaced, mapOf("enabled" to false)), HttpStatus.CREATED)
+
+        refusingNotificationsOf(created, replaced) {
+            failing("POST", "/api/objects/$obj/notification-rules", rule(created))
+            call("GET", "/api/objects/$obj/notification-rules/$created", null, HttpStatus.NOT_FOUND)
+
+            failing("PUT", "/api/objects/$obj/notification-rules/$replaced", rule(replaced, mapOf("label" to "Otra")))
+            val kept = call("GET", "/api/objects/$obj/notification-rules/$replaced", null, HttpStatus.OK)
+            assertThat(kept.get("enabled").asBoolean()).isFalse()
+            assertThat(kept.get("label").asString()).isEqualTo("Licencias por vencer")
+        }
+        assertThat(open(created)).isEmpty()
+        assertThat(open(replaced)).isEmpty()
     }
 
     @Test
@@ -382,6 +431,48 @@ class NotificationRuleApiTest : FullAppIntegrationTest() {
         estado: String = "VIGENTE"
     ) {
         call("PUT", "/api/objects/$obj/records/$id", mapOf("attributes" to mapOf("codigo" to codigo, "vence" to vence, "estado" to estado)), HttpStatus.OK)
+    }
+
+    private fun failing(
+        method: String,
+        uri: String,
+        body: Any
+    ) {
+        client
+            .method(HttpMethod.valueOf(method))
+            .uri(uri)
+            .header(HttpHeaders.AUTHORIZATION, tenant.admin)
+            .bodyValue(body)
+            .exchange()
+            .expectStatus()
+            .is5xxServerError
+    }
+
+    // inserts of these rules' notifications fail while block runs
+    private fun refusingNotificationsOf(
+        vararg rules: String,
+        block: () -> Unit
+    ) {
+        val m = schemas.metadata
+        val function = "$m.it_refuse_${rules.first()}"
+        val sources = rules.joinToString(", ") { "'rule:$it'" }
+        exec("CREATE FUNCTION $function() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''refused by the test''; END'")
+        exec(
+            "CREATE TRIGGER it_refuse_${rules.first()} BEFORE INSERT ON $m.notifications FOR EACH ROW WHEN (NEW.source IN ($sources)) EXECUTE FUNCTION $function()"
+        )
+        try {
+            block()
+        } finally {
+            exec("DROP TRIGGER it_refuse_${rules.first()} ON $m.notifications")
+            exec("DROP FUNCTION $function()")
+        }
+    }
+
+    private fun exec(statement: String) {
+        db
+            .sql(statement)
+            .then()
+            .block()
     }
 
     private fun names(list: JsonNode): List<String> = list.toList().map { it.get("name").asString() }

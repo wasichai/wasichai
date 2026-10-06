@@ -24,13 +24,16 @@ import wasichai.notifications.NotificationDraft
 import wasichai.notifications.NotificationKind
 import wasichai.notifications.NotificationLink
 import wasichai.notifications.NotificationListener
+import wasichai.notifications.NotificationLoop
 import wasichai.notifications.NotificationPreparer
+import wasichai.notifications.NotificationSignals
 import wasichai.notifications.NotificationWriter
 import wasichai.test.WasichaiTestDatabase
 import java.sql.DriverManager
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 // spec D end to end: the stream hears writes through LISTEN. the refresh floor is an hour here, so a new
 // summary within seconds can only have come through a signal.
@@ -57,6 +60,12 @@ class NotificationStreamApiTest : FullAppIntegrationTest() {
 
     @Autowired
     private lateinit var listener: NotificationListener
+
+    @Autowired
+    private lateinit var signals: NotificationSignals
+
+    @Autowired
+    private lateinit var loop: NotificationLoop
 
     private val tenant by lazy { NotificationsTenant.provision(client, db, schemas) }
 
@@ -101,6 +110,23 @@ class NotificationStreamApiTest : FullAppIntegrationTest() {
             writer.publish(tenant.organizationId, SOURCE, prepared, null).id
         }
 
+    // publish, then wait until this replica has heard its NOTIFY: a stream opened after that cannot get it late
+    // (the hub drops what nobody listened to), so the next event can only come from what the test does next
+    private fun publishHeard(
+        kind: NotificationKind,
+        to: UUID
+    ): UUID {
+        val heard =
+            signals
+                .signals()
+                .filter { it.organizationId == tenant.organizationId && it.userId == null }
+                .next()
+                .toFuture()
+        val id = publish(kind, to)
+        heard.get(20, TimeUnit.SECONDS)
+        return id
+    }
+
     private fun unread(
         summary: JsonNode,
         kind: NotificationKind
@@ -135,6 +161,12 @@ class NotificationStreamApiTest : FullAppIntegrationTest() {
             .verify(Duration.ofSeconds(20))
     }
 
+    // FullAppProperties turns the loop off, and this class's own properties add to them, never replace them
+    @Test
+    fun `the loop is off here, as in every full app test`() {
+        assertThat(loop.isRunning).isFalse()
+    }
+
     @Test
     fun `a heartbeat comment keeps the stream alive`() {
         val ana = tenant.createUser()
@@ -149,7 +181,7 @@ class NotificationStreamApiTest : FullAppIntegrationTest() {
     @Test
     fun `a raw pg_notify from another connection brings a recompute`() {
         val bea = tenant.createUser()
-        val id = publish(NotificationKind.INFO, bea.id)
+        val id = publishHeard(NotificationKind.INFO, bea.id)
         StepVerifier
             .create(summaries(bea.token))
             .assertNext { assertThat(unread(it, NotificationKind.INFO)).isEqualTo(1) }
@@ -175,7 +207,7 @@ class NotificationStreamApiTest : FullAppIntegrationTest() {
     fun `another person's receipts do not wake my stream`() {
         val cata = tenant.createUser()
         val dora = tenant.createUser()
-        publish(NotificationKind.INFO, cata.id)
+        publishHeard(NotificationKind.INFO, cata.id)
         StepVerifier
             .create(summaries(cata.token))
             .assertNext { assertThat(unread(it, NotificationKind.INFO)).isEqualTo(1) }

@@ -72,17 +72,21 @@ class NotificationRuleService(
         val (organizationId, definition) = objectFor(objectName)
         val rule = validate(organizationId, definition, request)
         if (rules.findByName(organizationId, rule.name) != null) throw taken(rule.name)
-        try {
-            rules.insert(organizationId, definition.obj.id, rule)
-        } catch (_: DuplicateKeyException) {
-            // another request took the name between the read and the insert
-            throw taken(rule.name)
+        // one transaction: a run that fails leaves no rule behind
+        operator.executeAndAwait {
+            try {
+                rules.insert(organizationId, definition.obj.id, rule)
+            } catch (_: DuplicateKeyException) {
+                // another request took the name between the read and the insert
+                throw taken(rule.name)
+            }
+            if (rule.enabled) runner.run(organizationId, rule, definition, clock.instant())
         }
-        if (rule.enabled) runner.run(organizationId, rule, definition, clock.instant())
         return stored(organizationId, rule.name)
     }
 
-    // full replace. enabled: runs at once. disabled: what it published resolves, in the same transaction
+    // full replace, in one transaction with what follows. enabled: runs at once (a run that fails leaves the rule
+    // as it was). disabled: what it published resolves
     suspend fun replace(
         objectName: String,
         name: String,
@@ -92,12 +96,11 @@ class NotificationRuleService(
         val existing = ruleOf(organizationId, definition, name)
         if (request.name != name) throw ValidationException(RuleCheck.MESSAGE, "name", "must be '$name', the rule in the path; a rule is not renamed")
         val rule = validate(organizationId, definition, request)
-        if (rule.enabled) {
+        operator.executeAndAwait {
             rules.update(organizationId, existing.id, rule)
-            runner.run(organizationId, rule, definition, clock.instant())
-        } else {
-            operator.executeAndAwait {
-                rules.update(organizationId, existing.id, rule)
+            if (rule.enabled) {
+                runner.run(organizationId, rule, definition, clock.instant())
+            } else {
                 writer.resolveAll(organizationId, Sources.rule(name))
             }
         }

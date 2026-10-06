@@ -1,6 +1,5 @@
 package wasichai.notifications
 
-import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import wasichai.core.data.RecordStore
 import wasichai.core.metadata.MetadataService
@@ -36,6 +35,11 @@ class RuleNotifications(
         now: Instant
     ): ReconcileResult {
         val source = Sources.rule(rule.name)
+        // saving checks the field, and core refuses to delete one a rule reads: a stale definition is a bug. once, not per record
+        if (!NotificationRules.readsDateField(rule, definition)) {
+            notADateField(organizationId, rule, definition)
+            return ReconcileResult(0, 0, 0, 0)
+        }
         val today = today(now)
         // one more than the cap tells "full" from "more than allowed"
         val found = store.query(definition, organizationId, NotificationRules.recordQuery(rule, today, zone, cap + 1)).content
@@ -53,7 +57,8 @@ class RuleNotifications(
                 val draft = evaluate(organizationId, rule, definition, row.id, row.attributes, today) ?: return@mapNotNull null
                 preparer.prepare(organizationId, source, draft, now, strict = false, allowReservedSource = true)
             }
-        return writer.reconcile(organizationId, source, prepared)
+        // now is when the read began: a notification written after it saw newer records, and stays as it is
+        return writer.reconcile(organizationId, source, prepared, readStart = now)
     }
 
     // one record, lenient: null when it is out of the window, fails a condition, or reaches nobody.
@@ -71,6 +76,20 @@ class RuleNotifications(
     }
 
     private fun today(now: Instant): LocalDate = LocalDate.ofInstant(now, zone)
+
+    internal fun notADateField(
+        organizationId: UUID,
+        rule: NotificationRuleDefinition,
+        definition: ObjectDefinition
+    ) {
+        log.warn(
+            "organization {}: notification rule '{}' skipped: '{}' is not a DATE or DATETIME field of '{}'",
+            organizationId,
+            rule.name,
+            rule.field,
+            definition.obj.name
+        )
+    }
 
     // one unreadable record never stops the others: logged, left out (so a notification of it resolves)
     private fun evaluate(
@@ -96,11 +115,20 @@ class RuleNotifications(
 // the loop's `rules` item: every enabled rule of the organization, each object's definition read once.
 // one failing rule is logged; the others still run.
 internal class RulesWork(
-    private val rules: NotificationRuleRepository,
-    private val metadata: MetadataService,
-    private val runner: RuleNotifications,
+    // the organization's enabled rules
+    private val enabled: suspend (UUID) -> List<StoredRule>,
+    // (organization, object id) -> the object's definition
+    private val definitionOf: suspend (UUID, UUID) -> ObjectDefinition,
+    private val runRule: suspend (UUID, NotificationRuleDefinition, ObjectDefinition, Instant) -> ReconcileResult,
     override val interval: Duration
 ) : LoopWork {
+    constructor(
+        rules: NotificationRuleRepository,
+        metadata: MetadataService,
+        runner: RuleNotifications,
+        interval: Duration
+    ) : this(rules::enabledAll, metadata::loadDefinitionById, runner::run, interval)
+
     override val key: String = KEY
 
     init {
@@ -111,17 +139,15 @@ internal class RulesWork(
         organizationId: UUID,
         now: Instant
     ) {
-        rules.enabledAll(organizationId).groupBy { it.objectId }.forEach { (objectId, stored) ->
-            val definition = metadata.loadDefinitionById(organizationId, objectId)
+        enabled(organizationId).groupBy { it.objectId }.forEach { (objectId, stored) ->
+            // read once per object, inside each rule's try: an object that does not load fails its own rules, not the rest
+            var definition: ObjectDefinition? = null
             stored.forEach { rule ->
-                try {
-                    val result = runner.run(organizationId, rule.rule, definition, now)
+                logged({
+                    val loaded = definition ?: definitionOf(organizationId, objectId).also { definition = it }
+                    val result = runRule(organizationId, rule.rule, loaded, now)
                     if (result.changed) log.debug("notification rule {} organization {}: {}", rule.rule.name, organizationId, result)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    log.warn("Notification rule '{}' failed for organization {}: {}", rule.rule.name, organizationId, e.message, e)
-                }
+                }) { e -> log.warn("Notification rule '{}' failed for organization {}: {}", rule.rule.name, organizationId, e.message, e) }
             }
         }
     }
@@ -129,7 +155,7 @@ internal class RulesWork(
     override fun toString(): String = "notification rules"
 
     companion object {
-        const val KEY = "rules"
+        const val KEY = Sources.RULES
 
         private val log = LoggerFactory.getLogger(RulesWork::class.java)
     }

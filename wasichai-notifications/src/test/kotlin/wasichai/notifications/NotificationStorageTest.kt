@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.postgresql.PGConnection
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.r2dbc.core.DatabaseClient
+import org.springframework.test.context.TestPropertySource
 import org.springframework.transaction.reactive.TransactionalOperator
 import org.springframework.transaction.reactive.executeAndAwait
 import wasichai.core.common.FieldViolation
@@ -29,6 +30,8 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 // the module's sql against a real postgres. every test works in an organization of its own, so counts are exact.
+// no loop: its purge and rules would write under the tests' feet
+@TestPropertySource(properties = ["wasichai.notifications.tick=0s"])
 class NotificationStorageTest : WasichaiIntegrationTest() {
     @Autowired
     private lateinit var preparer: NotificationPreparer
@@ -44,6 +47,9 @@ class NotificationStorageTest : WasichaiIntegrationTest() {
 
     @Autowired
     private lateinit var units: OrgUnitDirectory
+
+    @Autowired
+    private lateinit var publisher: Notifications
 
     @Autowired
     private lateinit var transactions: TransactionalOperator
@@ -151,23 +157,128 @@ class NotificationStorageTest : WasichaiIntegrationTest() {
                 title: String = key
             ) = NotificationDraft(NotificationKind.ACTION, title, listOf(Audience.All), key = key)
 
-            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("a")), prepare(org, d("b"))))).isEqualTo(ReconcileResult(2, 0, 0, 0))
+            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("a")), prepare(org, d("b"))), Instant.now())).isEqualTo(ReconcileResult(2, 0, 0, 0))
             // a keyless row of the source is not part of the set: resolved too
             writer.publish(org, source, prepare(org, d("x").copy(key = null)), null)
-            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("a", "a2")), prepare(org, d("c")))))
+            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("a", "a2")), prepare(org, d("c"))), Instant.now()))
                 .isEqualTo(ReconcileResult(created = 1, updated = 1, reopened = 0, resolved = 2))
-            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("b"))))).isEqualTo(ReconcileResult(0, 0, 1, 2))
-            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("b"))))).isEqualTo(ReconcileResult(0, 0, 0, 0))
+            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("b"))), Instant.now())).isEqualTo(ReconcileResult(0, 0, 1, 2))
+            assertThat(writer.reconcile(org, source, listOf(prepare(org, d("b"))), Instant.now())).isEqualTo(ReconcileResult(0, 0, 0, 0))
             assertThat(notifications.openBySource(org, source, null).map { it.key }).containsExactly("b")
             assertThat(notifications.openBySource(org, source, listOf("a")).map { it.key }).containsExactlyInAnyOrder("a", "b")
 
-            assertThatThrownBy { runBlocking { writer.reconcile(org, source, listOf(prepare(org, d("b")), prepare(org, d("b", "otra")))) } }
+            assertThatThrownBy { runBlocking { writer.reconcile(org, source, listOf(prepare(org, d("b")), prepare(org, d("b", "otra"))), Instant.now()) } }
                 .isInstanceOf(IllegalArgumentException::class.java)
-            assertThatThrownBy { runBlocking { writer.reconcile(org, source, listOf(prepare(org, d("b").copy(key = null)))) } }
+            assertThatThrownBy { runBlocking { writer.reconcile(org, source, listOf(prepare(org, d("b").copy(key = null))), Instant.now()) } }
                 .isInstanceOf(IllegalArgumentException::class.java)
             // another source is not touched
-            assertThat(writer.reconcile(org, "it.other", emptyList())).isEqualTo(ReconcileResult(0, 0, 0, 0))
+            assertThat(writer.reconcile(org, "it.other", emptyList(), Instant.now())).isEqualTo(ReconcileResult(0, 0, 0, 0))
             assertThat(notifications.openBySource(org, source, null)).hasSize(1)
+        }
+
+    @Test
+    fun `writers of one source take turns, other sources do not wait`(): Unit =
+        runBlocking {
+            val org = organization()
+            val draft = prepare(org, NotificationDraft(NotificationKind.INFO, "En curso", listOf(Audience.All), key = "turn"))
+            val published = CompletableDeferred<Unit>()
+            var committed = false
+
+            coroutineScope {
+                // a publishes and holds its transaction (and the source's lock) open
+                val a =
+                    async {
+                        transactions.executeAndAwait {
+                            writer.publish(org, source, draft, null)
+                            published.complete(Unit)
+                            delay(700)
+                            committed = true
+                        }
+                    }
+                published.await()
+                // another source of the organization is not held up
+                assertThat(writer.resolveAll(org, "it.other")).isZero()
+                assertThat(committed).isFalse()
+                // b waits for a's commit, then sees its row: without the lock it would read nothing and answer 0
+                val b = async { writer.resolveAll(org, source) }
+                assertThat(b.await()).isEqualTo(1)
+                assertThat(committed).isTrue()
+                a.await()
+            }
+        }
+
+    @Test
+    fun `updateOpen touches only an open key`(): Unit =
+        runBlocking {
+            val org = organization()
+
+            suspend fun d(title: String) = prepare(org, NotificationDraft(NotificationKind.WARNING, title, listOf(Audience.All), key = "k"))
+
+            // nothing stored: nothing created
+            assertThat(writer.updateOpen(org, source, d("Nuevo"))).isEqualTo(UpsertOutcome.UNCHANGED)
+            assertThat(rows(org)).isZero()
+
+            val id = writer.publish(org, source, d("Abierto"), null).id
+            assertThat(writer.updateOpen(org, source, d("Abierto"))).isEqualTo(UpsertOutcome.UNCHANGED)
+            assertThat(writer.updateOpen(org, source, d("Cambiado"))).isEqualTo(UpsertOutcome.UPDATED)
+            assertThat(notifications.findById(org, id)!!.title).isEqualTo("Cambiado")
+
+            // resolved: left resolved, the next run decides
+            assertThat(writer.resolve(org, source, "k")).isTrue()
+            assertThat(writer.updateOpen(org, source, d("Otra vez"))).isEqualTo(UpsertOutcome.UNCHANGED)
+            val back = notifications.findById(org, id)!!
+            assertThat(back.resolvedAt).isNotNull()
+            assertThat(back.title).isEqualTo("Cambiado")
+        }
+
+    @Test
+    fun `a reconcile leaves alone what was written after its read began`(): Unit =
+        runBlocking {
+            val org = organization()
+
+            suspend fun d(
+                key: String,
+                title: String = key
+            ) = prepare(org, NotificationDraft(NotificationKind.ACTION, title, listOf(Audience.All), key = key))
+
+            val readStart = Instant.now()
+            // the listener, after the read: one updated, one resolved, one left open
+            writer.publish(org, source, d("a", "nuevo"), null)
+            writer.publish(org, source, d("b"), null)
+            writer.resolve(org, source, "b")
+            writer.publish(org, source, d("c"), null)
+
+            // the stale read: "a" with old content, "b" still due, "c" gone
+            val stale = writer.reconcile(org, source, listOf(d("a", "viejo"), d("b")), readStart)
+            assertThat(stale).isEqualTo(ReconcileResult(0, 0, 0, 0))
+            assertThat(notifications.openBySource(org, source, null).map { it.key }).containsExactlyInAnyOrder("a", "c")
+
+            // a fresh read wins
+            assertThat(writer.reconcile(org, source, listOf(d("a", "viejo"), d("b")), Instant.now())).isEqualTo(ReconcileResult(0, 1, 1, 1))
+        }
+
+    @Test
+    fun `an expiry before the kept publication is an illegal argument, never an integrity error`(): Unit =
+        runBlocking {
+            val org = organization()
+            val now = Instant.now()
+            val later = now.plus(Duration.ofDays(2))
+            val scheduled = NotificationDraft(NotificationKind.INFO, "Programada", listOf(Audience.All), key = "w", publishAt = later)
+            val id = publisher.publish(org, source, scheduled)!!
+            // no publishAt keeps the stored one, two days ahead: an expiry tomorrow would end before it starts
+            val ending = scheduled.copy(title = "Termina antes", publishAt = null, expiresAt = now.plus(Duration.ofDays(1)))
+
+            assertThatThrownBy { runBlocking { publisher.publish(org, source, ending) } }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("expiresAt must be after publishAt")
+            assertThatThrownBy { runBlocking { writer.reconcile(org, source, listOf(prepare(org, ending)), Instant.now()) } }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("expiresAt must be after publishAt")
+            assertThat(notifications.findById(org, id)!!.title).isEqualTo("Programada")
+
+            // after the kept publication: fine
+            assertThat(publisher.publish(org, source, ending.copy(expiresAt = later.plus(Duration.ofDays(1))))).isEqualTo(id)
+            assertThat(notifications.findById(org, id)!!.title).isEqualTo("Termina antes")
         }
 
     @Test
@@ -332,8 +443,8 @@ class NotificationStorageTest : WasichaiIntegrationTest() {
             val other = organization()
             assertThat(notifications.findById(other, open)).isNull()
             assertThat(notifications.targetsOf(other, listOf(open))).isEmpty()
-            assertThat(writer.delete(other, open)).isFalse()
-            assertThat(writer.delete(org, open)).isTrue()
+            assertThat(writer.delete(other, source, open)).isFalse()
+            assertThat(writer.delete(org, source, open)).isTrue()
             assertThat(notifications.findById(org, open)).isNull()
         }
 

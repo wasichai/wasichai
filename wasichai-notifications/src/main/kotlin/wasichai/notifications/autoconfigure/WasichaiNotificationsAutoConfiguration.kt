@@ -78,7 +78,8 @@ class WasichaiNotificationsAutoConfiguration {
         audience: AudienceResolver
     ): NotificationPreparer = NotificationPreparer(metadata, audience)
 
-    // JsonMapper, not the wider ObjectMapper: see core's WasichaiMetadataAutoConfiguration.customFieldRepository
+    // JsonMapper, not the wider ObjectMapper: see core's WasichaiMetadataAutoConfiguration.customFieldRepository.
+    // both repositories check the channel's length when built: an over-long metadata schema fails the start
     @Bean
     @ConditionalOnMissingBean
     fun notificationRepository(
@@ -101,10 +102,13 @@ class WasichaiNotificationsAutoConfiguration {
     @ConditionalOnMissingBean
     fun notificationWriter(
         repository: NotificationRepository,
+        clusterLock: ClusterLock,
         clock: ObjectProvider<Clock>,
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): NotificationWriter =
-        NotificationWriter(repository, clock.getIfUnique { Clock.systemUTC() }) { TransactionalOperator.create(transactionManager.getObject()) }
+        NotificationWriter(repository, clusterLock, clock.getIfUnique { Clock.systemUTC() }) {
+            TransactionalOperator.create(transactionManager.getObject())
+        }
 
     // my notifications (task 9)
     @Bean

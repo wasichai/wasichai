@@ -417,6 +417,12 @@ object NotificationRules {
         )
     }
 
+    // what run and listener check once before any record: the rule's field is still a date field of the object
+    fun readsDateField(
+        rule: NotificationRuleDefinition,
+        definition: ObjectDefinition
+    ): Boolean = definition.fields.any { it.name == rule.field && it.type in DATE_TYPES }
+
     private fun dateField(
         rule: NotificationRuleDefinition,
         definition: ObjectDefinition

@@ -46,6 +46,11 @@ class InboxRepository(
 ) {
     private val m = schemas.metadata
 
+    init {
+        // an over-long channel fails the start, LISTEN or not: not the first receipt
+        NotificationChannel.name(schemas)
+    }
+
     // arrays + ANY, never IN (:list): an empty list breaks IN, an empty array matches nothing
     private val visible =
         """

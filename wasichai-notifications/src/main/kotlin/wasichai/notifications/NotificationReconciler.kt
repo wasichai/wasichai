@@ -1,6 +1,7 @@
 package wasichai.notifications
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import java.time.Instant
 
 enum class ReconcileAction { CREATE, UPDATE, REOPEN, SKIP }
 
@@ -45,12 +46,17 @@ internal object NotificationReconciler {
         require(repeated.isEmpty()) { "keys must be unique within a source: ${repeated.joinToString { "'$it'" }}" }
     }
 
-    // stored: the source's open rows plus resolved rows with the drafts' keys (NotificationRepository.openBySource)
+    // stored: the source's open rows plus resolved rows with the drafts' keys (NotificationRepository.openBySource).
+    // readStart: a row written after it (updated_at later) was written by someone who saw newer data than the
+    // drafts: skipped, never resolved. a frozen test clock stamps equal instants: equal is not later.
     fun diff(
         stored: List<StoredRow>,
-        drafts: List<PreparedNotification>
+        drafts: List<PreparedNotification>,
+        readStart: Instant? = null
     ): ReconcilePlan {
         requireKeys(drafts)
+
+        fun newer(row: StoredRow) = readStart != null && row.updatedAt > readStart
         val byKey = stored.filter { it.key != null }.associateBy { it.key }
         val steps =
             drafts.map { draft ->
@@ -58,6 +64,7 @@ internal object NotificationReconciler {
                 val action =
                     when {
                         row == null -> ReconcileAction.CREATE
+                        newer(row) -> ReconcileAction.SKIP
                         row.resolvedAt != null -> ReconcileAction.REOPEN
                         row.fingerprint == draft.fingerprint -> ReconcileAction.SKIP
                         else -> ReconcileAction.UPDATE
@@ -65,7 +72,7 @@ internal object NotificationReconciler {
                 ReconcileStep(action, draft, row)
             }
         val keys = drafts.mapTo(HashSet()) { it.key }
-        val resolve = stored.filter { it.resolvedAt == null && (it.key == null || it.key !in keys) }
+        val resolve = stored.filter { it.resolvedAt == null && (it.key == null || it.key !in keys) && !newer(it) }
         return ReconcilePlan(steps, resolve)
     }
 }

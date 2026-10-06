@@ -97,11 +97,12 @@ class NotificationAdminService(
     ): PageResponse<NotificationAdminView> {
         val organizationId = requireAdmin()
         val violations = mutableListOf<FieldViolation>()
-        val kindFilter = kind?.let { parse<NotificationKind>(it, "kind", violations) }
-        val statusFilter = status?.let { parse<NotificationStatus>(it, "status", violations) }
+        // blank is no filter, as the inbox's
+        val kindFilter = kind?.takeIf { it.isNotBlank() }?.let { parse<NotificationKind>(it, "kind", violations) }
+        val statusFilter = status?.takeIf { it.isNotBlank() }?.let { parse<NotificationStatus>(it, "status", violations) }
         // a unit is addressed by code, stored by id
         val unitId =
-            unit?.let { code ->
+            unit?.takeIf { it.isNotBlank() }?.let { code ->
                 units.idsByCode(organizationId, listOf(code)).values.firstOrNull().also {
                     if (it == null) violations += FieldViolation("unit", "unknown unit '${OrgUnitDirectory.normaliseCode(code)}'")
                 }
@@ -142,14 +143,14 @@ class NotificationAdminService(
         val stored = manualOrFail(organizationId, id)
         val draft = request.toDraft()
         checkStoredWindow(stored, draft)
-        writer.replace(organizationId, id, prepare(organizationId, draft)) ?: throw notFound()
+        writer.replace(organizationId, Sources.MANUAL, id, prepare(organizationId, draft)) ?: throw notFound()
         return view(organizationId, id)
     }
 
     suspend fun delete(id: UUID) {
         val organizationId = requireAdmin()
         manualOrFail(organizationId, id)
-        if (!writer.delete(organizationId, id)) throw notFound()
+        if (!writer.delete(organizationId, Sources.MANUAL, id)) throw notFound()
     }
 
     // strict: unknown recipients are 400s, so a null (nobody left) cannot happen; checked all the same

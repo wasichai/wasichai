@@ -1,12 +1,15 @@
 package wasichai.notifications
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.reactor.mono
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
 import reactor.core.Disposable
 import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 import wasichai.core.data.RecordService
 import wasichai.core.organization.OrganizationRepository
 import wasichai.core.platform.ClusterLock
@@ -75,7 +78,8 @@ internal class SourceWork(
             val drafts = source.currentNotifications(organizationId, now)
             // lenient: unknown recipients dropped; a draft nobody is left for stays out (resolves a stored one)
             val prepared = drafts.mapNotNull { preparer.prepare(organizationId, key, it, now, strict = false) }
-            val result = writer.reconcile(organizationId, key, prepared)
+            // now is the tick's, taken before the read: what was written after it is left for the next run
+            val result = writer.reconcile(organizationId, key, prepared, readStart = now)
             if (result.changed) log.debug("source {} organization {}: {}", key, organizationId, result)
         }
     }
@@ -144,7 +148,7 @@ class NotificationLoop internal constructor(
     override fun start() {
         if (properties.tick.isZero || subscription != null) return
         subscription =
-            loop(properties.tick, { log.error("Notifications loop stopped", it) }) {
+            tickLoop(properties.tick, { log.error("Notifications loop tick failed", it) }) {
                 logged({ runOnce() }) { log.warn("Notifications loop failed: {}", it.message) }
             }
     }
@@ -225,36 +229,43 @@ class NotificationLoop internal constructor(
         return !last.plus(interval).isAfter(now)
     }
 
-    // failures are logged and swallowed; a cancelled loop (stop) still stops
-    private suspend fun logged(
-        block: suspend () -> Unit,
-        onFailure: (Throwable) -> Unit
-    ) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            onFailure(e)
-        }
-    }
-
     private companion object {
         const val LOCK_PREFIX = "wasichai.notifications."
-        const val PURGE = "purge"
+        const val PURGE = Sources.PURGE
         val PURGE_INTERVAL: Duration = Duration.ofDays(1)
-
-        // AutomationDrain's loop, which is internal to automation. interval has no backpressure: a slow pass
-        // drops ticks instead of dying with an overflow. onError is a last resort that should never fire.
-        fun loop(
-            interval: Duration,
-            onError: (Throwable) -> Unit,
-            body: suspend () -> Unit
-        ): Disposable =
-            Flux
-                .interval(interval)
-                .onBackpressureDrop()
-                .concatMap { mono { body() } }
-                .subscribe({}, onError)
     }
 }
+
+// failures are logged and swallowed. a CancellationException that is not ours (a source's withTimeout, a
+// java.util.concurrent one from a future) is a failure like any other: only our own cancellation (stop) goes up
+internal suspend fun logged(
+    block: suspend () -> Unit,
+    onFailure: (Throwable) -> Unit
+) {
+    try {
+        block()
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+        onFailure(e)
+    } catch (e: Exception) {
+        onFailure(e)
+    }
+}
+
+// AutomationDrain's loop, which is internal to automation. interval has no backpressure: a slow pass drops
+// ticks instead of dying with an overflow. a tick that fails anyway is handed to onError and the next one
+// still comes: an error reaching interval would end the loop for good.
+internal fun tickLoop(
+    interval: Duration,
+    onError: (Throwable) -> Unit,
+    body: suspend () -> Unit
+): Disposable =
+    Flux
+        .interval(interval)
+        .onBackpressureDrop()
+        .concatMap { _ ->
+            mono { body() }.onErrorResume { e ->
+                onError(e)
+                Mono.empty()
+            }
+        }.subscribe({}, onError)

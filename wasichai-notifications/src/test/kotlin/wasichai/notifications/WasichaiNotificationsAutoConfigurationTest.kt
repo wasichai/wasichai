@@ -110,6 +110,20 @@ class WasichaiNotificationsAutoConfigurationTest {
         }
     }
 
+    // 50 + "_notifications" is 64: postgres would cut the channel. the start fails, even with no listener to build
+    @Test
+    fun `a metadata schema too long for the channel fails the start without a listener`() {
+        runner
+            .withPropertyValues("wasichai.database.metadata-schema=" + "m".repeat(50), "wasichai.notifications.listen=false")
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context).getFailure().rootCause().hasMessageContaining("notification channel")
+            }
+        runner.withPropertyValues("wasichai.database.metadata-schema=" + "m".repeat(49), "wasichai.notifications.listen=false").run { context ->
+            assertThat(context).hasNotFailed()
+        }
+    }
+
     @Test
     fun `switched off, no migration and no settings`() {
         runner.withPropertyValues("wasichai.notifications.enabled=false").run { context ->

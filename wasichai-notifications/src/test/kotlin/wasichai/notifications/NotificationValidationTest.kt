@@ -1,11 +1,16 @@
 package wasichai.notifications
 
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import wasichai.core.common.FieldViolation
 import wasichai.core.common.ValidationException
+import wasichai.core.metadata.MetadataService
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 
 class NotificationValidationTest {
@@ -63,6 +68,39 @@ class NotificationValidationTest {
         assertThat(fields(draft, source = "manual", allowReserved = true)).isEmpty()
         assertThat(fields(draft, source = "rule:tasa_por_vencer", allowReserved = true)).isEmpty()
         assertThat(fields(draft, source = "manuals")).isEmpty()
+    }
+
+    @Test
+    fun `purge and rules are the loop's keys, not a source of anyone's`() {
+        listOf("purge", "rules").forEach { key ->
+            assertThat(check(draft, source = key).violations).containsExactly(
+                FieldViolation("source", "'purge' and 'rules' are the notifications loop's own keys")
+            )
+            assertThat(fields(draft, source = key, allowReserved = true)).containsExactly("source")
+        }
+        assertThat(fields(draft, source = "rules.app")).isEmpty()
+    }
+
+    @Test
+    fun `publish, resolve and resolveAll refuse a loop key`() {
+        val notifications =
+            Notifications(
+                NotificationPreparer(mock(MetadataService::class.java), mock(AudienceResolver::class.java)),
+                mock(NotificationWriter::class.java),
+                Clock.fixed(now, ZoneOffset.UTC)
+            )
+        val org = UUID.randomUUID()
+        listOf("purge", "rules").forEach { key ->
+            assertThatThrownBy { runBlocking { notifications.publish(org, key, draft.copy(key = "k")) } }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("loop's own keys")
+            assertThatThrownBy { runBlocking { notifications.resolve(org, key, "k") } }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("loop's own keys")
+            assertThatThrownBy { runBlocking { notifications.resolveAll(org, key) } }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("loop's own keys")
+        }
     }
 
     @Test

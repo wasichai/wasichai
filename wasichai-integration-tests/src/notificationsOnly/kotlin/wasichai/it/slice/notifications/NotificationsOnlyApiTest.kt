@@ -7,10 +7,13 @@ import org.junit.jupiter.api.Test
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
+import org.springframework.test.context.TestPropertySource
 import wasichai.it.support.SliceSmokeTest
 
 // core + notifications on plain postgres: it boots, it migrates, core still answers, and the admin, the inbox
 // and the rules work without pages. the inherited checks cover every other module's 404s.
+// the loop is off, as in the full app: nothing here needs it
+@TestPropertySource(properties = ["wasichai.notifications.tick=0s"])
 class NotificationsOnlyApiTest : SliceSmokeTest() {
     override val installed = setOf("notifications")
 

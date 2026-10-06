@@ -14,8 +14,11 @@ import java.time.Clock
 /**
  * Keeps a rule's notification of one record in step with the record (spec C): a renewed licence stops saying
  * "vence" at once, not at the next run. The changed record is judged by `change.after`, the evaluator the run
- * uses; `DELETED` resolves. An unreadable value is logged and skipped; a SQL error propagates (the writer's
- * transaction is aborted anyway). Last in line: after automation.
+ * uses; `DELETED` resolves. Only a notification the rule has **open** is updated or resolved here: creating one,
+ * or reopening a resolved one, is the run's (POST and PUT run the rule at once, the loop every `rule-interval`).
+ * The run alone sees the cap, so a record beyond it never flaps between a write that publishes and a run that
+ * resolves. An unreadable value is logged and skipped; a SQL error propagates (the writer's transaction is
+ * aborted anyway). Last in line: after automation.
  */
 @Order(Ordered.LOWEST_PRECEDENCE)
 class NotificationRuleListener(
@@ -40,6 +43,10 @@ class NotificationRuleListener(
         val now = clock.instant()
         enabled.forEach { stored ->
             val source = Sources.rule(stored.rule.name)
+            if (!NotificationRules.readsDateField(stored.rule, definition)) {
+                runner.notADateField(organizationId, stored.rule, definition)
+                return@forEach
+            }
             val prepared =
                 try {
                     runner.prepareOne(organizationId, stored.rule, definition, change.recordId, after, now)
@@ -50,7 +57,7 @@ class NotificationRuleListener(
                     skipped(change, stored, e)
                     return@forEach
                 }
-            if (prepared == null) writer.resolve(organizationId, source, key) else writer.publish(organizationId, source, prepared, null)
+            if (prepared == null) writer.resolve(organizationId, source, key) else writer.updateOpen(organizationId, source, prepared)
         }
     }
 

@@ -1,6 +1,8 @@
 package wasichai.notifications
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -12,6 +14,9 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 // the loop's scheduling without a database: runs, lock and organizations are fakes
 class NotificationLoopTest {
@@ -145,6 +150,60 @@ class NotificationLoopTest {
             assertThat(fine.calls.map { it.first }).containsExactly(orgA, orgB)
         }
 
+    // a source's own timeout is a CancellationException, but the loop was not cancelled: logged like any failure
+    @Test
+    fun `a source that times out or meets a cancelled future does not stop the loop`(): Unit =
+        runBlocking {
+            val timingOut =
+                object : LoopWork {
+                    override val key = "app.slow"
+                    override val interval: Duration = Duration.ofMinutes(15)
+                    val calls = mutableListOf<UUID>()
+
+                    override suspend fun run(
+                        organizationId: UUID,
+                        now: Instant
+                    ) {
+                        calls += organizationId
+                        if (organizationId == orgA) withTimeout(1) { delay(10_000) }
+                        throw java.util.concurrent.CancellationException("future cancelled for $organizationId")
+                    }
+                }
+            val fine = FakeWork("app.fine")
+            val loop = loop(timingOut, fine)
+
+            loop.runOnce(t0)
+            assertThat(timingOut.calls).containsExactly(orgA, orgB)
+            assertThat(runs.last["app.slow"]).isEqualTo(t0)
+            assertThat(fine.calls.map { it.first }).containsExactly(orgA, orgB)
+            assertThat(purges).hasSize(1)
+
+            // the next pass runs too
+            loop.runOnce(t0.plus(Duration.ofMinutes(15)))
+            assertThat(timingOut.calls).hasSize(4)
+            assertThat(fine.calls).hasSize(4)
+        }
+
+    @Test
+    fun `a tick that fails never ends the timer`() {
+        val ticks = AtomicInteger()
+        val failures = AtomicInteger()
+        val third = CountDownLatch(3)
+        val timer =
+            tickLoop(Duration.ofMillis(10), { failures.incrementAndGet() }) {
+                ticks.incrementAndGet()
+                third.countDown()
+                // what logged() lets through: not ours to swallow, yet the next tick must still come
+                if (ticks.get() <= 2) throw java.util.concurrent.CancellationException("tick ${ticks.get()}")
+            }
+        try {
+            assertThat(third.await(10, TimeUnit.SECONDS)).isTrue()
+            assertThat(failures.get()).isEqualTo(2)
+        } finally {
+            timer.dispose()
+        }
+    }
+
     @Test
     fun `organizations that cannot be listed leave the item due`(): Unit =
         runBlocking {
@@ -207,6 +266,25 @@ class NotificationLoopTest {
         assertThatThrownBy { loop(FakeWork("purge")) }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("'purge'")
+    }
+
+    @Test
+    fun `a source keyed purge or rules is told they are the loop's own`() {
+        listOf("purge", "rules").forEach { key ->
+            val source =
+                object : NotificationSource {
+                    override val key = key
+
+                    override suspend fun currentNotifications(
+                        organizationId: UUID,
+                        now: Instant
+                    ): List<NotificationDraft> = emptyList()
+                }
+            assertThatThrownBy {
+                SourceWork(source, mock(RecordService::class.java), mock(NotificationPreparer::class.java), mock(NotificationWriter::class.java))
+            }.isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("'purge' and 'rules' are the notifications loop's own keys")
+        }
     }
 
     @Test

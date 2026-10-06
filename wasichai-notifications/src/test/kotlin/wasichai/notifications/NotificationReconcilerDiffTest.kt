@@ -9,6 +9,9 @@ import java.util.UUID
 class NotificationReconcilerDiffTest {
     private val resolvedAt = Instant.parse("2026-10-01T00:00:00Z")
 
+    // when the stored rows were last written, unless a test says otherwise
+    private val written = Instant.parse("2026-09-30T00:00:00Z")
+
     private fun draft(
         key: String?,
         fingerprint: String = "fp-$key",
@@ -30,8 +33,9 @@ class NotificationReconcilerDiffTest {
     private fun stored(
         key: String?,
         fingerprint: String = "fp-$key",
-        resolvedAt: Instant? = null
-    ) = StoredRow(UUID.randomUUID(), key, NotificationKind.ACTION, fingerprint, resolvedAt)
+        resolvedAt: Instant? = null,
+        updatedAt: Instant = written
+    ) = StoredRow(UUID.randomUUID(), key, NotificationKind.ACTION, fingerprint, resolvedAt, publishAt = written, updatedAt = updatedAt)
 
     @Test
     fun `a key nobody stored is created`() {
@@ -88,6 +92,30 @@ class NotificationReconcilerDiffTest {
 
         assertThat(plan.steps).isEmpty()
         assertThat(plan.resolve).containsExactly(a)
+    }
+
+    @Test
+    fun `a row written after the read began is neither updated, reopened nor resolved`() {
+        val readStart = Instant.parse("2026-10-02T00:00:00Z")
+        val later = readStart.plusMillis(1)
+        val updated = stored("a", fingerprint = "listener", updatedAt = later)
+        val resolvedByListener = stored("b", resolvedAt = later, updatedAt = later)
+        val unreported = stored("c", updatedAt = later)
+        val older = stored("d", fingerprint = "old")
+        // a frozen clock stamps the read's own instant: not later, so not left alone
+        val sameInstant = stored("e", updatedAt = readStart)
+
+        val plan =
+            NotificationReconciler.diff(
+                listOf(updated, resolvedByListener, unreported, older, sameInstant),
+                listOf(draft("a"), draft("b"), draft("d")),
+                readStart
+            )
+
+        assertThat(plan.steps.map { it.action }).containsExactly(ReconcileAction.SKIP, ReconcileAction.SKIP, ReconcileAction.UPDATE)
+        assertThat(plan.resolve).containsExactly(sameInstant)
+        // no readStart, no guard
+        assertThat(NotificationReconciler.diff(listOf(unreported), emptyList()).resolve).containsExactly(unreported)
     }
 
     @Test
