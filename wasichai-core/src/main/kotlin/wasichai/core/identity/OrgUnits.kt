@@ -3,6 +3,9 @@ package wasichai.core.identity
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import org.springframework.r2dbc.core.DatabaseClient
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
@@ -136,5 +139,26 @@ class OrgUnitDirectory(
 
         /** Codes are tokens, like role names: `trim().uppercase()`. */
         fun normaliseCode(code: String): String = code.trim().uppercase()
+    }
+}
+
+/** A unit of the caller, as `GET /api/auth/me/org-units` answers it: no id, apps bind to the code. */
+data class MyOrgUnit(
+    val code: String,
+    val label: String,
+    val path: List<String>
+)
+
+// any signed-in caller, a service account too (it sits nowhere, so it reads [])
+@RestController
+@RequestMapping("/api/auth/me/org-units")
+class MyOrgUnitsController(
+    private val units: OrgUnitDirectory,
+    private val currentUser: CurrentUser
+) {
+    @GetMapping
+    suspend fun mine(): List<MyOrgUnit> {
+        val user = currentUser.require()
+        return units.unitsOf(user.organizationId, user.userId).map { MyOrgUnit(it.code, it.label, it.path) }
     }
 }
