@@ -70,6 +70,8 @@ dark look as before, except where a class already asked for a token that did not
 | `Table`, `Th`, `Td` | `data-slot="table"` on the `<table>`, `"table-head"`, `"table-cell"` |
 | `Badge` | `data-slot="badge"` |
 | `Tabs` | `data-slot="tabs"` (root), `"tabs-list"` (the tablist), `"tabs-trigger"` (each tab), `"tabs-content"` (each panel) |
+| `Alert` | `data-slot="alert"` with `data-tone`, `"alert-text"`, `"alert-dismiss"` (since 0.5) |
+| `NavTree` (`@wasichai/core`) | `data-slot="nav-tree"`, `"nav-tree-group"`, `"nav-tree-leaf"`, `"nav-tree-caret"` (since 0.5) |
 
 They are set before the caller's props, so an app can override one (srtm-ui passes `data-variant="round"`). Classes
 and markup do not change, and light and dark do not style the hooks.
@@ -98,6 +100,13 @@ every primitive, left for when a second sheet needs it.
 drawn only under its theme through `useVarianteTema()`, stay in srtm-ui with the partials that paint them. The library
 ships tokens and CSS, not shells or components per theme, until a component has a second user; the candidates
 (`Alerta`, `PasosGalon`, `BarraInstruccion`, `ArbolNav`, `BandaTitulo`) are a separate issue.
+
+Updated on 2026-10-06: caja-ui, rewritten on the packages the way srtm-ui is, became the second user of `Alerta` and
+`ArbolNav`. `Alert` went up to `@wasichai/ui` and `NavTree` to `@wasichai/core` (it needs `react-router`, which ui does
+not have), with English names and their words in core's bundle; their partials joined the sheet on `data-slot`
+(`alerts.css`, `nav.css`). `BandaTitulo`, `PasosGalon`, `BarraInstruccion`, the shells per theme and `useVarianteTema`
+stay in the apps
+([the spec](../superpowers/specs/2026-10-06-theme-components-design.md)).
 
 **The boot script knows each theme's color scheme.** The inline script of ADR-034 lists every theme the app offers
 as a map from id to color scheme (`light`, `dark` and each `config.themes` entry). A stored id outside the map (an
