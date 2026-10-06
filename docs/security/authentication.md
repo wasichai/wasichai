@@ -93,6 +93,24 @@ The check is one read per target object with the role and owner rules folded in,
 `ADMIN`, the platform and automations check the organization only. A value an update leaves as stored is not checked
 again (ADR-031 D30).
 
+## Organizational units
+
+An organization's units (gerencia › subgerencia › área) say where a person sits, not what they may do
+([ADR-045](../adr/0045-organizational-units.md), ADR-031 D31). **Membership grants nothing**: no permission check
+reads it, and there are no rights scoped to a unit. It only addresses people, such as a notification sent to a unit,
+which reaches its whole subtree.
+
+Units are **not in the token**. Membership changes more often than an 8-hour token lives, so it is read when needed
+(`OrgUnitDirectory`), and a change applies on the next read, without signing in again. `GET /api/auth/me` does not
+carry them either.
+
+Units and memberships are administered under `MANAGE_ORGANIZATION`: `/api/org-units` and
+`PUT /api/users/{id}/org-units`, the caller's own tenant only (another tenant's unit is `404`). A service account is
+refused (`403`) there whatever its roles grant, as on every `MANAGE_ORGANIZATION` route, and its backing user cannot
+be put in a unit (`404`). Any signed-in caller reads their own units, with their paths, at
+`GET /api/auth/me/org-units`; a service account sits in none and reads `[]`. See
+[../api/rest.md#organizational-units](../api/rest.md#organizational-units).
+
 ## The security chain
 
 Core declares one `SecurityWebFilterChain` at `@Order(0)`. Spring Boot's reactive resource-server auto-configuration

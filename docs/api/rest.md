@@ -30,6 +30,7 @@ POST /api/auth/login        { "email": "...", "password": "..." }  →  { token,
 POST /api/auth/token        { "clientId": "...", "clientSecret": "..." }  →  { token, expiresAt, serviceAccount }
 GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
+GET  /api/auth/me/org-units     the caller's own organizational units (see below)
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
 PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
@@ -94,6 +95,85 @@ deleting stops new tokens at once; a token already issued lives until it expires
 The account is backed by a user row with the same id, so its writes are recorded under that id like anyone's:
 `created_by`, `updated_by` and the audit log. That user is not listed by `GET /api/users`, cannot sign in, and is
 `404` to the user routes.
+
+## Organizational units
+
+A tree of units per organization (gerencia › subgerencia › área) and who sits in which
+([ADR-045](../adr/0045-organizational-units.md)). A unit addresses people; it grants nothing and is not in the token.
+
+```http
+GET    /api/org-units                  the tenant's units, flat, by label  →  [{ code, label, parentCode, memberCount }]
+POST   /api/org-units                  { "code": "SGFT", "label": "...", "parentCode"?: "GR" }  →  201
+GET    /api/org-units/{code}           the unit and its members
+PUT    /api/org-units/{code}           { "label"?: "...", "parentCode"?: "GR" | null }  rename or move
+DELETE /api/org-units/{code}           →  204, only an empty leaf
+PUT    /api/users/{id}/org-units       { "units": ["SGFT", "SGR"] }  replaces the user's whole set  →  the user
+GET    /api/auth/me/org-units          the caller's own units, with their paths
+```
+
+```json
+{ "code": "SGFT", "label": "Subgerencia de Fiscalización Tributaria", "parentCode": "GR", "memberCount": 3 }
+```
+
+`GET /api/org-units/{code}` answers `members` instead of `memberCount`, sorted by email:
+
+```json
+{
+  "code": "SGFT", "label": "Subgerencia de Fiscalización Tributaria", "parentCode": "GR",
+  "members": [{ "id": "…", "email": "ana@muni.pe", "displayName": "Ana" }]
+}
+```
+
+Units are addressed by `code`, never by id: it is what apps bind to (`model/org_units.json`, a notification's
+audience), and it never changes. A `code` is trimmed and upper-cased, then must match `^[A-Z][A-Z0-9_]{1,48}$`; it is
+unique in the tenant (`409 Organizational unit 'SGFT' already exists`). The path `{code}` is normalised the same way,
+so `/api/org-units/sgft` is the same unit. `label` is trimmed text of 1 to 120 characters and may change. A unit with
+no `parentCode` is a root. The list is flat, sorted by label then code; the client builds the tree from `parentCode`.
+
+`PUT /api/org-units/{code}` takes a map, as `PUT /api/auth/me/preferences` does: `label` renames; `parentCode` moves
+the unit under another one, and `null` (or blank) moves it to the root; a key left out keeps its value. Any other key,
+`code` included, is `400` on that key (`is not a unit property`), and nothing changes. A move under the unit itself or
+one of its own sub-units is `400 A unit cannot move under itself`. Units nest at most 10 levels deep (a root is level
+1), counting the subtree a move carries along: a create or a move past that is `400 Too deep`. Every write takes a lock
+on the tenant's tree for its transaction, so two concurrent moves cannot build a cycle between them.
+
+`DELETE` refuses a unit with sub-units (`409 Organizational unit 'GR' has sub-units`) or members
+(`409 … has members`): move or empty it first. With wasichai-notifications installed, deleting a unit also drops the
+notification targets that named it, so a client warns before deleting one.
+
+`PUT /api/users/{id}/org-units` replaces the user's units with the ones listed; an empty list, or a body without
+`units`, takes the user out of every unit. Membership is many to many: a person may sit in several units. A code the
+tenant does not have is `400` naming `units[i]` (`unknown unit '…'`), and nothing changes. An unknown user, another
+tenant's, or a service account's backing user is `404`, as on the other user routes. The answer is the user as every
+`/api/users` route answers it, now with `orgUnits`, the codes of the user's units sorted, `[]` for a user in none:
+
+```json
+{
+  "id": "…", "email": "ana@muni.pe", "displayName": "Ana", "enabled": true, "roles": ["FISCALIZADOR"],
+  "orgUnits": ["SGFT"], "createdAt": "2026-10-06T09:00:00Z"
+}
+```
+
+`GET /api/users`, `POST /api/users`, `PUT /api/users/{id}` and `PUT /api/users/{id}/roles` carry the same `orgUnits`.
+`GET /api/auth/me` does not change.
+
+Every route except the last needs `MANAGE_ORGANIZATION` and reaches the caller's own tenant only: another tenant's
+unit is `404`, as one that never existed, and naming it as a parent or a user's unit is `400`. A service account's
+token is refused (`403`) whatever its roles grant, as on every `MANAGE_ORGANIZATION` route
+([service accounts](#service-accounts)). A malformed body answers `400 Invalid organizational unit` with the offending
+field in `errors[]` (`code`, `label`, a `parentCode` that is not text, an unknown key); a parent the tenant does not
+have is `400 Unknown organizational unit '…'` on `parentCode`.
+
+`GET /api/auth/me/org-units` needs only a token. It answers the caller's direct units, sorted by label, each with
+`path`, the codes from the root down to the unit itself; no id, since apps bind to the code. A service account sits
+in no unit and reads `[]`.
+
+```json
+[
+  { "code": "SGFT", "label": "Fiscalización Tributaria", "path": ["GR", "SGFT"] },
+  { "code": "TUPA", "label": "Mesa de partes", "path": ["TUPA"] }
+]
+```
 
 ## Objects (metadata)
 
@@ -468,14 +548,15 @@ a component that has none today.
               "column": 1,
               "layout": "single-column",
               "children": [
-                { "type": "TAB", "title": "DETAILS", "children": [{ "type": "FORM" }] },
-                { "type": "TAB", "title": "MAP", "children": [{ "type": "MAP", "title": "Predio" }] },
+                { "type": "TAB", "title": "DETAILS", "key": "DETAILS", "children": [{ "type": "FORM" }] },
+                { "type": "TAB", "title": "MAP", "key": "MAP", "children": [{ "type": "MAP", "title": "Predio" }] },
                 {
                   "type": "TAB",
                   "title": "RELATED",
+                  "key": "RELATED",
                   "children": [{ "type": "RELATED_LIST", "title": "Titular", "relationship": "predio_titular" }]
                 },
-                { "type": "TAB", "title": "HISTORY", "children": [{ "type": "HISTORY" }] }
+                { "type": "TAB", "title": "HISTORY", "key": "HISTORY", "children": [{ "type": "HISTORY" }] }
               ]
             }
           ]
@@ -490,7 +571,7 @@ A generated page carries a deterministic id derived from the object and kind, so
 it even though no row exists yet. It always uses `one-region`, the only template whose region is
 guaranteed non-empty for any object: the form and the workflow panel go to a `DETAILS` tab, the map
 to `MAP` when the object has geometry, each related list to `RELATED`, and the trail to `HISTORY`, all
-inside the single `MAIN` region.
+inside the single `MAIN` region. Each of those tabs carries its title as its `key`.
 
 ### Templates
 
@@ -540,6 +621,18 @@ non-null.
 | `target` | string? | `ACTION`/`NAVIGATE`: an object name; navigates to its record list |
 | `url` | string? | `ACTION`/`NAVIGATE`: an external `http(s)://` url |
 | `style` | `PRIMARY` \| `SECONDARY`, default `SECONDARY` | `ACTION`: button emphasis |
+| `key` | string? | `TAB` only: a stable name a link opens the tab by (`?tab=KEY`); see below |
+
+A `TAB` may carry a `key` ([ADR-046](../adr/0046-notifications-module.md), ADR-031 D33). It is trimmed and
+upper-cased on write, blank counts as none, and it must then match `^[A-Z][A-Z0-9_]{0,39}$`. It is unique in the whole
+page, tabs of nested strips included, so a key never names two tabs. A component without a key is stored and sent
+without the property, never as `null`, so a page that uses no keys reads exactly as before. A `PUT` without a
+`definition` keeps the stored keys.
+
+A generated page keys its tabs with their titles: `DETAILS`, `RELATED`, `HISTORY`, and each module tab its own
+(`MAP` from wasichai-gis). The built-in keys come first: a module tab whose title repeats a key already taken keeps its
+tab but gets no key. Opening a tab from `?tab=` and editing keys in the builder belong to wasichai-ui; there a key the
+page lacks falls back to the first tab (ADR-046). The server never checks a link's tab against pages.
 
 ### Component types
 
@@ -569,7 +662,8 @@ holds a fully free tree, exactly as `SECTION` does today.
 
 A `TAB`'s `title` is its label on the strip. The **generated** page uses the keys `DETAILS`, `MAP`,
 `RELATED` and `HISTORY`, which the client translates — the server has no language. Anything an
-administrator types is shown exactly as typed.
+administrator types is shown exactly as typed. Its `key`, when it has one, is what a link names, and
+is never shown.
 
 ### Bounds
 
@@ -628,7 +722,12 @@ Definitions are validated on write. A `400` names the offending component and th
 - `ACTION`/`NAVIGATE.target` naming anything other than an object of this organization — a
   relationship of the same name does not count; navigating to a related record is what
   `RELATED_LIST` is for;
-- `ACTION`/`NAVIGATE.url` not starting with `http://` or `https://`.
+- `ACTION`/`NAVIGATE.url` not starting with `http://` or `https://`;
+- `key` on anything but a `TAB` — *"key is only for TAB"* / `"SECTION cannot carry a key"`;
+- a `TAB.key` that, trimmed and upper-cased, does not match `^[A-Z][A-Z0-9_]{0,39}$` — *"Invalid tab
+  key '…'"* / `"key must match ^[A-Z][A-Z0-9_]{0,39}$"`;
+- two tabs with the same key anywhere in the page, nested strips included — *"repeated tab key '…'"*
+  / `"a tab key names one tab in the page"`.
 
 ## Views
 

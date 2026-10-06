@@ -52,17 +52,23 @@ coordinate. See [ADR-024](../adr/0024-libraries-and-starters.md).
 |---|---|
 | `common` | RFC 7807 errors, paging, health |
 | `platform` | `WasichaiSchemas`, `SqlIdentifier`, Flyway runner (`WasichaiMigrations`), `ModuleMigration`, `SystemColumns`, database and JWT properties |
-| `identity` | Users, roles, login, JWT issuing, tenant resolution from the token |
+| `identity` | Users, roles, organizational units, login, JWT issuing, tenant resolution; `OrgUnitDirectory`, `UserDirectory` |
 | `metadata` | Custom Objects, Custom Fields, relationships, `FieldTypeRegistry`, `ObjectSchemaManager` |
 | `audit` | Append-only audit log and its query service |
 | `data` | `RecordStore` port, `PhysicalTableRecordStore`, the dynamic record and relationship APIs |
-| `admin` | User and role administration |
+| `admin` | User, role, service account and organizational unit administration |
 | `organization` | Organizations, the tenant |
 | `autoconfigure` | `@AutoConfiguration` classes that wire every bean above |
 
 `CoreArchitectureTest` enforces the layering as a DAG, `platform` at the bottom: `common` ← `platform` ← `identity`
 ← `metadata` ← `audit` ← `data`, with `admin` and `organization` standing on `metadata` and `autoconfigure` on top
 of all of them. A package may only import the packages below it in this order; the test fails the build otherwise.
+
+A module never reads core's identity tables. It finds people and units through ports in `identity`:
+`OrgUnitDirectory` (a user's units and their ancestors, codes to ids and back) and `UserDirectory` (enabled people by
+email or id), both tenant-scoped and `@ConditionalOnMissingBean`
+([ADR-045](../adr/0045-organizational-units.md)). Background work lists tenants with `OrganizationRepository.ids()`;
+a connection that must keep session state comes from `Connections.unpooled` (`platform`).
 
 ## Extension SPIs
 

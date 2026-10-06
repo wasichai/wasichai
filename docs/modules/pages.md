@@ -29,6 +29,9 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
   one region of a template ([ADR-022](../adr/0022-a-page-has-a-template.md)). When no page is stored, the server
   generates one from the object's metadata (the form, one tab per module component, one related list per
   relationship, history last).
+- Tab keys: a `TAB` may carry a `key`, a stable upper-case name a link opens the tab by (`?tab=KEY`), so a
+  notification can point at the tab where the work is done ([ADR-046](../adr/0046-notifications-module.md), ADR-031
+  D33). See "Tab keys" below.
 - The drag-and-drop builder screen, at `<basePath>/pages` (default `/builder/pages`).
 - REST routes:
 
@@ -42,6 +45,25 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
   | GET | `/api/pages/{name}` |
   | PUT | `/api/pages/{name}` |
   | DELETE | `/api/pages/{name}` |
+
+### Tab keys
+
+Only a `TAB` may carry `key`; on any other component it is `400` (`key is only for TAB`). On write it is trimmed and
+upper-cased, blank counts as none, and it must match `^[A-Z][A-Z0-9_]{0,39}$` (`TabKey.PATTERN`). It is unique in the
+whole page, tabs of nested strips included, so `?tab=KEY` never names two tabs: a repeat is `400`
+(`repeated tab key '…'`). A component without a key is stored and sent without the property
+(`@JsonInclude(NON_NULL)`), so a page that uses no keys is stored and read as before. A `PUT` without a `definition`
+re-emits the stored tree and keeps its keys.
+
+A generated page keys each tab with its title: `DETAILS`, `RELATED` and `HISTORY` (`GeneratedTab`), and each module
+tab with the `tab` its `PageComponentProvider` returns (`MAP` from wasichai-gis). The built-in keys are taken first:
+a module tab whose title repeats a taken key keeps its tab, without a key, so the generated page stays valid.
+`GeneratedComponent` refuses a `tab` that is not a valid key, which the module's own tests catch before a page is
+ever generated.
+
+The server checks a key's format and uniqueness only. Opening a tab from `?tab=`, with a fallback to the first tab
+when the page has no such key, and editing keys in the builder belong to wasichai-ui. See
+[../api/rest.md#component-fields](../api/rest.md#component-fields) for the wire shape and the refusals.
 
 ## Configuration
 
@@ -119,6 +141,8 @@ page components never register even when those modules are installed.
   swapping the layout.
 - **D13**: a stored `NAVIGATE` whose target object has gone missing (e.g. deleted after the page was saved) links
   to the objects list instead of building a broken `/undefined` url.
+- **D33**: a `TAB` may carry `key`, an upper-case token unique in its page, and generated pages key their tabs with
+  their titles. A component without a key is stored and sent as before, with no `key` property.
 
 ## Known limitations
 
