@@ -56,12 +56,13 @@ Decisions taken with the user:
 | caja | Pending payments block the closing | WARNING | the turno's cashier | `NotificationSource` | arqueo |
 | caja | The day's reconciliation does not balance | ACTION | `TESORERIA` | `NotificationSource` `caja.conciliacion` | reconciliation `?fecha=` |
 | caja | Closing with a cash difference | WARNING | `SUPERVISOR_CAJA`, `TESORERIA` | explicit `publish` in `CerrarTurno` | arqueo |
-| caja | Fee about to end / new fee in force | WARNING / INFO + ordinance URL | `TESORERIA` / `CAJERO` | date rule on `tasa.vigencia_hasta` / `publish` | fee record |
+| caja | Fees about to end without a successor / new fee in force | WARNING / INFO + ordinance URL | `TESORERIA` / `CAJERO` | `NotificationSource` `caja.tasas`, aggregated (a renewal is a new row) / `publish` | fee list |
 | srtm | Notificaciones previas due this week / overdue without acta | WARNING / ACTION, aggregated | Fiscalización unit | `NotificationSource` `srtm.sanciones` | Infracciones › Notificaciones |
 | srtm | Acta without RIS, descargo not resolved, RIS not served | ACTION | resolutor / notificador | `NotificationSource` | acta › Resoluciones tab |
 | srtm | Next year's parameters missing (UIT, FERIADOS, PLAZO) | WARNING | ADMIN / Parámetros | `NotificationSource` `srtm.parametros` | parameters |
 | srtm | Mass emisión finished / failed | ACTION / WARNING | who launched it | explicit `publish` from the job | Emisiones › detail |
-| srtm | Advertisement about to expire; special condition or representative ends | WARNING | role or unit | date rule | record › tab |
+| srtm | Advertisement about to expire (its term lives in `movimiento_anuncio`) | WARNING | role or unit | `NotificationSource` `srtm.anuncios` | record › tab |
+| srtm | Special condition or representative ends (`condicion_fecha_fin`, `relacionado.fecha_fin`) | WARNING | role or unit | date rule | record › tab |
 | both | New ordinance, TUPA, manual | INFO + URL | everyone, a unit or a role | manual, with a window | external document |
 
 Sources that see many records must **aggregate** ("12 due this week", linking to the list): an inbox that floods is
@@ -194,7 +195,7 @@ Also in core:
 | `stream-refresh` | `60s` | every stream recomputes this often, whatever it heard |
 | `stream-heartbeat` | `25s` | a comment line keeps proxies from closing an idle stream |
 | `stream-debounce` | `500ms` | signals closer than this cost one recompute |
-| `zone` | unset | the zone date rules count days in; unset: the app's unique `Clock` bean's zone, else the system's |
+| `zone` | unset | the zone date rules count days in; unset: the app's unique `Clock` bean's zone, else the system's, with a WARN at start |
 | `date-pattern` | `dd/MM/yyyy` | how `{{date}}` and DATE values print in rule templates |
 
 ### Tables (`db/wasichai/notifications/V1__notifications.sql`)
@@ -341,6 +342,9 @@ interface NotificationSource {
 {"type": "URL", "url": "https://www.munixyz.gob.pe/ordenanzas/2026-006.pdf"}
 ```
 
+A `ROUTE` link names a route key the UI knows (a wasichai-ui module route, or one an app's own shell resolves); its
+`params` fill the route's path parameters first and the rest go to the query string.
+
 Audience over REST: `{"type": "ALL"}`, `{"type": "USER", "value": "<uuid>"}`, `{"type": "EMAIL", "value": "a@b.pe"}`,
 `{"type": "ROLE", "value": "CAJERO"}`, `{"type": "UNIT", "value": "SGFT"}`. `EMAIL` is stored as `USER`.
 
@@ -359,7 +363,13 @@ Audience over REST: `{"type": "ALL"}`, `{"type": "USER", "value": "<uuid>"}`, `{
 | `link.object` | an object of the organization (`MetadataService.loadDefinition`); its id is stored in `link_object_id` |
 | window | `expiresAt > publishAt` when both are known (`publishAt` defaults to now) |
 
-**REST is strict, Kotlin is lenient about recipients.** Over REST an unknown user, email, role or unit is a `400` naming
+**What "of a source" means:** any `source` other than `manual` (`rule:*`, an app's `NotificationSource` key, or a
+key an app only publishes under). Such a notification cannot be edited or deleted over REST, and its ACTIONs cannot be
+dismissed: the app resolves them (`resolve`, or by leaving them out of its source) or gives them an `expiresAt`.
+
+**REST is strict, Kotlin is lenient about recipients and length.** From Kotlin a title over 200 characters or a body
+over 4000 is cut with "…" rather than refused, so wording never aborts a business transaction.
+ Over REST an unknown user, email, role or unit is a `400` naming
 `audience[i]`. From Kotlin an unknown recipient is dropped with a WARN, so a person who left never rolls back the
 business transaction the notification was published in; if none is left, `publish` answers `null` and writes nothing.
 A malformed draft (format, an unknown object) is an `IllegalArgumentException` from Kotlin: that is a bug in the app.
@@ -412,7 +422,7 @@ WHERE n.organization_id = :org
 
 | Route | |
 |---|---|
-| `GET /api/notifications?source&kind&status=open\|scheduled\|ended&page&size` | `PageResponse` of the admin view, newest first |
+| `GET /api/notifications?source&kind&unit&status=open\|scheduled\|ended&page&size` | `PageResponse` of the admin view, newest first; `unit` (a code) keeps those addressed to that unit, so the UI can warn before deleting it |
 | `POST /api/notifications` | `{kind, title, body?, link?, audience, publishAt?, expiresAt?, dueAt?}` → `201`; `source` = `manual`, `created_by` = the caller |
 | `GET /api/notifications/{id}` | the admin view |
 | `PUT /api/notifications/{id}` | same body, full replace, same receipt rule as an upsert |
@@ -428,7 +438,7 @@ see, or of another tenant, is `404`:
 | Route | |
 |---|---|
 | `GET /api/auth/me/notifications?kind&state=active\|unread\|snoozed&page&size` | `PageResponse` of inbox items |
-| `GET /api/auth/me/notifications/summary` | `{kinds: {INFO: {active, unread, overdue}, WARNING: {…}, ACTION: {…}}, latest: {id, kind, title, publishAt} \| null}` |
+| `GET /api/auth/me/notifications/summary` | `{kinds: {INFO: {active, unread, overdue}, WARNING: {…}, ACTION: {…}}, latest: {id, kind, title, publishAt, link} \| null}` |
 | `POST /api/auth/me/notifications/{id}/read` | `204` |
 | `POST /api/auth/me/notifications/{id}/dismiss` | `204`; `409` for an ACTION of a source or a rule: it leaves when the work is done |
 | `POST /api/auth/me/notifications/{id}/snooze` | `{until}` → `204`; `400` unless `now < until ≤ now + snooze-max` |
@@ -449,7 +459,8 @@ fail the start), plus the module's own `rules` item at `rule-interval`. Each tic
 2. A due item runs under `ClusterLock.tryLock("wasichai.notifications.<key>")`; inside, it re-checks due-ness, so N
    replicas run it once.
 3. For every `OrganizationRepository.ids()`, inside `runCatching`, inside `RecordService.asPlatform(org)`:
-   `drafts = source.currentNotifications(org, now)`, then `NotificationReconciler.apply(org, source.key, drafts)`.
+   `drafts = source.currentNotifications(org, now)` **outside any transaction** (a source may call remote systems), then
+   `NotificationReconciler.apply(org, source.key, drafts)`, which is the only transactional step.
 4. `last_run_at` is upserted. A failing organization or source is logged and the loop moves on.
 
 Daily, under `tryLock("wasichai.notifications.purge")`, notifications resolved or expired longer than `retention` ago
@@ -475,6 +486,7 @@ resolve what `publish` wrote); documented.
 
 | Route | |
 |---|---|
+| `GET /api/notification-rules` | every rule of the organization, with its object (`MANAGE_METADATA`) |
 | `GET /api/objects/{object}/notification-rules` | the object's rules |
 | `POST /api/objects/{object}/notification-rules` | `201`; runs the rule at once |
 | `GET`, `PUT`, `DELETE /api/objects/{object}/notification-rules/{name}` | `PUT` replaces and runs; `DELETE` → `204` and resolves its notifications |
@@ -482,13 +494,13 @@ resolve what `publish` wrote); documented.
 
 ```json
 {
-  "name": "tasa_por_vencer", "label": "Tasas por vencer", "enabled": true,
+  "name": "licencia_por_vencer", "label": "Licencias por vencer", "enabled": true,
   "field": "vigencia_hasta",
   "stages": [{"fromDays": -15, "kind": "WARNING"}, {"fromDays": 0, "kind": "ACTION"}],
   "untilDays": 3,
-  "conditions": [{"field": "estado", "op": "EQ", "value": "VIGENTE"}, {"field": "reemplazo", "op": "EMPTY"}],
+  "conditions": [{"field": "estado", "op": "EQ", "value": "VIGENTE"}, {"field": "baja", "op": "EMPTY"}],
   "audience": [{"type": "ROLE", "value": "TESORERIA"}],
-  "title": "La tasa {{codigo}} vence el {{date}}",
+  "title": "La licencia {{numero}} vence el {{date}}",
   "body": "Quedan {{days}} días.",
   "tab": "VIGENCIA"
 }
@@ -513,7 +525,7 @@ resolve what `publish` wrote); documented.
   `NOT_EMPTY`; an `EQ` value passes the field's codec; the audience is strict; the tab passes its format.
 - **On record change** (`NotificationRuleListener : RecordChangeListener`): for an object with enabled rules, the
   changed record is evaluated against `change.after` by the same pure evaluator and its one key is upserted or
-  resolved; `DELETED` resolves. A renewed fee stops saying "vence" at once instead of at the next run. Evaluation
+  resolved; `DELETED` resolves. A renewed licence stops saying "vence" at once instead of at the next run. Evaluation
   errors are logged and skipped; SQL errors propagate (the writer's transaction is aborted anyway).
 - **Lifecycle:** disabling or deleting a rule resolves its notifications; deleting the object cascades its rules.
   `NotificationRuleFieldUsage : FieldUsage` names "notification rule '<name>'" when a field it reads is about to go.
@@ -608,3 +620,6 @@ age, an automation `NOTIFY` action (neither srtm nor caja installs automation).
 - **srtm's audiences:** srtm ships no named roles; units are the natural audience. To settle in its plan.
 - **A deleted unit** silently drops its targets; the admin UI should say "N notifications address this unit" first.
 - **Who publishes** is coarse in v1 (`MANAGE_ORGANIZATION`).
+- **Rule conditions are ANDed equalities and emptiness**; "one of" (`IN`) and "equal or empty" wait for a second
+  user (srtm needs two rules for `estado` VIGENTE or empty). A value that is replaced by a new row, not edited (a fee
+  renewal), needs a source, not a rule.
