@@ -82,16 +82,17 @@ class AllModulesWiringTest {
         }
     }
 
-    // the original's module routes, verb by verb, plus the three metadata routes that left core (P1 R16)
+    // the original's module routes, verb by verb, plus the three metadata routes that left core (P1 R16),
+    // and the routes of the modules the original never had (ADR-031)
     @Test
-    fun `the module routes are the original's, with no collision`() {
+    fun `the module routes are the original's and the added ones, with no collision`() {
         runner.run { context ->
             assertThat(context).hasNotFailed()
             val routes =
                 context.getBean(RequestMappingHandlerMapping::class.java).handlerMethods.keys.flatMap { info ->
                     info.methodsCondition.methods.flatMap { verb -> info.patternsCondition.patterns.map { "${verb.name} ${it.patternString}" } }
                 }
-            assertThat(routes).doesNotHaveDuplicates().containsAll(LEGACY_MODULE_ROUTES)
+            assertThat(routes).doesNotHaveDuplicates().containsAll(LEGACY_MODULE_ROUTES + ADDED_MODULE_ROUTES)
         }
     }
 
@@ -148,6 +149,30 @@ class AllModulesWiringTest {
                 "PUT /api/objects/{object}/views/{name}",
                 "PUT /api/objects/{object}/workflow",
                 "PUT /api/pages/{name}"
+            )
+
+        // routes the original never had: notifications (ADR-031 D32). org units are core's, not here
+        val ADDED_MODULE_ROUTES =
+            listOf(
+                "DELETE /api/notifications/{id}",
+                "DELETE /api/objects/{object}/notification-rules/{name}",
+                "GET /api/auth/me/notifications",
+                "GET /api/auth/me/notifications/stream",
+                "GET /api/auth/me/notifications/summary",
+                "GET /api/notification-rules",
+                "GET /api/notifications",
+                "GET /api/notifications/{id}",
+                "GET /api/objects/{object}/notification-rules",
+                "GET /api/objects/{object}/notification-rules/{name}",
+                "POST /api/auth/me/notifications/read-all",
+                "POST /api/auth/me/notifications/{id}/dismiss",
+                "POST /api/auth/me/notifications/{id}/read",
+                "POST /api/auth/me/notifications/{id}/snooze",
+                "POST /api/notifications",
+                "POST /api/objects/{object}/notification-rules",
+                "POST /api/objects/{object}/notification-rules/{name}/run",
+                "PUT /api/notifications/{id}",
+                "PUT /api/objects/{object}/notification-rules/{name}"
             )
     }
 }

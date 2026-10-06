@@ -7,7 +7,9 @@ import wasichai.it.support.ModuleRoutes
 class ModuleRoutesTest {
     @Test
     fun `the matrix probes exactly the module routes the wiring test pins`() {
-        assertThat(ModuleRoutes.all).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(AllModulesWiringTest.LEGACY_MODULE_ROUTES)
+        assertThat(ModuleRoutes.all).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(
+            AllModulesWiringTest.LEGACY_MODULE_ROUTES + AllModulesWiringTest.ADDED_MODULE_ROUTES
+        )
     }
 
     @Test
