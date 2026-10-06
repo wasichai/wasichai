@@ -11,8 +11,9 @@ tree menu, with its nodes and the rule for the current leaf (its own route, then
 the path). `NavTree` lives in core because it needs `react-router`. Their names are English and their words are in
 core's bundle (`common.dismissAlert`, `common.goHome`, `common.hideMenu`); their hooks are `data-slot`s (`alert` with
 `data-tone`, `nav-tree*`), and the `portal-tributario` sheet paints them with two new partials, `alerts.css` and
-`nav.css`. Light and dark do not change. They ship in the pre-release `0.5.0-dev.0`; srtm-ui and caja-ui adopt it and
-delete their copies, and caja-ui's alerts gain the prototype's box under the theme, which it never had copied.
+`nav.css`. Light and dark do not change. They ship in wasichai-ui 0.5.0, promoted from `dev` to `main` and released
+without a dev pre-release; srtm-ui and caja-ui adopt it and delete their copies, and caja-ui's alerts gain the
+prototype's box under the theme, which it never had copied.
 `BandaTitulo`, `PasosGalon`, `BarraInstruccion` and `useVarianteTema` stay in the apps
 ([wasichai/wasichai-ui#14](https://github.com/wasichai/wasichai-ui/issues/14) stays open for them). Design and plans:
 [the spec](superpowers/specs/2026-10-06-theme-components-design.md),
