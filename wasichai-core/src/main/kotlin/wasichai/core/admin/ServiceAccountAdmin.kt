@@ -30,6 +30,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.ServiceAccountSecrets
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.time.Instant
 import java.util.UUID
 
@@ -193,7 +194,7 @@ class ServiceAccountService(
                 ORDER BY sa.name
                 """.trimIndent()
             ).bind("organizationId", organizationId)
-            .let { spec -> if (id == null) spec.bindNull("id", UUID::class.java) else spec.bind("id", id) }
+            .bindNullable("id", id)
             .map { row, _ ->
                 val accountId = Rows.uuid(row, "id").toString()
                 ServiceAccountResponse(

@@ -15,10 +15,10 @@ import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.ObjectSchemaManager
-import wasichai.core.metadata.bindNullable
 import wasichai.core.platform.Rows
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // one physical table per object (ADR-004). every column goes through its type's handler, so a
@@ -435,7 +435,7 @@ class PhysicalTableRecordStore(
         var current = spec
         values.entries.forEachIndexed { index, (field, value) ->
             val name = "$prefix$index"
-            current = if (value == null) current.bindNull(name, types.handler(field.type).javaType(field)) else current.bind(name, value)
+            current = current.bindNullable(name, value, types.handler(field.type).javaType(field))
         }
         return current
     }

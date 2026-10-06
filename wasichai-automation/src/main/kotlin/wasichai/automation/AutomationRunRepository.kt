@@ -9,6 +9,7 @@ import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 private const val COLUMNS =
@@ -130,12 +131,6 @@ class AutomationRunRepository(
             .collectList()
             .awaitSingle()
     }
-
-    private fun <T : Any> DatabaseClient.GenericExecuteSpec.bindNullable(
-        name: String,
-        value: T?,
-        type: Class<T>
-    ): DatabaseClient.GenericExecuteSpec = if (value == null) bindNull(name, type) else bind(name, value)
 
     private fun map(
         row: Row,

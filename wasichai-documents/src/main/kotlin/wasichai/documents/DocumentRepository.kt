@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // jsonb travels as text over r2dbc: cast on the way in, ::text on the way out.
@@ -44,7 +45,7 @@ class DocumentRepository(
             .bind("sequence", document.sequence)
             .bind("status", document.status.name)
             .bind("snapshot", objectMapper.writeValueAsString(document.snapshot))
-            .let { spec -> document.issuedBy?.let { spec.bind("issuedBy", it) } ?: spec.bindNull("issuedBy", UUID::class.java) }
+            .bindNullable("issuedBy", document.issuedBy)
             .map(::map)
             .one()
             .awaitSingle()

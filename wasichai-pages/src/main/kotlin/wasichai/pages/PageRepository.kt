@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // jsonb travels as text over r2dbc: cast on the way in, ::text on the way out.
@@ -128,9 +129,3 @@ class PageRepository(
             definition = objectMapper.readValue(Rows.string(row, "definition"), PageDefinition::class.java)
         )
 }
-
-// r2dbc rejects bind(null); a nullable bind must name its type. core has the same helper, internal.
-private inline fun <reified T : Any> DatabaseClient.GenericExecuteSpec.bindNullable(
-    name: String,
-    value: T?
-): DatabaseClient.GenericExecuteSpec = if (value == null) bindNull(name, T::class.java) else bind(name, value)

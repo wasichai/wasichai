@@ -20,6 +20,7 @@ import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // users, roles and the rules attached to them. every entry point is MANAGE_ORGANIZATION,
@@ -92,10 +93,9 @@ class AdminService(
                 """.trimIndent()
             ).bind("id", id)
             .bind("organizationId", admin.organizationId)
-            .bindNullableString("displayName", request.displayName?.trim()?.ifBlank { null })
-            .let { spec ->
-                if (request.enabled == null) spec.bindNull("enabled", Boolean::class.javaObjectType) else spec.bind("enabled", request.enabled)
-            }.bindNullableString("hash", request.password?.let { passwordEncoder.encode(it) })
+            .bindNullable("displayName", request.displayName?.trim()?.ifBlank { null })
+            .bindNullable("enabled", request.enabled)
+            .bindNullable("hash", request.password?.let { passwordEncoder.encode(it) })
             .fetch()
             .rowsUpdated()
             .awaitSingle()
@@ -186,14 +186,9 @@ class AdminService(
                 WHERE id = :id
                 """.trimIndent()
             ).bind("id", role)
-            .bindNullableString("label", request.label?.trim()?.ifBlank { null })
-            .let { spec ->
-                if (request.ownRecordsOnly == null) {
-                    spec.bindNull("ownRecordsOnly", Boolean::class.javaObjectType)
-                } else {
-                    spec.bind("ownRecordsOnly", request.ownRecordsOnly)
-                }
-            }.fetch()
+            .bindNullable("label", request.label?.trim()?.ifBlank { null })
+            .bindNullable("ownRecordsOnly", request.ownRecordsOnly)
+            .fetch()
             .rowsUpdated()
             .awaitSingle()
         return roleOrFail(admin.organizationId, name.trim().uppercase())
@@ -260,7 +255,7 @@ class AdminService(
                     VALUES (:roleId, :objectId, :action, :allowed)
                     """.trimIndent()
                 ).bind("roleId", roleId)
-                .let { spec -> if (objectId == null) spec.bindNull("objectId", UUID::class.java) else spec.bind("objectId", objectId) }
+                .bindNullable("objectId", objectId)
                 .bind("action", action)
                 .bind("allowed", allowed)
                 .fetch()
@@ -353,7 +348,7 @@ class AdminService(
                 ORDER BY u.email
                 """.trimIndent()
             ).bind("organizationId", organizationId)
-            .let { spec -> if (id == null) spec.bindNull("id", UUID::class.java) else spec.bind("id", id) }
+            .bindNullable("id", id)
             .map { row, _ ->
                 AdminUserResponse(
                     id = Rows.uuid(row, "id").toString(),
@@ -401,7 +396,7 @@ class AdminService(
                 ORDER BY name
                 """.trimIndent()
             ).bind("organizationId", organizationId)
-            .let { spec -> if (name == null) spec.bindNull("name", String::class.java) else spec.bind("name", name) }
+            .bindNullable("name", name)
             .map { row, _ ->
                 val id = Rows.uuid(row, "id")
                 RoleResponse(
@@ -555,11 +550,6 @@ class AdminService(
             throw ValidationException("Password too short", "password", "must be at least $MIN_PASSWORD characters")
         }
     }
-
-    private fun DatabaseClient.GenericExecuteSpec.bindNullableString(
-        name: String,
-        value: String?
-    ): DatabaseClient.GenericExecuteSpec = if (value == null) bindNull(name, String::class.java) else bind(name, value)
 
     companion object {
         private const val MIN_PASSWORD = 8
