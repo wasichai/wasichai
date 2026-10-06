@@ -8,11 +8,15 @@ import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.annotation.ImportCandidates
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
+import wasichai.core.data.RecordChangeListener
+import wasichai.core.metadata.FieldUsage
+import wasichai.core.metadata.ObjectRemovalListener
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.autoconfigure.NotificationsProperties
 import wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
 import wasichai.test.WasichaiContextRunner
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -159,6 +163,44 @@ class WasichaiNotificationsAutoConfigurationTest {
         runner.withPropertyValues("wasichai.notifications.enabled=false").run { context ->
             assertThat(context).doesNotHaveBean(Notifications::class.java)
             assertThat(context).doesNotHaveBean(NotificationAdminController::class.java)
+        }
+    }
+
+    // date rules (task 12b)
+    @Test
+    fun `date rules are beans, and core sees their listener and field usage`() {
+        runner.run { context ->
+            assertThat(context).hasNotFailed()
+            listOf(
+                NotificationRuleRepository::class.java,
+                RuleNotifications::class.java,
+                NotificationRuleService::class.java,
+                NotificationRuleController::class.java,
+                NotificationRuleListener::class.java,
+                NotificationRuleCleanup::class.java,
+                NotificationRuleFieldUsage::class.java
+            ).forEach { assertThat(context).hasSingleBean(it) }
+            assertThat(context.getBeansOfType(RecordChangeListener::class.java).values).hasAtLeastOneElementOfType(NotificationRuleListener::class.java)
+            assertThat(context.getBeansOfType(FieldUsage::class.java).values).hasAtLeastOneElementOfType(NotificationRuleFieldUsage::class.java)
+            assertThat(context.getBeansOfType(ObjectRemovalListener::class.java).values).hasAtLeastOneElementOfType(NotificationRuleCleanup::class.java)
+        }
+        runner.withPropertyValues("wasichai.notifications.enabled=false").run { context ->
+            assertThat(context).doesNotHaveBean(NotificationRuleController::class.java)
+            assertThat(context).doesNotHaveBean(NotificationRuleListener::class.java)
+        }
+    }
+
+    @Test
+    fun `rules count days in the zone property, else the app clock's, else the system's`() {
+        val tokyo = Clock.fixed(Instant.parse("2026-10-06T12:00:00Z"), ZoneId.of("Asia/Tokyo"))
+        runner.withBean(Clock::class.java, { tokyo }).withPropertyValues("wasichai.notifications.zone=America/Lima").run { context ->
+            assertThat(context.getBean(RuleNotifications::class.java).zone).isEqualTo(ZoneId.of("America/Lima"))
+        }
+        runner.withBean(Clock::class.java, { tokyo }).run { context ->
+            assertThat(context.getBean(RuleNotifications::class.java).zone).isEqualTo(ZoneId.of("Asia/Tokyo"))
+        }
+        runner.run { context ->
+            assertThat(context.getBean(RuleNotifications::class.java).zone).isEqualTo(ZoneId.systemDefault())
         }
     }
 }

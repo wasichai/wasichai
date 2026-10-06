@@ -260,6 +260,16 @@ object NotificationRules {
         }
     }
 
+    // every field the rule reads: its date, its conditions, its placeholders. a built-in wins over a field of its name.
+    fun fieldsRead(rule: NotificationRuleDefinition): Set<String> =
+        buildSet {
+            add(rule.field)
+            rule.conditions.forEach { add(it.field) }
+            listOfNotNull(rule.title, rule.body).forEach { template ->
+                PLACEHOLDER.findAll(template).map { it.groupValues[1].trim() }.filterTo(this) { it !in BUILT_INS }
+            }
+        }
+
     // ---- window and stage. offset = today - the record's date, in days. ----
 
     fun window(

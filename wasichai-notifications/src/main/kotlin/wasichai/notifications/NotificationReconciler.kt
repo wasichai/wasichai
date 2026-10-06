@@ -1,5 +1,7 @@
 package wasichai.notifications
 
+import com.fasterxml.jackson.annotation.JsonIgnore
+
 enum class ReconcileAction { CREATE, UPDATE, REOPEN, SKIP }
 
 data class ReconcileStep(
@@ -24,6 +26,8 @@ data class ReconcileResult(
     val reopened: Int,
     val resolved: Int
 ) {
+    // the run endpoint answers the four counts only
+    @get:JsonIgnore
     val changed: Boolean get() = created + updated + reopened + resolved > 0
 }
 
