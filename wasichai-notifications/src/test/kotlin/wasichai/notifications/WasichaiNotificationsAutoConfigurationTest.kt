@@ -121,4 +121,18 @@ class WasichaiNotificationsAutoConfigurationTest {
         assertThat(ImportCandidates.load(AutoConfiguration::class.java, javaClass.classLoader).candidates)
             .contains("wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration")
     }
+
+    // publish and admin (task 8)
+    @Test
+    fun `publishing from code and the admin api are beans`() {
+        runner.run { context ->
+            assertThat(context).hasNotFailed()
+            listOf(Notifications::class.java, NotificationAdminService::class.java, NotificationAdminController::class.java)
+                .forEach { assertThat(context).hasSingleBean(it) }
+        }
+        runner.withPropertyValues("wasichai.notifications.enabled=false").run { context ->
+            assertThat(context).doesNotHaveBean(Notifications::class.java)
+            assertThat(context).doesNotHaveBean(NotificationAdminController::class.java)
+        }
+    }
 }

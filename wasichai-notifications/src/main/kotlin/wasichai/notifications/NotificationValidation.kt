@@ -104,6 +104,8 @@ internal object NotificationValidation {
             else -> emptyList()
         }
 
+    fun checkKey(key: String): List<FieldViolation> = if (KEY.matches(key)) emptyList() else listOf(FieldViolation("key", "must match ${KEY.pattern}"))
+
     fun checkDraft(
         draft: NotificationDraft,
         now: Instant,
@@ -117,7 +119,7 @@ internal object NotificationValidation {
         val body = draft.body?.let { if (cutLongText) it.cut(BODY_MAX) else it }
         if (body != null && body.charCount() > BODY_MAX) violations += FieldViolation("body", "must be at most $BODY_MAX characters")
 
-        if (draft.key != null && !KEY.matches(draft.key)) violations += FieldViolation("key", "must match ${KEY.pattern}")
+        if (draft.key != null) violations += checkKey(draft.key)
 
         val audience = normalizeAudience(draft.audience, violations)
         val link = draft.link?.let { normalizeLink(it, violations) }

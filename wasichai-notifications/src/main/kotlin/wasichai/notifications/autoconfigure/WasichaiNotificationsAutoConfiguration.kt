@@ -22,9 +22,12 @@ import wasichai.notifications.AudienceResolver
 import wasichai.notifications.InboxController
 import wasichai.notifications.InboxRepository
 import wasichai.notifications.InboxService
+import wasichai.notifications.NotificationAdminController
+import wasichai.notifications.NotificationAdminService
 import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
 import wasichai.notifications.NotificationWriter
+import wasichai.notifications.Notifications
 import java.time.Clock
 
 // notifications (ADR-046). tables reference core's org_units: core migrates at 0, modules after.
@@ -97,4 +100,29 @@ class WasichaiNotificationsAutoConfiguration {
         service: InboxService,
         currentUser: CurrentUser
     ): InboxController = InboxController(service, currentUser)
+
+    // publish and admin (task 8)
+    @Bean
+    @ConditionalOnMissingBean
+    fun notifications(
+        preparer: NotificationPreparer,
+        writer: NotificationWriter,
+        clock: ObjectProvider<Clock>
+    ): Notifications = Notifications(preparer, writer, clock.getIfUnique { Clock.systemUTC() })
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationAdminService(
+        currentUser: CurrentUser,
+        preparer: NotificationPreparer,
+        writer: NotificationWriter,
+        repository: NotificationRepository,
+        audience: AudienceResolver,
+        units: OrgUnitDirectory,
+        clock: ObjectProvider<Clock>
+    ): NotificationAdminService = NotificationAdminService(currentUser, preparer, writer, repository, audience, units, clock.getIfUnique { Clock.systemUTC() })
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationAdminController(admin: NotificationAdminService): NotificationAdminController = NotificationAdminController(admin)
 }
