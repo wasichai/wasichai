@@ -184,6 +184,26 @@ These are the only intended differences. Anything else that behaves differently 
   update that keeps a link the caller cannot see (made by someone who could) goes through. Tested by
   `RelationTargetApiTest`, `RelationTargetsTest` and `RecordServiceTest`.
 
+**Because staff must be told what needs doing**
+
+- **D31. Organizational units.** The original had no unit, area or group. Now core has a tree of units per
+  organization and who belongs to which ([ADR-045](0045-organizational-units.md)): `/api/org-units`,
+  `PUT /api/users/{id}/org-units` and `GET /api/auth/me/org-units`, under `MANAGE_ORGANIZATION` except the last.
+  `AdminUserResponse` gains `orgUnits`, a list of unit codes, empty for a user in no unit. Units grant nothing and are
+  not in the token. The `org_units` and `user_org_units` tables are a known schema-parity deviation. Tested by
+  `OrgUnitApiTest` and `OrgUnitDirectoryTest`.
+- **D32. Notifications.** The original could not tell anyone anything. With `wasichai-notifications` installed, people
+  get notifications addressed to everyone, a user, a role or a unit, within a window, at
+  `/api/auth/me/notifications` (list, summary, read, dismiss, snooze, read-all and a live `text/event-stream`);
+  administrators publish at `/api/notifications`; date rules live at `/api/objects/{object}/notification-rules`
+  ([ADR-046](0046-notifications-module.md), [ADR-047](0047-server-push-over-sse-and-listen-notify.md)). Without the
+  module every one of those routes is a `404` (D1). The `notification*` tables are a known schema-parity deviation.
+  Tested by the `notificationsIt` suite and `NotificationsOnlyApiTest`.
+- **D33. A TAB has a key.** The original's tabs had only a title. Now a `TAB` may carry `key`, an upper-case token
+  unique in its page, and generated pages key their tabs with their titles (`DETAILS`, `RELATED`, `HISTORY`, `MAP`), so
+  a link can name a tab ([ADR-046](0046-notifications-module.md)). A component without a key is stored and sent as
+  before (no `key` property). Tested by `PageServiceTest`, `PageGenerationTest` and `PageApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
