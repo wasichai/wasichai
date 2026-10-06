@@ -14,7 +14,9 @@ import wasichai.notifications.autoconfigure.NotificationsProperties
 import wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
 import wasichai.test.WasichaiContextRunner
 import java.time.Duration
+import java.time.Instant
 import java.time.ZoneId
+import java.util.UUID
 
 class WasichaiNotificationsAutoConfigurationTest {
     private val runner =
@@ -114,6 +116,30 @@ class WasichaiNotificationsAutoConfigurationTest {
             assertThat(context).doesNotHaveBean(InboxRepository::class.java)
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name }).containsExactly("core")
         }
+    }
+
+    @Test
+    fun `the loop is a bean, and two sources with one key fail the start`() {
+        fun source(key: String) =
+            object : NotificationSource {
+                override val key = key
+
+                override suspend fun currentNotifications(
+                    organizationId: UUID,
+                    now: Instant
+                ): List<NotificationDraft> = emptyList()
+            }
+        runner.withBean("first", NotificationSource::class.java, { source("app.deadlines") }).run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context).hasSingleBean(NotificationLoop::class.java)
+        }
+        runner
+            .withBean("first", NotificationSource::class.java, { source("app.deadlines") })
+            .withBean("second", NotificationSource::class.java, { source("app.deadlines") })
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context).getFailure().rootCause().hasMessageContaining("'app.deadlines' is taken by")
+            }
     }
 
     @Test

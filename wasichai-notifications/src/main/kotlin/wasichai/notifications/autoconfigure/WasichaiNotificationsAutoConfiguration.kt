@@ -11,11 +11,14 @@ import org.springframework.transaction.ReactiveTransactionManager
 import org.springframework.transaction.reactive.TransactionalOperator
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
+import wasichai.core.data.RecordService
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.UserDirectory
 import wasichai.core.metadata.MetadataService
+import wasichai.core.organization.OrganizationRepository
+import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.AudienceResolver
@@ -24,10 +27,13 @@ import wasichai.notifications.InboxRepository
 import wasichai.notifications.InboxService
 import wasichai.notifications.NotificationAdminController
 import wasichai.notifications.NotificationAdminService
+import wasichai.notifications.NotificationLoop
 import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
+import wasichai.notifications.NotificationSource
 import wasichai.notifications.NotificationWriter
 import wasichai.notifications.Notifications
+import wasichai.notifications.SourceRunRepository
 import java.time.Clock
 
 // notifications (ADR-046). tables reference core's org_units: core migrates at 0, modules after.
@@ -125,4 +131,35 @@ class WasichaiNotificationsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun notificationAdminController(admin: NotificationAdminService): NotificationAdminController = NotificationAdminController(admin)
+
+    // scheduled sources (task 10). the loop starts after every singleton (SmartLifecycle), migrations included.
+    // the run table is the loop's alone: no bean of its own.
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationLoop(
+        sources: ObjectProvider<NotificationSource>,
+        clusterLock: ClusterLock,
+        records: RecordService,
+        organizations: OrganizationRepository,
+        preparer: NotificationPreparer,
+        writer: NotificationWriter,
+        repository: NotificationRepository,
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        properties: NotificationsProperties,
+        clock: ObjectProvider<Clock>
+    ): NotificationLoop =
+        NotificationLoop(
+            sources.orderedStream().toList(),
+            emptyList(),
+            clusterLock,
+            records,
+            organizations,
+            preparer,
+            writer,
+            repository,
+            SourceRunRepository(db, schemas),
+            properties,
+            clock.getIfUnique { Clock.systemUTC() }
+        )
 }
