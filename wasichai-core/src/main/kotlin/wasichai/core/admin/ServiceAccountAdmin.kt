@@ -65,6 +65,8 @@ class ServiceAccountService(
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas
 ) {
+    private val roles = RoleAssignments(db, schemas)
+
     suspend fun list(): List<ServiceAccountResponse> = load(requireAdmin().organizationId, null)
 
     suspend fun get(id: UUID): ServiceAccountResponse = accountOrFail(requireAdmin().organizationId, id)
@@ -108,7 +110,7 @@ class ServiceAccountService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        replaceRoles(id, roleIds)
+        roles.replace(id, roleIds)
         return accountOrFail(admin.organizationId, id).copy(clientSecret = secret)
     }
 
@@ -130,7 +132,7 @@ class ServiceAccountService(
                 .rowsUpdated()
                 .awaitSingle()
         }
-        roleIds?.let { replaceRoles(id, it) }
+        roleIds?.let { roles.replace(id, it) }
         return accountOrFail(admin.organizationId, id)
     }
 
@@ -233,44 +235,11 @@ class ServiceAccountService(
         organizationId: UUID,
         names: List<String>
     ): List<UUID> =
-        names
-            .map { it.trim().uppercase() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { name ->
-                if (name == AuthenticatedUser.ADMIN_ROLE) {
-                    throw ValidationException("A service account cannot hold ADMIN", "roles", "grant the actions it needs through another role")
-                }
-                db
-                    .sql("SELECT id FROM ${schemas.metadata}.roles WHERE organization_id = :organizationId AND name = :name")
-                    .bind("organizationId", organizationId)
-                    .bind("name", name)
-                    .map { row, _ -> Rows.uuid(row, "id") }
-                    .one()
-                    .awaitFirstOrNull()
-                    ?: throw ValidationException("Unknown role '$name'", "roles", "role does not exist in this organization")
+        roles.resolve(organizationId, names) { name ->
+            if (name == AuthenticatedUser.ADMIN_ROLE) {
+                throw ValidationException("A service account cannot hold ADMIN", "roles", "grant the actions it needs through another role")
             }
-
-    private suspend fun replaceRoles(
-        id: UUID,
-        roleIds: List<UUID>
-    ) {
-        db
-            .sql("DELETE FROM ${schemas.metadata}.user_roles WHERE user_id = :id")
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle()
-        roleIds.forEach { roleId ->
-            db
-                .sql("INSERT INTO ${schemas.metadata}.user_roles (user_id, role_id) VALUES (:id, :roleId)")
-                .bind("id", id)
-                .bind("roleId", roleId)
-                .fetch()
-                .rowsUpdated()
-                .awaitSingle()
         }
-    }
 
     companion object {
         private val NAME = Regex("^[a-z][a-z0-9_-]{1,48}$")

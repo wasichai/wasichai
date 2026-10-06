@@ -34,6 +34,8 @@ class AdminService(
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas
 ) {
+    private val roles = RoleAssignments(db, schemas)
+
     // ------------------------------------------------------------------ users
 
     suspend fun listUsers(): List<AdminUserResponse> {
@@ -49,7 +51,7 @@ class AdminService(
         if (findUserByEmail(admin.organizationId, email) != null) {
             throw ConflictException("User '$email' already exists")
         }
-        val roleIds = resolveRoles(admin.organizationId, request.roles)
+        val roleIds = roles.resolve(admin.organizationId, request.roles)
         val id = UUID.randomUUID()
         db
             .sql(
@@ -65,7 +67,7 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        assignRoles(id, roleIds)
+        roles.assign(id, roleIds)
         return userOrFail(admin.organizationId, id)
     }
 
@@ -109,14 +111,7 @@ class AdminService(
     ): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         userOrFail(admin.organizationId, id)
-        val roleIds = resolveRoles(admin.organizationId, request.roles)
-        db
-            .sql("DELETE FROM ${schemas.metadata}.user_roles WHERE user_id = :id")
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle()
-        assignRoles(id, roleIds)
+        roles.replace(id, roles.resolve(admin.organizationId, request.roles))
         return userOrFail(admin.organizationId, id)
     }
 
@@ -150,7 +145,7 @@ class AdminService(
         if (!ROLE_NAME.matches(name)) {
             throw ValidationException("Invalid role name '$name'", "name", "must match ^[A-Z][A-Z0-9_]{1,48}$")
         }
-        if (findRole(admin.organizationId, name) != null) {
+        if (roles.findRole(admin.organizationId, name) != null) {
             throw ConflictException("Role '$name' already exists")
         }
         db
@@ -419,23 +414,11 @@ class AdminService(
         loadRoles(organizationId, name).firstOrNull()
             ?: throw NotFoundException("Role '$name' does not exist")
 
-    private suspend fun findRole(
-        organizationId: UUID,
-        name: String
-    ): UUID? =
-        db
-            .sql("SELECT id FROM ${schemas.metadata}.roles WHERE organization_id = :organizationId AND name = :name")
-            .bind("organizationId", organizationId)
-            .bind("name", name)
-            .map { row, _ -> Rows.uuid(row, "id") }
-            .one()
-            .awaitFirstOrNull()
-
     private suspend fun roleIdOrFail(
         organizationId: UUID,
         name: String
     ): UUID =
-        findRole(organizationId, name.trim().uppercase())
+        roles.findRole(organizationId, name.trim().uppercase())
             ?: throw NotFoundException("Role '$name' does not exist")
 
     private suspend fun permissionsOf(organizationId: UUID): Map<UUID, List<PermissionResponse>> =
@@ -515,34 +498,6 @@ class AdminService(
                 return false
             }
         return actions.exists(organizationId, objectId, action)
-    }
-
-    private suspend fun resolveRoles(
-        organizationId: UUID,
-        names: List<String>
-    ): List<UUID> =
-        names
-            .map { it.trim().uppercase() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { name ->
-                findRole(organizationId, name)
-                    ?: throw ValidationException("Unknown role '$name'", "roles", "role does not exist in this organization")
-            }
-
-    private suspend fun assignRoles(
-        userId: UUID,
-        roleIds: List<UUID>
-    ) {
-        roleIds.forEach { roleId ->
-            db
-                .sql("INSERT INTO ${schemas.metadata}.user_roles (user_id, role_id) VALUES (:userId, :roleId) ON CONFLICT DO NOTHING")
-                .bind("userId", userId)
-                .bind("roleId", roleId)
-                .fetch()
-                .rowsUpdated()
-                .awaitSingle()
-        }
     }
 
     private fun requirePassword(password: String) {
