@@ -182,6 +182,78 @@ class PageApiTest : FullAppIntegrationTest() {
             .doesNotExist()
     }
 
+    // ---- D33: a TAB has a key ----
+
+    @Test
+    fun `the generated page keys its tabs with their titles, and nothing else has a key`() {
+        createRelationship(predio, nota)
+
+        val body =
+            resolve(predio)
+                .jsonPath("$.definition.page.children[0].children[0].children[*].key")
+                .isEqualTo(listOf("DETAILS", "MAP", "RELATED", "HISTORY"))
+                .returnResult()
+                .responseBody!!
+                .decodeToString()
+
+        // absent, not null: the wire of a keyless component is what it was before keys
+        val strip = objectMapper.readTree(body).at("/definition/page/children/0/children/0")
+        assertThat(strip.has("key")).isFalse()
+        assertThat(strip.at("/children/1/children/0").has("key")).isFalse()
+    }
+
+    @Test
+    fun `a tab key is stored upper-cased, read back, and kept by a label-only update`() {
+        val name = uniqueName("page").take(30)
+        val tree = page(region("MAIN", listOf(tabs(tab("Ficha", listOf(form(1, null))) + ("key" to " ficha "), tab("Notas", listOf(text(1, "hola")))))))
+        createPage(name, predio, "one-region", tree)
+            .expectStatus()
+            .isCreated
+            .expectBody()
+            .jsonPath("$.definition.page.children[0].children[0].children[0].key")
+            .isEqualTo("FICHA")
+
+        val stored = objectMapper.readTree(readRawDefinition(name)!!).at("/page/children/0/children/0/children")
+        assertThat(stored.get(0).get("key").asString()).isEqualTo("FICHA")
+        // a tab without a key stores none, not a null
+        assertThat(stored.get(1).has("key")).isFalse()
+
+        client
+            .put()
+            .uri("/api/pages/$name")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("label" to "Ficha del predio"))
+            .exchange()
+            .expectStatus()
+            .isOk
+
+        resolve(predio)
+            .jsonPath("$.definition.page.children[0].children[0].children[0].key")
+            .isEqualTo("FICHA")
+    }
+
+    @Test
+    fun `a key on anything but a tab is refused`() {
+        createPage(uniqueName("page").take(30), predio, "one-region", page(region("MAIN", listOf(form(1, null) + ("key" to "FICHA")))))
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("key is only for TAB")
+    }
+
+    // ?tab=KEY names one tab, so a nested strip may not reuse an outer tab's key
+    @Test
+    fun `a tab key repeated in a nested strip is refused`() {
+        val inner = tabs(tab("Dentro", listOf(form(1, null))) + ("key" to "FICHA"))
+        createPage(uniqueName("page").take(30), predio, "one-region", page(region("MAIN", listOf(tabs(tab("Ficha", listOf(inner)) + ("key" to "ficha"))))))
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("repeated tab key 'FICHA'")
+    }
+
     @Test
     fun `a page keeps the tree it was given`() {
         val name = uniqueName("page").take(30)

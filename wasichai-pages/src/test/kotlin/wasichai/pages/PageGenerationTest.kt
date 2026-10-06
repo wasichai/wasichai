@@ -3,6 +3,7 @@ package wasichai.pages
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
@@ -52,4 +53,39 @@ class PageGenerationTest {
             val tabs = generatedTabs(definition, listOf(provider("MAP", null)), emptyList())
             assertThat(tabs.map { it.title }).containsExactly("DETAILS", "HISTORY")
         }
+
+    // D33: a link names a generated tab by its title
+    @Test
+    fun `generated tabs are keyed by their titles`() =
+        runTest {
+            val tabs = generatedTabs(definition, emptyList(), related)
+            assertThat(tabs.map { it.key }).containsExactly("DETAILS", "RELATED", "HISTORY")
+        }
+
+    @Test
+    fun `a module tab is keyed by its title`() =
+        runTest {
+            val map = provider("MAP", GeneratedComponent(PageComponent(type = ComponentType("MAP")), tab = "MAP"))
+            val tabs = generatedTabs(definition, listOf(map), related)
+            assertThat(tabs.map { it.key }).containsExactly("DETAILS", "MAP", "RELATED", "HISTORY")
+            // the component inside is no tab: it carries none
+            assertThat(tabs[1].children.single().key).isNull()
+        }
+
+    // two modules naming the same tab: both tabs stay, only the first is linkable, so the page still validates
+    @Test
+    fun `a module tab repeating a key already taken keeps its tab but no key`() =
+        runTest {
+            val first = provider("MAP", GeneratedComponent(PageComponent(type = ComponentType("MAP")), tab = "MAP"))
+            val second = provider("PLANO", GeneratedComponent(PageComponent(type = ComponentType("PLANO")), tab = "MAP"))
+            val history = provider("AUDIT", GeneratedComponent(PageComponent(type = ComponentType("AUDIT")), tab = "HISTORY"))
+            val tabs = generatedTabs(definition, listOf(first, second, history), emptyList())
+            assertThat(tabs.map { it.title }).containsExactly("DETAILS", "MAP", "MAP", "HISTORY", "HISTORY")
+            assertThat(tabs.map { it.key }).containsExactly("DETAILS", "MAP", null, null, "HISTORY")
+        }
+
+    @Test
+    fun `a module tab must be a valid key`() {
+        assertThrows<IllegalArgumentException> { GeneratedComponent(PageComponent(type = ComponentType("MAP")), tab = "Mapa del predio") }
+    }
 }

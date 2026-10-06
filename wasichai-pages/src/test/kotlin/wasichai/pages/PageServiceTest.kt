@@ -156,4 +156,118 @@ class PageServiceTest {
         assertThat(updated.page.label).isEqualTo("New Predio")
         assertThat(updated.page.definition).isEqualTo(storedDefinition)
     }
+
+    // ---- D33: a TAB has a key ----
+
+    private fun inMain(vararg components: PageComponentRequest) =
+        CreatePageRequest(
+            objectName = "predio",
+            name = "predio-detail",
+            label = "Predio",
+            definition =
+                PageDefinitionRequest(
+                    PageComponentRequest(
+                        type = "PAGE",
+                        children = listOf(PageComponentRequest(type = "REGION", region = "MAIN", children = components.toList()))
+                    )
+                )
+        )
+
+    private fun tabs(vararg tabs: PageComponentRequest) = PageComponentRequest(type = "TABS", children = tabs.toList())
+
+    private fun tab(
+        key: String?,
+        vararg children: PageComponentRequest
+    ) = PageComponentRequest(type = "TAB", title = "Ficha", key = key, children = children.toList())
+
+    private fun createRefused(request: CreatePageRequest): ValidationException =
+        assertThrows<ValidationException> {
+            runTest { service(emptyList()).create(request) }
+        }
+
+    private fun tabKeys(component: PageComponent): List<String?> =
+        (if (component.type == ComponentType.TAB) listOf(component.key) else emptyList()) + component.children.flatMap { tabKeys(it) }
+
+    @Test
+    fun `a tab key is trimmed and upper-cased, and a blank one is none`() {
+        lateinit var created: ResolvedPage
+        runTest { created = service(emptyList()).create(inMain(tabs(tab("details "), tab("   ")))) }
+
+        assertThat(tabKeys(created.page.definition.page)).containsExactly("DETAILS", null)
+    }
+
+    @Test
+    fun `a tab key out of format is refused`() {
+        listOf("1TAB", "MY-TAB", "TAB KEY", "A".repeat(41)).forEach {
+            val error = createRefused(inMain(tabs(tab(it))))
+            assertThat(error.message).isEqualTo("Invalid tab key '$it'")
+            assertThat(error.violations.single().field).isEqualTo("components")
+        }
+    }
+
+    @Test
+    fun `a key on anything but a TAB is refused`() {
+        val error = createRefused(inMain(PageComponentRequest(type = "SECTION", key = "FICHA")))
+        assertThat(error.message).isEqualTo("key is only for TAB")
+        assertThat(error.violations.single().field).isEqualTo("components")
+    }
+
+    // ?tab=KEY must never be ambiguous, so a nested strip may not reuse an outer tab's key
+    @Test
+    fun `a tab key repeated in a nested strip is refused`() {
+        val error = createRefused(inMain(tabs(tab("FICHA", tabs(tab("ficha"))))))
+        assertThat(error.message).isEqualTo("repeated tab key 'FICHA'")
+        assertThat(error.violations.single().field).isEqualTo("components")
+    }
+
+    @Test
+    fun `a tab key repeated across strips is refused`() {
+        val error = createRefused(inMain(tabs(tab("FICHA")), tabs(tab("OTRA"), tab(" Ficha"))))
+        assertThat(error.message).isEqualTo("repeated tab key 'FICHA'")
+    }
+
+    // relabel keeps the stored tree as is; a template change with no definition re-validates it through toRequest()
+    @Test
+    fun `an update without a definition keeps the tab keys`() {
+        val keyed =
+            PageComponent(
+                type = ComponentType.TABS,
+                children =
+                    listOf(
+                        PageComponent(type = ComponentType.TAB, title = "Ficha", key = "FICHA", children = listOf(PageComponent(type = ComponentType.FORM)))
+                    )
+            )
+        val stored =
+            Page(
+                id = UUID.randomUUID(),
+                organizationId = obj.organizationId,
+                objectId = obj.id,
+                name = "predio-detail",
+                label = "Predio",
+                kind = PageKind.RECORD_DETAIL,
+                template = PageTemplate.TWO_REGIONS,
+                definition =
+                    PageDefinition(
+                        PageComponent(
+                            type = ComponentType.PAGE,
+                            children =
+                                listOf(
+                                    PageComponent(type = ComponentType.REGION, region = PageRegion.MAIN, children = listOf(keyed)),
+                                    PageComponent(type = ComponentType.REGION, region = PageRegion.RIGHT)
+                                )
+                        )
+                    )
+            )
+
+        lateinit var relabelled: ResolvedPage
+        lateinit var retemplated: ResolvedPage
+        runTest {
+            relabelled = service(emptyList(), stored).update("predio-detail", UpdatePageRequest(label = "Otro"))
+            retemplated = service(emptyList(), stored).update("predio-detail", UpdatePageRequest(template = "main-and-right-sidebar"))
+        }
+
+        assertThat(tabKeys(relabelled.page.definition.page)).containsExactly("FICHA")
+        assertThat(retemplated.page.template).isEqualTo(PageTemplate.MAIN_AND_RIGHT_SIDEBAR)
+        assertThat(tabKeys(retemplated.page.definition.page)).containsExactly("FICHA")
+    }
 }
