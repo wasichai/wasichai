@@ -10,6 +10,7 @@ import tools.jackson.databind.ObjectMapper
 import wasichai.core.common.Actions
 import wasichai.core.common.NotFoundException
 import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AdminEntity
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
@@ -60,15 +61,23 @@ class AuditQueryService(
     private val schemas: WasichaiSchemas,
     private val scope: AuditRecordScope
 ) {
-    // tenant-wide read: needs an organization-wide READ grant, not one on some object
+    // tenant-wide read: needs an organization-wide READ grant, not one on some object.
+    // the admin trail (admin:*) is MANAGE_ORGANIZATION's instead (ADR-049): asked for by name, anyone else gets
+    // nothing, not a 403 that says it is there; unasked, it is left out for them, before the limit.
     suspend fun list(
         objectName: String?,
         recordId: UUID?,
         operation: String?,
         limit: Int?
     ): List<AuditEntry> {
-        val user = currentUser.requireWithPermission(Actions.READ)
-        val rows = fetch(user.organizationId, objectName, recordId, operation, limit)
+        val user = currentUser.require()
+        if (AdminEntity.isAdmin(objectName)) {
+            if (!currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)) return emptyList()
+            return toEntries(user, fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin = true))
+        }
+        currentUser.requirePermission(user, Actions.READ)
+        val withAdmin = currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)
+        val rows = fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin)
         return toEntries(user, inScope(user, rows))
     }
 
@@ -84,13 +93,14 @@ class AuditQueryService(
         // a record outside the app's read scope has no history for this caller: 404, as GET on it (ADR-048)
         val readable = scope.readable(user, definition, listOf(recordId))
         if (readable != null && recordId !in readable) throw NotFoundException("Record $recordId does not exist")
-        val rows = fetch(user.organizationId, definition.obj.name, recordId, null, limit)
+        val rows = fetch(user.organizationId, definition.obj.name, recordId, null, limit, withAdmin = false)
         return toEntries(user, rows)
     }
 
     // only the entries of records the caller reads (ADR-048). with a scope on the object, a record that is
     // gone cannot be shown to be in it, so its entries go too, as do those of an object that is gone.
-    // after the limit: a scoped caller may get fewer entries than asked for. internal for tests.
+    // after the limit: a scoped caller may get fewer entries than asked for. admin entries name no record of an
+    // object, so no scope reaches them (ADR-049). internal for tests.
     internal suspend fun inScope(
         user: AuthenticatedUser,
         rows: List<AuditRow>
@@ -98,7 +108,7 @@ class AuditQueryService(
         if (!scope.appliesTo(user)) return rows
         val readable =
             rows
-                .filter { it.recordId != null }
+                .filter { it.recordId != null && !AdminEntity.isAdmin(it.objectName) }
                 .groupBy({ it.objectName }, { it.recordId!! })
                 .mapValues { (objectName, ids) ->
                     val definition = definitionOrNull(user, objectName) ?: return@mapValues emptySet<UUID>()
@@ -125,10 +135,12 @@ class AuditQueryService(
         objectName: String?,
         recordId: UUID?,
         operation: String?,
-        limit: Int?
+        limit: Int?,
+        withAdmin: Boolean
     ): List<AuditRow> {
         val filters = StringBuilder()
         if (recordId != null) filters.append(" AND a.record_id = :recordId")
+        if (!withAdmin) filters.append(" AND a.object_name NOT LIKE :adminNames")
         var spec =
             db
                 .sql(
@@ -150,6 +162,7 @@ class AuditQueryService(
                 .bind("operation", operation?.trim()?.uppercase() ?: "")
                 .bind("limit", (limit ?: 100).coerceIn(1, 500))
         if (recordId != null) spec = spec.bind("recordId", recordId)
+        if (!withAdmin) spec = spec.bind("adminNames", AdminEntity.PREFIX + "%")
         return spec
             .map { row, _ ->
                 AuditRow(
@@ -170,8 +183,8 @@ class AuditQueryService(
             .toList()
     }
 
-    // the log would otherwise hand out field values the field permissions hide
-    private suspend fun toEntries(
+    // the log would otherwise hand out field values the field permissions hide. internal for tests.
+    internal suspend fun toEntries(
         user: AuthenticatedUser,
         rows: List<AuditRow>
     ): List<AuditEntry> {
@@ -185,7 +198,7 @@ class AuditQueryService(
                 recordId = row.recordId?.toString(),
                 operation = row.operation,
                 occurredAt = row.occurredAt,
-                changes = AuditDiff.changes(filter(row.before, allowed), filter(row.after, allowed)),
+                changes = changes(row, allowed),
                 documentId = row.documentId?.toString(),
                 reason = row.reason,
                 serviceAccount = row.serviceAccount
@@ -193,12 +206,23 @@ class AuditQueryService(
         }
     }
 
+    // an admin entry's CREATE and DELETE list every key: who made or dropped a role says what it was (ADR-049).
+    // a record's carry none, as they always did.
+    private fun changes(
+        row: AuditRow,
+        allowed: Set<String>?
+    ): List<FieldChange> {
+        if (AdminEntity.isAdmin(row.objectName)) return AuditDiff.changes(row.before ?: emptyMap(), row.after ?: emptyMap())
+        return AuditDiff.changes(filter(row.before, allowed), filter(row.after, allowed))
+    }
+
     // null means no restriction. empty set means nothing may be shown.
+    // an admin entry reaches here only for a MANAGE_ORGANIZATION holder, and is theirs whole (ADR-049).
     private suspend fun readableFields(
         user: AuthenticatedUser,
         objectName: String
     ): Set<String>? {
-        if (user.isAdmin) return null
+        if (user.isAdmin || AdminEntity.isAdmin(objectName)) return null
         val definition =
             try {
                 metadata.loadDefinition(user.organizationId, objectName)

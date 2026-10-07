@@ -45,7 +45,10 @@ An app overrides any core bean by declaring its own bean of the same type — se
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
 - Dynamic records and related records: `/api/objects/{object}/records`.
-- Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`.
+- Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
+  permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
+  read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
+  write them through the `AdminAudit` port in `identity`, which `audit` implements.
 - Admin: users and roles, under `/api/users` and `/api/roles`; service accounts for server-to-server callers, under
   `/api/service-accounts` ([ADR-043](../adr/0043-service-accounts.md)).
 - Organizational units: a tree of units per organization and who sits in which, under `/api/org-units` and
@@ -197,9 +200,9 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
-- Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditQueryService`, `auditController`, `workflowStates`,
-  `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`, `relatedRecordService`, `recordController`,
-  `relatedRecordController`.
+- Data (`WasichaiDataAutoConfiguration`): `auditService`, `adminAudit`, `auditQueryService`, `auditController`,
+  `workflowStates`, `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`, `relatedRecordService`,
+  `recordController`, `relatedRecordController`.
 - Admin (`WasichaiAdminAutoConfiguration`): `adminService`, `userAdminController`, `roleAdminController`,
   `organizationRepository`, `organizationService`, `organizationController`, `orgUnitService`, `orgUnitController`,
   `userOrgUnitsController`.
@@ -332,6 +335,9 @@ Core is always installed.
   table, and `serviceAccount` on their audit entries and `GET /api/auth/me` (ADR-043).
 - D31: organizational units, `/api/org-units`, `PUT /api/users/{id}/org-units`, `GET /api/auth/me/org-units`, `orgUnits`
   on every user answer, and the `org_units` and `user_org_units` tables (ADR-045).
+- D34: changes to users, roles, permissions, service accounts, units, objects, fields, relationships and the tenant are
+  audit entries under `admin:*` names, listed by `/api/audit` to `MANAGE_ORGANIZATION` only, `[]` to anyone else
+  (ADR-049).
 
 ## Known limitations
 

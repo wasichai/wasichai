@@ -21,6 +21,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.web.server.SecurityWebFilterChain
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.admin.ServiceAccountService
+import wasichai.core.audit.AuditLogAdminAudit
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
@@ -29,6 +30,7 @@ import wasichai.core.data.RecordReadScope
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
 import wasichai.core.data.WorkflowStates
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.WasichaiJwtKey
@@ -97,6 +99,8 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountTokenService::class.java)
+            // issue 49 (ADR-049): admin changes go to the audit log
+            assertThat(context.getBean(AdminAudit::class.java)).isInstanceOf(AuditLogAdminAudit::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)
             // order, not just size: core's twelve types, in ScalarFieldTypes.ALL's declared order
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).containsExactly(

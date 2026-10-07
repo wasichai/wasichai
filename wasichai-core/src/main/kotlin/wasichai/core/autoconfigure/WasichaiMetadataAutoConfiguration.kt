@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CallerPermissionsController
 import wasichai.core.metadata.CallerPermissionsService
@@ -99,7 +100,9 @@ class WasichaiMetadataAutoConfiguration {
         types: FieldTypeRegistry,
         systemColumns: SystemColumns,
         usages: ObjectProvider<FieldUsage>,
-        removals: ObjectProvider<ObjectRemovalListener>
+        removals: ObjectProvider<ObjectRemovalListener>,
+        actions: ObjectActionRepository,
+        audit: AdminAudit
     ): MetadataService =
         MetadataService(
             objects,
@@ -111,7 +114,9 @@ class WasichaiMetadataAutoConfiguration {
             types,
             systemColumns,
             usages.orderedStream().toList(),
-            removals.orderedStream().toList()
+            removals.orderedStream().toList(),
+            actions,
+            audit
         )
 
     @Bean
@@ -122,8 +127,9 @@ class WasichaiMetadataAutoConfiguration {
         fields: CustomFieldRepository,
         metadata: MetadataService,
         schema: ObjectSchemaManager,
-        currentUser: CurrentUser
-    ): RelationshipService = RelationshipService(relationships, objects, fields, metadata, schema, currentUser)
+        currentUser: CurrentUser,
+        audit: AdminAudit
+    ): RelationshipService = RelationshipService(relationships, objects, fields, metadata, schema, currentUser, audit)
 
     @Bean
     @ConditionalOnMissingBean
@@ -159,8 +165,10 @@ class WasichaiMetadataAutoConfiguration {
     fun objectActionService(
         objects: CustomObjectRepository,
         actions: ObjectActionRepository,
-        currentUser: CurrentUser
-    ): ObjectActionService = ObjectActionService(objects, actions, currentUser)
+        currentUser: CurrentUser,
+        fields: CustomFieldRepository,
+        audit: AdminAudit
+    ): ObjectActionService = ObjectActionService(objects, actions, currentUser, fields, audit)
 
     @Bean
     @ConditionalOnMissingBean

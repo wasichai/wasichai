@@ -13,6 +13,7 @@ import wasichai.core.admin.ServiceAccountController
 import wasichai.core.admin.ServiceAccountService
 import wasichai.core.admin.UserAdminController
 import wasichai.core.admin.UserOrgUnitsController
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.metadata.CustomObjectRepository
@@ -36,8 +37,9 @@ class WasichaiAdminAutoConfiguration {
         actions: ObjectActionRepository,
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
-        schemas: WasichaiSchemas
-    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas)
+        schemas: WasichaiSchemas,
+        audit: AdminAudit
+    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit)
 
     @Bean
     @ConditionalOnMissingBean
@@ -63,8 +65,9 @@ class WasichaiAdminAutoConfiguration {
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
         db: DatabaseClient,
-        schemas: WasichaiSchemas
-    ): OrganizationService = OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas)
+        schemas: WasichaiSchemas,
+        audit: AdminAudit
+    ): OrganizationService = OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit)
 
     @Bean
     @ConditionalOnMissingBean
@@ -76,8 +79,9 @@ class WasichaiAdminAutoConfiguration {
         db: DatabaseClient,
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
-        schemas: WasichaiSchemas
-    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas)
+        schemas: WasichaiSchemas,
+        audit: AdminAudit
+    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas, audit)
 
     @Bean
     @ConditionalOnMissingBean
@@ -91,8 +95,9 @@ class WasichaiAdminAutoConfiguration {
         schemas: WasichaiSchemas,
         clusterLock: ClusterLock,
         directory: OrgUnitDirectory,
-        admin: AdminService
-    ): OrgUnitService = OrgUnitService(db, currentUser, schemas, clusterLock, directory, admin)
+        admin: AdminService,
+        audit: AdminAudit
+    ): OrgUnitService = OrgUnitService(db, currentUser, schemas, clusterLock, directory, admin, audit)
 
     @Bean
     @ConditionalOnMissingBean

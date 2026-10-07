@@ -1089,6 +1089,50 @@ scope is a `404`, and `/api/audit` leaves out the entries of records outside it.
 exists is shown only to a caller with no scope on that object. The filter runs after `limit`, so a scoped caller may
 get fewer entries than asked for.
 
+### Administration entries
+
+Changes to the tenant's administration and model are in the same log, under reserved `objectName`s that no object can
+have ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). `recordId` is the entity's id, `operation` is `CREATE`,
+`UPDATE` or `DELETE`, and `userEmail` (or `serviceAccount`) is who did it:
+
+| `objectName` | `recordId` | Written by |
+|---|---|---|
+| `admin:user` | user | create, update, `PUT .../roles`, delete under `/api/users`; `PUT /api/users/{id}/org-units` |
+| `admin:role` | role | create, update, delete under `/api/roles` |
+| `admin:permission` | role | `PUT /api/roles/{name}/permissions` and `/field-permissions` |
+| `admin:service-account` | account | create, update, secret rotation, delete under `/api/service-accounts` |
+| `admin:org-unit` | unit | create, update, delete under `/api/org-units` |
+| `admin:object` | object | create, update (flags, indexes, uniques), delete; declaring or removing an action |
+| `admin:field` | field | add, update, delete under `/api/metadata/objects/{object}/fields` |
+| `admin:relationship` | relationship | create, update, delete under `/api/relationships`, its column included |
+| `admin:organization` | organization | provisioning (in the provisioner's tenant), rename, delete |
+
+```http
+GET /api/audit?objectName=admin:permission&recordId={roleId}
+```
+
+```json
+[{
+  "id": "…", "userEmail": "admin@wasichai.local", "objectName": "admin:permission", "recordId": "…",
+  "operation": "UPDATE", "occurredAt": "2026-10-07T09:00:00Z", "reason": null,
+  "changes": [
+    { "field": "predio.DELETE", "before": true, "after": null },
+    { "field": "*.CREATE", "before": null, "after": true }
+  ]
+}]
+```
+
+A replaced permission set is stored whole on both sides, one key per grant (`<object>.<ACTION>`, `*.<ACTION>` for every
+object, `<object>.<field>` for a field rule), so `changes` names only the grants that changed. An object's entries carry
+its fields and declared actions. No entry holds a password, a hash or a client secret: a password change is
+`passwordChanged: true`, a rotation `secretRotated: true`. Unlike a record's, an admin `CREATE` or `DELETE` lists every
+key in `changes`.
+
+Only `MANAGE_ORGANIZATION` reads them, with or without `READ`. Anyone else asking for `objectName=admin:…` gets `[]`,
+never a `403`; asking for no object, they get the record entries only (the admin ones are left out before `limit`).
+Field permissions and a read scope do not apply to them: they are shown whole. A failed or rolled-back call leaves no
+entry, and a deleted tenant's entries stay in the database.
+
 ## Workflows
 
 Module: wasichai-workflow.

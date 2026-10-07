@@ -204,6 +204,20 @@ These are the only intended differences. Anything else that behaves differently 
   a link can name a tab ([ADR-046](0046-notifications-module.md)). A component without a key is stored and sent as
   before (no `key` property). Tested by `PageServiceTest`, `PageGenerationTest` and `PageApiTest`.
 
+**Because administration answers to an auditor too**
+
+- **D34. Admin changes are in the audit log.** The original audited record writes only. Now every change to users,
+  roles, permission sets, service accounts, organizational units, objects (their flags, indexes, uniques and declared
+  actions), fields, relationships and the tenant writes one `audit_log` row in its own transaction, under a reserved
+  `object_name` (`admin:user`, `admin:role`, `admin:permission`, `admin:service-account`, `admin:org-unit`,
+  `admin:object`, `admin:field`, `admin:relationship`, `admin:organization`), with the acting user, the entity's id
+  and its state before and after, never a password, hash or client secret
+  ([ADR-049](0049-admin-changes-in-the-audit-log.md)). Observable changes: `GET /api/audit?objectName=admin:…`
+  answers them to a `MANAGE_ORGANIZATION` holder and `[]` to anyone else (no `403`, no `READ` needed);
+  `GET /api/audit` with no `admin:*` filter lists them too, for a `MANAGE_ORGANIZATION` holder only; their `CREATE`
+  and `DELETE` entries list every key in `changes`. Record entries, their `changes` and the operation CHECK are
+  unchanged. Tested by `AdminAuditApiTest`, `AuditQueryServiceAdminTest` and `AdminSnapshotsTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
