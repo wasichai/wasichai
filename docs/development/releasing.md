@@ -45,7 +45,7 @@ packages have their own version line.
 ## Guards
 
 `.github/scripts/check-maven-publications.sh <dir>` compares what `./gradlew publishToMavenLocal
--Dmaven.repo.local=<dir>` produced with the twenty expected artifacts. CI runs it on every pull request
+-Dmaven.repo.local=<dir>` produced with the twenty-two expected artifacts. CI runs it on every pull request
 (`publish-dry-run` job) and `publish.yml` right before uploading. A new library fails it until it is added to the
 script's list on purpose.
 

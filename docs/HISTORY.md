@@ -33,6 +33,36 @@ notifications route is `404`. New tests: `OrgUnitApiTest`, `OrgUnitDirectoryTest
 [srtm](superpowers/plans/2026-10-06-notifications-srtm-adoption.md) and
 [caja](superpowers/plans/2026-10-06-notifications-caja-adoption.md).
 
+## 2026-10-06 — Refactors: one gate and one description per record write, one nullable bind, one role assignment
+
+An architecture review of the libraries found three pieces of code kept in several copies that had to change together.
+They are now in one place each, with no change in behaviour: same REST answers, same SQL effects, same audit rows,
+same listener calls. Plan: `docs/superpowers/plans/2026-10-06-core-refactors.md`.
+
+- **`RecordService`.** `create`, `update` and `delete` each repeated the gate in front of a write (reason, caller,
+  object, api-only, permission, disabled) and built the guard's `RecordWrite`, the audit row and the `RecordChange`
+  from the same five facts, three times over. Every rule added to the write path (ADR-040, ADR-041, D29, D30) touched
+  all three. Now a private `open(...)` runs the gate in the same order and returns a `Write`, and `Write.guard(...)`
+  and `Write.recorded(...)` tell guards, the audit log and listeners about it, so the three cannot drift apart. The
+  audit row names the object by its stored name, which is the path's name and the one history reads by. New test:
+  `RecordWriteTrailTest`, which pins what each write tells the three and the order of the checks, and passed on the
+  old code first.
+- **`bindNullable`.** R2DBC refuses `bind(name, null)`. Core kept an internal helper in `metadata`, which `data`
+  imported; wasichai-pages and wasichai-automation kept private copies (pages' said so in a comment); and about a dozen
+  call sites in core and documents wrote the `if (x == null) bindNull(...) else bind(...)` by hand. One public pair now
+  lives in `wasichai.core.platform` (`bindNullable(name, value)`, boxed type, and `bindNullable(name, value, type)`),
+  and those copies and call sites use it. New public API, nothing removed that was public. New test: `BindsTest`.
+- **Role assignment.** `AdminService` (users) and `ServiceAccountService` each resolved role names in the tenant and
+  replaced a user row's roles, with the same SQL and the same errors. An internal `RoleAssignments` does it for both;
+  a service account still refuses `ADMIN` before the lookup, name by name. Its role inserts now skip a role already
+  held, as the users' always did: the only difference, and only two saves of the same account racing could see it.
+- **Permission payloads.** `PUT /api/roles/{name}/permissions` read an object's whole definition once per entry that
+  named it, twice for a declared action, and `PUT /api/roles/{name}/field-permissions` once per field entry. Each
+  object is now read once per request. The action is still judged before the object, so the same payload gets the
+  same error.
+
+No constructor, bean or REST contract changed.
+
 ## 2026-10-06 — Theme components with a second user go up to wasichai-ui
 
 Two components srtm-ui wrote for its `portal-tributario` theme move into wasichai-ui, because caja-ui, which copied

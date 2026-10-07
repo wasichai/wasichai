@@ -12,6 +12,7 @@ import wasichai.core.common.FieldViolation
 import wasichai.core.common.ValidationException
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 data class UserPreferences(
@@ -47,7 +48,7 @@ class UserPreferencesRepository(
                         "RETURNING theme, locale"
                 ).bind("userId", userId)
                 .bind("theme", preferences.theme)
-        val bound = preferences.locale?.let { spec.bind("locale", it) } ?: spec.bindNull("locale", String::class.java)
+        val bound = spec.bindNullable("locale", preferences.locale)
         return bound
             .map { row, _ -> UserPreferences(Rows.string(row, "theme"), Rows.stringOrNull(row, "locale")) }
             .one()

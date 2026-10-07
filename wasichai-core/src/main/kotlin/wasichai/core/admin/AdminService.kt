@@ -20,6 +20,7 @@ import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // users, roles and the rules attached to them. every entry point is MANAGE_ORGANIZATION,
@@ -33,6 +34,8 @@ class AdminService(
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas
 ) {
+    private val roles = RoleAssignments(db, schemas)
+
     // ------------------------------------------------------------------ users
 
     suspend fun listUsers(): List<AdminUserResponse> {
@@ -54,7 +57,7 @@ class AdminService(
         if (findUserByEmail(admin.organizationId, email) != null) {
             throw ConflictException("User '$email' already exists")
         }
-        val roleIds = resolveRoles(admin.organizationId, request.roles)
+        val roleIds = roles.resolve(admin.organizationId, request.roles)
         val id = UUID.randomUUID()
         db
             .sql(
@@ -70,7 +73,7 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        assignRoles(id, roleIds)
+        roles.assign(id, roleIds)
         return userOrFail(admin.organizationId, id)
     }
 
@@ -98,10 +101,9 @@ class AdminService(
                 """.trimIndent()
             ).bind("id", id)
             .bind("organizationId", admin.organizationId)
-            .bindNullableString("displayName", request.displayName?.trim()?.ifBlank { null })
-            .let { spec ->
-                if (request.enabled == null) spec.bindNull("enabled", Boolean::class.javaObjectType) else spec.bind("enabled", request.enabled)
-            }.bindNullableString("hash", request.password?.let { passwordEncoder.encode(it) })
+            .bindNullable("displayName", request.displayName?.trim()?.ifBlank { null })
+            .bindNullable("enabled", request.enabled)
+            .bindNullable("hash", request.password?.let { passwordEncoder.encode(it) })
             .fetch()
             .rowsUpdated()
             .awaitSingle()
@@ -115,14 +117,7 @@ class AdminService(
     ): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         userOrFail(admin.organizationId, id)
-        val roleIds = resolveRoles(admin.organizationId, request.roles)
-        db
-            .sql("DELETE FROM ${schemas.metadata}.user_roles WHERE user_id = :id")
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle()
-        assignRoles(id, roleIds)
+        roles.replace(id, roles.resolve(admin.organizationId, request.roles))
         return userOrFail(admin.organizationId, id)
     }
 
@@ -156,7 +151,7 @@ class AdminService(
         if (!ROLE_NAME.matches(name)) {
             throw ValidationException("Invalid role name '$name'", "name", "must match ^[A-Z][A-Z0-9_]{1,48}$")
         }
-        if (findRole(admin.organizationId, name) != null) {
+        if (roles.findRole(admin.organizationId, name) != null) {
             throw ConflictException("Role '$name' already exists")
         }
         db
@@ -192,14 +187,9 @@ class AdminService(
                 WHERE id = :id
                 """.trimIndent()
             ).bind("id", role)
-            .bindNullableString("label", request.label?.trim()?.ifBlank { null })
-            .let { spec ->
-                if (request.ownRecordsOnly == null) {
-                    spec.bindNull("ownRecordsOnly", Boolean::class.javaObjectType)
-                } else {
-                    spec.bind("ownRecordsOnly", request.ownRecordsOnly)
-                }
-            }.fetch()
+            .bindNullable("label", request.label?.trim()?.ifBlank { null })
+            .bindNullable("ownRecordsOnly", request.ownRecordsOnly)
+            .fetch()
             .rowsUpdated()
             .awaitSingle()
         return roleOrFail(admin.organizationId, name.trim().uppercase())
@@ -230,6 +220,7 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val objects = ObjectLookup(admin.organizationId)
 
         val resolved =
             request.permissions.map { entry ->
@@ -240,14 +231,14 @@ class AdminService(
                         ?.lowercase()
                         ?.ifBlank { null }
                 // the action is judged before the object, as it always was
-                if (action !in Actions.BUILT_IN && !isDeclared(admin.organizationId, objectName, action)) {
+                if (action !in Actions.BUILT_IN && !objects.declares(objectName, action)) {
                     throw ValidationException(
                         "Unknown action '$action'",
                         "action",
                         "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
                     )
                 }
-                val objectId = objectName?.let { objectOrBadRequest(admin.organizationId, it).obj.id }
+                val objectId = objectName?.let { objects.require(it).obj.id }
                 Triple(objectId, action, entry.allowed)
             }
 
@@ -266,7 +257,7 @@ class AdminService(
                     VALUES (:roleId, :objectId, :action, :allowed)
                     """.trimIndent()
                 ).bind("roleId", roleId)
-                .let { spec -> if (objectId == null) spec.bindNull("objectId", UUID::class.java) else spec.bind("objectId", objectId) }
+                .bindNullable("objectId", objectId)
                 .bind("action", action)
                 .bind("allowed", allowed)
                 .fetch()
@@ -285,12 +276,13 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val objects = ObjectLookup(admin.organizationId)
 
         val touchedObjects = mutableSetOf<UUID>()
         val rows =
             request.fields.map { entry ->
                 val objectName = entry.objectName.trim().lowercase()
-                val definition = objectOrBadRequest(admin.organizationId, objectName)
+                val definition = objects.require(objectName)
                 val fieldName = entry.fieldName.trim().lowercase()
                 val field =
                     definition.fields.firstOrNull { it.name == fieldName }
@@ -366,7 +358,7 @@ class AdminService(
                 ORDER BY u.email
                 """.trimIndent()
             ).bind("organizationId", organizationId)
-            .let { spec -> if (id == null) spec.bindNull("id", UUID::class.java) else spec.bind("id", id) }
+            .bindNullable("id", id)
             .map { row, _ ->
                 AdminUserResponse(
                     id = Rows.uuid(row, "id").toString(),
@@ -415,7 +407,7 @@ class AdminService(
                 ORDER BY name
                 """.trimIndent()
             ).bind("organizationId", organizationId)
-            .let { spec -> if (name == null) spec.bindNull("name", String::class.java) else spec.bind("name", name) }
+            .bindNullable("name", name)
             .map { row, _ ->
                 val id = Rows.uuid(row, "id")
                 RoleResponse(
@@ -438,23 +430,11 @@ class AdminService(
         loadRoles(organizationId, name).firstOrNull()
             ?: throw NotFoundException("Role '$name' does not exist")
 
-    private suspend fun findRole(
-        organizationId: UUID,
-        name: String
-    ): UUID? =
-        db
-            .sql("SELECT id FROM ${schemas.metadata}.roles WHERE organization_id = :organizationId AND name = :name")
-            .bind("organizationId", organizationId)
-            .bind("name", name)
-            .map { row, _ -> Rows.uuid(row, "id") }
-            .one()
-            .awaitFirstOrNull()
-
     private suspend fun roleIdOrFail(
         organizationId: UUID,
         name: String
     ): UUID =
-        findRole(organizationId, name.trim().uppercase())
+        roles.findRole(organizationId, name.trim().uppercase())
             ?: throw NotFoundException("Role '$name' does not exist")
 
     private suspend fun permissionsOf(organizationId: UUID): Map<UUID, List<PermissionResponse>> =
@@ -509,58 +489,35 @@ class AdminService(
 
     // ---------------------------------------------------------------- helpers
 
-    // an object the payload names but the tenant does not have is a bad request, not a missing page
-    private suspend fun objectOrBadRequest(
-        organizationId: UUID,
-        objectName: String
-    ): ObjectDefinition =
-        try {
-            metadata.loadDefinition(organizationId, objectName)
-        } catch (ignored: NotFoundException) {
-            throw ValidationException("Unknown object '$objectName'", "objectName", "object does not exist")
+    // the objects one payload names, each read once however many entries name it
+    private inner class ObjectLookup(
+        private val organizationId: UUID
+    ) {
+        private val read = mutableMapOf<String, ObjectDefinition?>()
+
+        suspend fun find(objectName: String): ObjectDefinition? {
+            if (objectName in read) return read[objectName]
+            val definition =
+                try {
+                    metadata.loadDefinition(organizationId, objectName)
+                } catch (ignored: NotFoundException) {
+                    null
+                }
+            read[objectName] = definition
+            return definition
         }
 
-    // a declared action (ADR-042) exists only on the object that declares it, never tenant-wide
-    private suspend fun isDeclared(
-        organizationId: UUID,
-        objectName: String?,
-        action: String
-    ): Boolean {
-        if (objectName == null) return false
-        val objectId =
-            try {
-                metadata.loadDefinition(organizationId, objectName).obj.id
-            } catch (ignored: NotFoundException) {
-                return false
-            }
-        return actions.exists(organizationId, objectId, action)
-    }
+        // an object the payload names but the tenant does not have is a bad request, not a missing page
+        suspend fun require(objectName: String): ObjectDefinition =
+            find(objectName) ?: throw ValidationException("Unknown object '$objectName'", "objectName", "object does not exist")
 
-    private suspend fun resolveRoles(
-        organizationId: UUID,
-        names: List<String>
-    ): List<UUID> =
-        names
-            .map { it.trim().uppercase() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { name ->
-                findRole(organizationId, name)
-                    ?: throw ValidationException("Unknown role '$name'", "roles", "role does not exist in this organization")
-            }
-
-    private suspend fun assignRoles(
-        userId: UUID,
-        roleIds: List<UUID>
-    ) {
-        roleIds.forEach { roleId ->
-            db
-                .sql("INSERT INTO ${schemas.metadata}.user_roles (user_id, role_id) VALUES (:userId, :roleId) ON CONFLICT DO NOTHING")
-                .bind("userId", userId)
-                .bind("roleId", roleId)
-                .fetch()
-                .rowsUpdated()
-                .awaitSingle()
+        // a declared action (ADR-042) exists only on the object that declares it, never tenant-wide
+        suspend fun declares(
+            objectName: String?,
+            action: String
+        ): Boolean {
+            val definition = objectName?.let { find(it) } ?: return false
+            return actions.exists(organizationId, definition.obj.id, action)
         }
     }
 
@@ -569,11 +526,6 @@ class AdminService(
             throw ValidationException("Password too short", "password", "must be at least $MIN_PASSWORD characters")
         }
     }
-
-    private fun DatabaseClient.GenericExecuteSpec.bindNullableString(
-        name: String,
-        value: String?
-    ): DatabaseClient.GenericExecuteSpec = if (value == null) bindNull(name, String::class.java) else bind(name, value)
 
     companion object {
         private const val MIN_PASSWORD = 8
