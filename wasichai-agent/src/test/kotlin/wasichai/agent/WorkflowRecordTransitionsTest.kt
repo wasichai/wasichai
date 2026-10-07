@@ -7,12 +7,14 @@ import org.mockito.Mockito.mock
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditService
+import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelationTargets
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
+import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectSchemaManager
@@ -42,8 +44,15 @@ class WorkflowRecordTransitionsTest {
             emptyList(),
             RecordWriteGuards(
                 emptyList(),
-                RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java))
-            )
+                RelationTargets(
+                    mock(DatabaseClient::class.java),
+                    mock(WasichaiSchemas::class.java),
+                    mock(CustomObjectRepository::class.java),
+                    mock(CustomFieldRepository::class.java),
+                    RecordReadScopes(emptyList(), mock(RecordStore::class.java))
+                )
+            ),
+            RecordReadScopes(emptyList(), mock(RecordStore::class.java))
         ) {
             override suspend fun transitionsOf(
                 objectName: String,
