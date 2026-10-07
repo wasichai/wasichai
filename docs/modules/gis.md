@@ -50,6 +50,11 @@ REST routes:
 A `/layers/{object}` call without a `{geometry}` segment means the object's first geometry field, so links saved
 before an object could carry more than one geometry still work.
 
+The feature endpoints read through `RecordService`, so they hold what the record list holds: the caller's permissions,
+`own_records_only` and the app's read scope; a record out of scope is a `404`
+([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). A GeoServer layer does not: GeoServer reads the
+table itself.
+
 Frontend routes and slots:
 
 | Slot | Contribution |
@@ -150,3 +155,6 @@ instead of failing to load the page.
 
 - A `MULTI*` geometry field cannot be drawn in the UI: the draw modes are single-part, as in the original app. The
   API accepts `MULTI*` GeoJSON. See [../gis/geometry.md](../gis/geometry.md) for storage and wire format.
+- A published layer is served by GeoServer from the table, with GeoServer's own credentials: no wasichai record rule
+  reaches it, neither `own_records_only` nor an app's read scope (ADR-048). Do not publish an object whose reads are
+  scoped, or secure the layer in GeoServer.

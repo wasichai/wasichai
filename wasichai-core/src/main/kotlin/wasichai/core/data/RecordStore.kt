@@ -23,7 +23,7 @@ data class RecordQuery(
     val descending: Boolean = false,
     val search: String? = null,
     val filters: Map<String, String> = emptyMap(),
-    // conditions installed modules add (R7)
+    // conditions installed modules add (R7), and the app's read scope (ADR-048)
     val criteria: List<RecordCriterion> = emptyList(),
     val ids: List<UUID>? = null,
     // record-level security. non-null = only rows this user created.
@@ -75,12 +75,14 @@ interface RecordStore {
         id: UUID
     ): Boolean
 
+    // createdBy and criteria narrow it like a list (ADR-048): a row they leave out is null, as a missing one
     suspend fun findById(
         definition: ObjectDefinition,
         organizationId: UUID,
         id: UUID,
         createdBy: UUID? = null,
-        withState: Boolean = false
+        withState: Boolean = false,
+        criteria: List<RecordCriterion> = emptyList()
     ): RecordRow?
 
     suspend fun query(

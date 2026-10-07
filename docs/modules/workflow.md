@@ -42,7 +42,9 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
   (kind `TRANSITIONED`, with its name) before the state moves. `apiOnly` does not refuse it: it runs the workflow's
   own rules ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)). It takes an `X-Change-Reason`
   header (in-process, `WorkflowService.apply(…, reason)`), stored on its audit entry and required on a
-  `requiresReason` object ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
+  `requiresReason` object ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)). Both transition routes look
+  the record up as `GET` on it does, under `own_records_only` and the app's read scope: a record out of either is a
+  `404` ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)).
 
 - A screen and sidebar entry: the `workflow:builder` route at `<basePath>/workflows` (lazy-loaded), listed under the
   `automation` nav group as "Workflows".

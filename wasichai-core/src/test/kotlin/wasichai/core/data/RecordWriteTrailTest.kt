@@ -109,7 +109,8 @@ class RecordWriteTrailTest {
                 organizationId: UUID,
                 id: UUID,
                 createdBy: UUID?,
-                withState: Boolean
+                withState: Boolean,
+                criteria: List<RecordCriterion>
             ): RecordRow? = rows[id]?.let { RecordRow(id, Instant.now(), Instant.now(), it, state = if (withState) "abierto" else null) }
 
             override suspend fun query(
@@ -179,7 +180,8 @@ class RecordWriteTrailTest {
             FieldTypeRegistry(emptyList()),
             listOf(listener),
             RecordWriteGuards(listOf(guard), RelationTargetsFixtures.none()),
-            AppendOnlyReferencesFixtures.none()
+            AppendOnlyReferencesFixtures.none(),
+            RecordReadScopesFixtures.none()
         )
     }
 

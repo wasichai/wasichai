@@ -13,6 +13,7 @@ import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordChangeListener
+import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordResponse
 import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWrite
@@ -78,7 +79,8 @@ class WorkflowService(
     private val currentUser: CurrentUser,
     private val access: AccessPolicy,
     private val changes: List<RecordChangeListener>,
-    private val guards: RecordWriteGuards
+    private val guards: RecordWriteGuards,
+    private val readScopes: RecordReadScopes
 ) {
     suspend fun byObject(objectName: String): Pair<Workflow, String> {
         val user = currentUser.require()
@@ -153,8 +155,9 @@ class WorkflowService(
         if (workflow == null || !workflow.enabled) return emptyList()
 
         val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
+        // the owner filter and the app's read scope, as a GET of the record (ADR-048)
         val record =
-            store.findById(visible, user.organizationId, id, access.ownerFilter(user), true)
+            store.findById(visible, user.organizationId, id, access.ownerFilter(user), true, readScopes.criteria(user, definition))
                 ?: throw NotFoundException("Record $id does not exist")
 
         // a record older than the workflow has no state. show the moves out of the initial
@@ -214,9 +217,10 @@ class WorkflowService(
                 ?: throw NotFoundException("Workflow '${workflow.name}' has no transition '$transitionName'")
 
         val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
-        // read whole: a guard judges the record, not the fields this caller may see (ADR-040)
+        // read whole: a guard judges the record, not the fields this caller may see (ADR-040). in the
+        // caller's read scope: out of it, the record looks missing (ADR-048)
         val record =
-            store.findById(definition, user.organizationId, id, access.ownerFilter(user), true)
+            store.findById(definition, user.organizationId, id, access.ownerFilter(user), true, readScopes.criteria(user, definition))
                 ?: throw NotFoundException("Record $id does not exist")
 
         if (!holdsRole(user, transition)) {

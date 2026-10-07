@@ -64,3 +64,5 @@ supersedes it and says so in its status line.
   keys](0046-notifications-module.md)
 - [ADR-047: Server push over SSE, with PostgreSQL LISTEN/NOTIFY between
   replicas](0047-server-push-over-sse-and-listen-notify.md)
+- [ADR-048: A read scope SPI narrows what a caller reads of an
+  object](0048-a-read-scope-narrows-what-a-caller-reads.md)

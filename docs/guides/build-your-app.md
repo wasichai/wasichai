@@ -362,6 +362,45 @@ class ReceiptLines : RecordWriteGuard {
 }
 ```
 
+## Who reads which records
+
+`READ` on an object opens every record of it, and `own_records_only` narrows that to the caller's own. When several
+projects, territories or regions share a tenant, declare a `RecordReadScope` bean: it tells core which records of an
+object a person or a service account reads, and core applies it to every read of that object, next to the owner
+filter ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)):
+
+```kotlin
+// a person reads the records of the projects they are assigned to; an object without project_id is not scoped
+@Component
+class ProjectScope(
+    private val assignments: Assignments
+) : RecordReadScope {
+    override suspend fun criterion(
+        caller: AuthenticatedUser,
+        definition: ObjectDefinition
+    ): RecordCriterion? {
+        val field = definition.fields.firstOrNull { it.name == "project_id" } ?: return null
+        // asked once per object a read touches: cache the caller's assignments per request
+        val projects = assignments.projectsOf(caller.userId)
+        if (projects.isEmpty()) return RecordCriterion { _, _ -> "false" }
+        val column = SqlIdentifier.quote(field.columnName)
+        return RecordCriterion { _, bind -> "$column IN (${bind(projects)})" }
+    }
+}
+```
+
+- Return `null` for no restriction, a criterion to narrow, `false` to read nothing (every total is then `0`).
+- Every value goes through `bind`. Your condition is put in parentheses behind the tenant and owner filters, so an
+  `OR` in it cannot widen them. It is handed the object's whole definition, so it may name a field the caller cannot
+  read.
+- It applies to lists and their counts, reads by id, related records on both sides, history and `/api/audit`, a
+  `RELATION` value on a write, the lookups before an update, delete, link or workflow transition, and so to GIS
+  features and the assistant's tools. A record out of scope answers as a missing one: `404`, or `400` on a `RELATION`
+  field. `ADMIN`, the platform and automations are never asked; a service account is (`caller.serviceAccount` names it).
+- Several beans all apply, in `@Order`. The scope hides records, it does not judge values: a caller may still create
+  a record in another project. Keep creates in scope with a `RecordWriteGuard`.
+- GeoServer layers read the table themselves: do not publish a scoped object as a layer.
+
 ## Every change says why
 
 When each change must carry an observation, mark the object `requiresReason`: a write without a reason is a `400` on

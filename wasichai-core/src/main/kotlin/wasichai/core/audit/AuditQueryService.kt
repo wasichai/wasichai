@@ -13,6 +13,7 @@ import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.readableNames
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
@@ -34,8 +35,8 @@ data class AuditEntry(
     @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null
 )
 
-// raw row. states stay as maps until we know what the caller may read.
-private data class AuditRow(
+// raw row. states stay as maps until we know what the caller may read. internal for tests.
+internal data class AuditRow(
     val id: UUID,
     val userEmail: String?,
     val objectName: String,
@@ -56,7 +57,8 @@ class AuditQueryService(
     private val currentUser: CurrentUser,
     private val metadata: MetadataService,
     private val access: AccessPolicy,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val scope: AuditRecordScope
 ) {
     // tenant-wide read: needs an organization-wide READ grant, not one on some object
     suspend fun list(
@@ -67,7 +69,7 @@ class AuditQueryService(
     ): List<AuditEntry> {
         val user = currentUser.requireWithPermission(Actions.READ)
         val rows = fetch(user.organizationId, objectName, recordId, operation, limit)
-        return toEntries(user, rows)
+        return toEntries(user, inScope(user, rows))
     }
 
     // history of one record is a read of that object, so it is checked against that object
@@ -79,9 +81,44 @@ class AuditQueryService(
         val user = currentUser.require()
         val definition = metadata.loadDefinition(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.READ, definition.obj.id)
+        // a record outside the app's read scope has no history for this caller: 404, as GET on it (ADR-048)
+        val readable = scope.readable(user, definition, listOf(recordId))
+        if (readable != null && recordId !in readable) throw NotFoundException("Record $recordId does not exist")
         val rows = fetch(user.organizationId, definition.obj.name, recordId, null, limit)
         return toEntries(user, rows)
     }
+
+    // only the entries of records the caller reads (ADR-048). with a scope on the object, a record that is
+    // gone cannot be shown to be in it, so its entries go too, as do those of an object that is gone.
+    // after the limit: a scoped caller may get fewer entries than asked for. internal for tests.
+    internal suspend fun inScope(
+        user: AuthenticatedUser,
+        rows: List<AuditRow>
+    ): List<AuditRow> {
+        if (!scope.appliesTo(user)) return rows
+        val readable =
+            rows
+                .filter { it.recordId != null }
+                .groupBy({ it.objectName }, { it.recordId!! })
+                .mapValues { (objectName, ids) ->
+                    val definition = definitionOrNull(user, objectName) ?: return@mapValues emptySet<UUID>()
+                    scope.readable(user, definition, ids)
+                }
+        return rows.filter { row ->
+            val allowed = readable[row.objectName]
+            row.recordId == null || allowed == null || row.recordId in allowed
+        }
+    }
+
+    private suspend fun definitionOrNull(
+        user: AuthenticatedUser,
+        objectName: String
+    ): ObjectDefinition? =
+        try {
+            metadata.loadDefinition(user.organizationId, objectName)
+        } catch (_: NotFoundException) {
+            null
+        }
 
     private suspend fun fetch(
         organizationId: UUID,

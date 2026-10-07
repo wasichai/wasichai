@@ -7,6 +7,7 @@ import org.mockito.Mockito.mock
 import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
@@ -32,7 +33,13 @@ class RelationTargetsTest {
 
     // the database knows one record, [known], of every target object
     private val targets =
-        object : RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java)) {
+        object : RelationTargets(
+            mock(DatabaseClient::class.java),
+            mock(WasichaiSchemas::class.java),
+            mock(CustomObjectRepository::class.java),
+            mock(CustomFieldRepository::class.java),
+            RecordReadScopesFixtures.none()
+        ) {
             override suspend fun existing(
                 organizationId: UUID,
                 targetObjectId: UUID,

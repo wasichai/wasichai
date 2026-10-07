@@ -994,6 +994,16 @@ not a UUID":
 The id is not echoed back. A record deleted between that check and the write still fails the database's foreign key:
 that is a `409`, "A record this one points at does not exist any more" (ADR-031 D28, D29, D30).
 
+### Read scope
+
+An app may keep a person or a service account to some records of an object, such as those of their projects, with a
+`RecordReadScope` bean ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). No route or parameter
+changes; what the caller reads does. A list and its `totalElements` hold only the records in scope, and with an empty
+scope every total is `0`. A record out of scope answers exactly as a missing one: `404` on `GET`, `PUT` and `DELETE`,
+on its related records, its history and its transitions, on a link or unlink naming it, and on its GIS feature; `400`
+on a `RELATION` field naming it. Never `403`. `ADMIN` is not narrowed. Without such a bean every answer above is
+unchanged.
+
 ### Change reason
 
 ```http
@@ -1073,6 +1083,11 @@ The history of a record is a read **of its object**, so a role granted `READ` on
 that object's history and no other's. Field permissions apply here too: a field the caller may not
 read never appears as a change or as a value, in either endpoint. Without that, the audit log would
 be a way around the field permissions.
+
+When the app declares a read scope (see "Read scope" under Records), the history of a record outside the caller's
+scope is a `404`, and `/api/audit` leaves out the entries of records outside it. An entry whose record no longer
+exists is shown only to a caller with no scope on that object. The filter runs after `limit`, so a scoped caller may
+get fewer entries than asked for.
 
 ## Workflows
 

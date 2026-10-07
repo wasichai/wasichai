@@ -73,7 +73,8 @@ class RecordService(
     private val types: FieldTypeRegistry,
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
-    private val references: AppendOnlyReferences
+    private val references: AppendOnlyReferences,
+    private val readScopes: RecordReadScopes
 ) {
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
@@ -104,7 +105,7 @@ class RecordService(
             store.query(
                 visible,
                 caller.organizationId,
-                query.copy(createdBy = caller.ownerFilter(), withState = workflow.attached)
+                query.copy(createdBy = caller.ownerFilter(), withState = workflow.attached, criteria = query.criteria + caller.scope(definition))
             )
         return page.map { it.toResponse() }
     }
@@ -119,7 +120,7 @@ class RecordService(
         val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         return store
-            .findById(visible, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
+            .findById(visible, caller.organizationId, id, caller.ownerFilter(), workflow.attached, caller.scope(definition))
             ?.toResponse()
             ?: throw NotFoundException("Record $id does not exist")
     }
@@ -200,7 +201,7 @@ class RecordService(
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val before =
-            store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
+            store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached, caller.scope(definition))
                 ?: throw NotFoundException("Record $id does not exist")
         write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = request.attributes, reader = caller.user)
         // locked fields keep their stored value: a full-replace PUT must not blank them.
@@ -243,7 +244,7 @@ class RecordService(
         val caller = write.caller
         val definition = write.definition
         val before =
-            store.findById(definition, caller.organizationId, id, caller.ownerFilter())
+            store.findById(definition, caller.organizationId, id, caller.ownerFilter(), criteria = caller.scope(definition))
                 ?: throw NotFoundException("Record $id does not exist")
         // postgres would null or drop what append-only records hold of this one (ADR-040). checked
         // again under a row lock, with the delete, when anything append-only can point here (ADR-044)
@@ -264,7 +265,7 @@ class RecordService(
         val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
         return visible to
             store
-                .query(visible, caller.organizationId, query.copy(createdBy = caller.ownerFilter()))
+                .query(visible, caller.organizationId, query.copy(createdBy = caller.ownerFilter(), criteria = query.criteria + caller.scope(definition)))
                 .content
     }
 
@@ -282,7 +283,7 @@ class RecordService(
         return Caller(user.organizationId, user)
     }
 
-    // the platform passes every check, as ADMIN does: no role, no field rule, no owner filter
+    // the platform passes every check, as ADMIN does: no role, no field rule, no owner filter, no read scope
     private suspend fun Caller.requirePermission(
         action: String,
         objectId: UUID
@@ -293,6 +294,9 @@ class RecordService(
     private suspend fun Caller.fieldAccess(objectId: UUID): FieldAccess = if (user == null) FieldAccess.FULL else access.fieldAccess(user, objectId)
 
     private suspend fun Caller.ownerFilter(): UUID? = if (user == null) null else access.ownerFilter(user)
+
+    // the app's read scope, next to the owner filter (ADR-048). the full definition, not the caller's projection
+    private suspend fun Caller.scope(definition: ObjectDefinition): List<RecordCriterion> = readScopes.criteria(user, definition)
 
     /**
      * The row as stored, every field, for audit and listeners (ADR-0025). Listeners get this, not the
