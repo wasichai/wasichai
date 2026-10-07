@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/wasichai/wasichai/compare/v0.3.2...v0.3.3) (2026-10-07)
+
+
+### Performance Improvements
+
+* **core:** a role's permission payload reads each object once ([019a911](https://github.com/wasichai/wasichai/commit/019a911a387965b537b7942eaa001a88da58f7cb))
+
 ## [0.3.2](https://github.com/wasichai/wasichai/compare/v0.3.1...v0.3.2) (2026-10-03)
 
 
