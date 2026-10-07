@@ -33,7 +33,9 @@ data class PageComponentRequest(
     val transition: String? = null,
     val target: String? = null,
     val url: String? = null,
-    val style: String? = null
+    val style: String? = null,
+    // TAB only. trimmed and upper-cased; blank is none
+    val key: String? = null
 )
 
 data class PageDefinitionRequest(
@@ -264,6 +266,8 @@ class PageService(
         val hasAction = all.any { !it.action.isNullOrBlank() }
         val transitions = if (hasAction) workflows.transitionNames(definition.obj.organizationId, definition.obj.id) else emptySet()
         val objectNames = if (hasAction) metadata.listObjects().map { it.name }.toSet() else emptySet()
+        // ?tab=KEY must name one tab: unique across the whole tree, nested strips included
+        val tabKeys = mutableSetOf<String>()
 
         fun walk(
             components: List<PageComponentRequest>,
@@ -274,6 +278,10 @@ class PageService(
                 val type = componentTypes.parse(component.type)
                 val own = PageLayout.parse(component.layout)
                 check(component, type, parentLayout, parent, definition, fieldNames, relationshipNames, formNames, transitions, objectNames, template)
+                val key = TabKey.normalise(component.key)
+                if (key != null && !tabKeys.add(key)) {
+                    throw ValidationException("repeated tab key '$key'", "components", "a tab key names one tab in the page")
+                }
                 PageComponent(
                     type = type,
                     // the page and its regions are placed by the template, so a column means nothing
@@ -296,7 +304,8 @@ class PageService(
                     transition = component.transition?.trim()?.ifBlank { null },
                     target = component.target?.trim()?.ifBlank { null },
                     url = component.url?.trim()?.ifBlank { null },
-                    style = component.action?.let { ActionStyle.parse(component.style) }
+                    style = component.action?.let { ActionStyle.parse(component.style) },
+                    key = key
                 )
             }
 
@@ -386,6 +395,15 @@ class PageService(
         }
         if (!type.container && component.children.isNotEmpty()) {
             throw ValidationException("${type.name} carries children", "components", "only TABS, TAB and SECTION hold children")
+        }
+        // a key is what a link names, and a link opens a tab -- nothing else has one
+        TabKey.normalise(component.key)?.let { key ->
+            if (type != ComponentType.TAB) {
+                throw ValidationException("key is only for TAB", "components", "${type.name} cannot carry a key")
+            }
+            if (!TabKey.valid(key)) {
+                throw ValidationException("Invalid tab key '$key'", "components", "key must match ${TabKey.PATTERN.pattern}")
+            }
         }
         if (parentLayout != null && (component.column < 1 || component.column > parentLayout.columns)) {
             throw ValidationException(
@@ -567,5 +585,6 @@ private fun PageComponent.toRequest(): PageComponentRequest =
         transition = transition,
         target = target,
         url = url,
-        style = style?.name
+        style = style?.name,
+        key = key
     )

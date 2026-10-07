@@ -68,6 +68,8 @@ data class AdminUserResponse(
     val displayName: String,
     val enabled: Boolean,
     val roles: List<String>,
+    // unit codes, sorted (ADR-045)
+    val orgUnits: List<String>,
     val createdAt: Instant?
 )
 

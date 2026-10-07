@@ -1,8 +1,9 @@
 # Core module
 
-An app that installs core gets identity and login, organizations (the tenant), Custom Objects and Fields, dynamic
-records and related records, relationships, caller permissions, audit and history, and the admin screens for users,
-roles and permissions. Every other module builds on it; core itself depends on nothing else in wasichai.
+An app that installs core gets identity and login, organizations (the tenant) and their organizational units, Custom
+Objects and Fields, dynamic records and related records, relationships, caller permissions, audit and history, and the
+admin screens for users, roles and permissions. Every other module builds on it; core itself depends on nothing else
+in wasichai.
 
 ## Install
 
@@ -47,11 +48,45 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`.
 - Admin: users and roles, under `/api/users` and `/api/roles`; service accounts for server-to-server callers, under
   `/api/service-accounts` ([ADR-043](../adr/0043-service-accounts.md)).
+- Organizational units: a tree of units per organization and who sits in which, under `/api/org-units` and
+  `PUT /api/users/{id}/org-units`, with each person's own at `GET /api/auth/me/org-units`
+  ([ADR-045](../adr/0045-organizational-units.md)). See "Organizational units" below.
 - Background work: `RecordService.asPlatform(organizationId) { }` for writes with no user, and the `ClusterLock` bean
   (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
-  ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)).
+  ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)). Work that runs per tenant
+  walks `OrganizationRepository.ids()`, every organization's id (there is still no REST list of organizations). A
+  connection that holds session state (an advisory lock, a `LISTEN`) comes from
+  `wasichai.core.platform.Connections.unpooled(factory)`, the factory under the R2DBC pool, so it never goes back to
+  the pool with that state; `ClusterLock` takes its lease the same way.
 
 See [../api/rest.md](../api/rest.md) for the full method-by-method table.
+
+### Organizational units
+
+A municipality is gerencias, subgerencias and áreas; roles say what someone may do, units say where they sit
+([ADR-045](../adr/0045-organizational-units.md)). Each organization has a tree of units, and a person may sit in
+several (encargaturas, shared staff). A unit's `code` is upper case (`^[A-Z][A-Z0-9_]{1,48}$`), unique in the tenant
+and never changes, so apps bind to it; its `label` can change. Siblings sort by label; units nest at most 10 deep. A
+unit with sub-units or members cannot be deleted. `MANAGE_ORGANIZATION` administers them, so a service account never
+does ([../api/rest.md#organizational-units](../api/rest.md#organizational-units)).
+
+Units are not authorization: membership grants nothing, and it is not in the token. It changes more often than a
+token lives, so it is read when needed. Not there until a second user asks: a head of unit, an `active` flag, an order
+among siblings, rights scoped to a unit.
+
+Modules never read core's identity tables; they get two ports, both in `wasichai.core.identity`:
+
+- `OrgUnitDirectory`: `closureOf(organizationId, userId)`, the user's units and every unit above them, which is the set
+  a notification addressed to a unit is matched against (one recursive query, `UNION` so a cycle could never loop);
+  `idsByCode` and `codesById` (codes trimmed and upper-cased, an unknown one simply missing from the map);
+  `unitsOf(organizationId, userId)`, the user's direct units as `OrgUnitRef(id, code, label, path)` with `path` the
+  codes from the root down. `OrgUnitDirectory.normaliseCode` is the one normalisation.
+- `UserDirectory`: `idsByEmail` (emails trimmed and lower-cased) and `existing(organizationId, ids)` answer only
+  enabled users of the tenant, so a service account, whose backing user is disabled, is never found as a person;
+  `emailsById` answers any user of the tenant, disabled ones too, to show who something named.
+
+Every method takes the organization and filters by it. An empty input collection answers an empty map or set without
+a query.
 
 Screens (`packages/core/src/app/coreModule.ts` in
 [wasichai-ui](https://github.com/wasichai/wasichai-ui/tree/main/packages/core)): login (public), the dashboard, the
@@ -147,8 +182,9 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `healthController`.
 - Security (`WasichaiSecurityAutoConfiguration`): `wasichaiJwtKey`, `jwtDecoder`, `passwordEncoder`,
-  `securityFilterChain`, `corsConfigurationSource`, `roleQueries`, `roleDirectory`, `currentUser`, `accessPolicy`,
-  `userRepository`, `jwtService`, `authService`, `authController`.
+  `securityFilterChain`, `corsConfigurationSource`, `roleQueries`, `roleDirectory`, `orgUnitDirectory`, `userDirectory`,
+  `currentUser`, `accessPolicy`, `userRepository`, `jwtService`, `authService`, `authController`,
+  `myOrgUnitsController`.
 - Metadata (`WasichaiMetadataAutoConfiguration`): `fieldTypeRegistry`, `customObjectRepository`,
   `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
@@ -157,7 +193,8 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`, `relatedRecordService`, `recordController`,
   `relatedRecordController`.
 - Admin (`WasichaiAdminAutoConfiguration`): `adminService`, `userAdminController`, `roleAdminController`,
-  `organizationRepository`, `organizationService`, `organizationController`.
+  `organizationRepository`, `organizationService`, `organizationController`, `orgUnitService`, `orgUnitController`,
+  `userOrgUnitsController`.
 
 `wasichaiCoreMigration` and `wasichaiCoreSeedMigration` are the two exceptions: they register `ModuleMigration` values
 into an ordered list, not a single replaceable bean, so they carry no `@ConditionalOnMissingBean`.
@@ -168,13 +205,20 @@ Migration location `classpath:db/wasichai/core`, history table `flyway_history_c
 ([ADR-026](../adr/0026-per-module-migrations.md)). Creates the `pgcrypto` extension `WITH SCHEMA public` (shared by
 every app in the database, so it outlives any one app) and, when the server ships it, `pgvector` the same way.
 Tables: `organizations`, `users`, `roles`, `user_roles`, `custom_objects`, `custom_fields`, `relationships`,
-`permissions`, `field_permissions`, `audit_log`, `user_preferences` (`V2`) and `object_actions` (`V7`, ADR-042).
+`permissions`, `field_permissions`, `audit_log`, `user_preferences` (`V2`), `object_actions` (`V7`, ADR-042), and
+`org_units` and `user_org_units` (`V9__org_units.sql`, ADR-045).
 `V3__declared_indexes.sql` adds `custom_fields.indexed` and `custom_objects.indexes`
 ([ADR-036](../adr/0036-declared-indexes-optional-count-and-keyset-reads.md)). The indexes themselves sit on each data
 table, built by `ObjectSchemaManager`. A declared index is named `<physical table>_ix_<hash of its columns>`.
 `V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
 ([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)), whose constraints are named
 `<physical table>_uq_<hash of its columns>`.
+
+`V9__org_units.sql` keys `org_units` by `id`, unique per `(organization_id, code)`, with the `code` and `label` rules as
+`CHECK`s (label 1 to 120 characters) and a unit never its own parent. The parent is a composite foreign key
+`(organization_id, parent_id)`, so a parent is always of the same tenant; it is `NO ACTION`, and the admin route
+refuses a unit with children. Deleting the organization removes its whole tree. `user_org_units (user_id, unit_id)`
+cascades from both sides: deleting a user or a unit removes the membership.
 
 The opt-in dev seed, `classpath:db/wasichai/core-seed` (history table `flyway_history_core_seed`, order `10`), runs
 only with `wasichai.seed.dev=true` and inserts a demo organization, an `ADMIN` role with every permission, and the
@@ -278,6 +322,8 @@ Core is always installed.
   `permissions` column (ADR-042).
 - D27: service accounts trade a client id and secret for a token at `POST /api/auth/token`, a new `service_accounts`
   table, and `serviceAccount` on their audit entries and `GET /api/auth/me` (ADR-043).
+- D31: organizational units, `/api/org-units`, `PUT /api/users/{id}/org-units`, `GET /api/auth/me/org-units`, `orgUnits`
+  on every user answer, and the `org_units` and `user_org_units` tables (ADR-045).
 
 ## Known limitations
 

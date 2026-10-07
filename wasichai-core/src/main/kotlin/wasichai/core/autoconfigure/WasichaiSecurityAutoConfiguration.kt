@@ -22,10 +22,13 @@ import wasichai.core.identity.AuthController
 import wasichai.core.identity.AuthService
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.JwtService
+import wasichai.core.identity.MyOrgUnitsController
+import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.RoleQueries
 import wasichai.core.identity.ServiceAccountTokenController
 import wasichai.core.identity.ServiceAccountTokenService
+import wasichai.core.identity.UserDirectory
 import wasichai.core.identity.UserPreferencesController
 import wasichai.core.identity.UserPreferencesRepository
 import wasichai.core.identity.UserPreferencesService
@@ -127,6 +130,20 @@ class WasichaiSecurityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun orgUnitDirectory(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): OrgUnitDirectory = OrgUnitDirectory(db, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun userDirectory(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): UserDirectory = UserDirectory(db, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
     fun currentUser(roleQueries: RoleQueries): CurrentUser = CurrentUser(roleQueries)
 
     @Bean
@@ -183,6 +200,13 @@ class WasichaiSecurityAutoConfiguration {
         service: UserPreferencesService,
         currentUser: CurrentUser
     ): UserPreferencesController = UserPreferencesController(service, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun myOrgUnitsController(
+        units: OrgUnitDirectory,
+        currentUser: CurrentUser
+    ): MyOrgUnitsController = MyOrgUnitsController(units, currentUser)
 
     @Bean
     @ConditionalOnMissingBean

@@ -23,7 +23,7 @@ One deployable per app: still a modular monolith ([ADR-001](../adr/0001-modular-
 The backend graph is acyclic:
 
 ```
-core  <-  views, forms, workflow, automation, documents, gis, agent
+core  <-  views, forms, workflow, automation, documents, gis, agent, notifications
 core  <-  forms  <-  pages
 automation  ->  documents, only through the optional DocumentIssuer port (documents implements it)
 ```
@@ -38,6 +38,7 @@ automation  ->  documents, only through the optional DocumentIssuer port (docume
 | automation | `wasichai-automation` | `wasichai-spring-boot-starter-automation` | `@wasichai/automation` | [automation](../modules/automation.md) |
 | documents | `wasichai-documents` | `wasichai-spring-boot-starter-documents` | `@wasichai/documents` | [documents](../modules/documents.md) |
 | gis | `wasichai-gis` | `wasichai-spring-boot-starter-gis` | `@wasichai/gis` | [gis](../modules/gis.md) |
+| notifications | `wasichai-notifications` | `wasichai-spring-boot-starter-notifications` | planned | [notifications](../modules/notifications.md) |
 | agent | `wasichai-agent` | `wasichai-spring-boot-starter-agent` | `@wasichai/agent` | [agent](../modules/agent.md) |
 | testing | `wasichai-test` | — | `@wasichai/testing` | [testing](../modules/testing.md) |
 
@@ -52,17 +53,25 @@ coordinate. See [ADR-024](../adr/0024-libraries-and-starters.md).
 |---|---|
 | `common` | RFC 7807 errors, paging, health |
 | `platform` | `WasichaiSchemas`, `SqlIdentifier`, Flyway runner (`WasichaiMigrations`), `ModuleMigration`, `SystemColumns`, database and JWT properties |
-| `identity` | Users, roles, login, JWT issuing, tenant resolution from the token |
+| `identity` | Users, roles, organizational units, login, JWT issuing, tenant resolution; `OrgUnitDirectory`, `UserDirectory` |
 | `metadata` | Custom Objects, Custom Fields, relationships, `FieldTypeRegistry`, `ObjectSchemaManager` |
 | `audit` | Append-only audit log and its query service |
 | `data` | `RecordStore` port, `PhysicalTableRecordStore`, the dynamic record and relationship APIs |
-| `admin` | User and role administration |
+| `admin` | User, role, service account and organizational unit administration |
 | `organization` | Organizations, the tenant |
 | `autoconfigure` | `@AutoConfiguration` classes that wire every bean above |
 
 `CoreArchitectureTest` enforces the layering as a DAG, `platform` at the bottom: `common` ← `platform` ← `identity`
 ← `metadata` ← `audit` ← `data`, with `admin` and `organization` standing on `metadata` and `autoconfigure` on top
 of all of them. A package may only import the packages below it in this order; the test fails the build otherwise.
+
+A module never reads core's identity tables. It finds people and units through ports in `identity`:
+`OrgUnitDirectory` (a user's units and their ancestors, codes to ids and back) and `UserDirectory` (enabled people by
+email or id), both tenant-scoped and `@ConditionalOnMissingBean`
+([ADR-045](../adr/0045-organizational-units.md)). Background work lists tenants with `OrganizationRepository.ids()`;
+a connection that must keep session state comes from `Connections.unpooled` (`platform`). wasichai-notifications
+uses all of them: units and emails to address people, the tenants for its loop, an unpooled connection for `LISTEN`
+([ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md)).
 
 ## Extension SPIs
 
@@ -78,6 +87,7 @@ of all of them. A package may only import the packages below it in this order; t
 | `ModuleMigration` | `wasichai-core` (`platform`) | Registry | every module, one entry each, plus core's own and its dev seed |
 | `PageComponentProvider` | `wasichai-pages` | Strategy | wasichai-pages itself (the HISTORY component); other modules that add a page component |
 | `DocumentIssuer` | `wasichai-automation` | Port | `NoDocumentIssuer` (automation default); `DocumentIssuerAdapter` in wasichai-documents |
+| `NotificationSource` | `wasichai-notifications` | Strategy | apps: computed states the module's loop turns into notifications (ADR-046) |
 
 Listener and contributor lists run in `@Order`, synchronously, inside the caller's own call: `RecordService` opens
 no transaction of its own, so a listener that needs atomicity opens one itself. An empty list means no module
@@ -89,7 +99,7 @@ and they commit or roll back together: [ADR-038](../adr/0038-record-service-join
 
 `@wasichai/ui` (Tailwind primitives), `@wasichai/core` (the app shell, `WasichaiApp`, the registry, everything that works
 with no module installed), one package per backend module (`@wasichai/views`, `forms`, `pages`, `workflow`,
-`automation`, `documents`, `gis`, `agent`) and `@wasichai/testing`, all in
+`automation`, `documents`, `gis`, `agent`; `notifications` is planned) and `@wasichai/testing`, all in
 [wasichai-ui](https://github.com/wasichai/wasichai-ui).
 
 A module is a `WasichaiModule` value, usually built by a factory (`gisModule({ workerUrl })`), passed to
@@ -153,3 +163,6 @@ Every decision is an ADR: [../adr/README.md](../adr/README.md). This page leans 
 - [ADR-028](../adr/0028-frontend-module-registry.md) — frontend modules plug into a registry
 - [ADR-029](../adr/0029-polyglot-monorepo-and-publishing.md) — polyglot monorepo and publishing
 - [ADR-032](../adr/0032-rebrand-to-wasichai-and-split-repositories.md) — rebrand to wasichai, split into two repositories
+- [ADR-045](../adr/0045-organizational-units.md) — organizational units in core
+- [ADR-046](../adr/0046-notifications-module.md) — a notifications module: audience matched on read, keyed sources
+- [ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md) — server push over SSE, LISTEN/NOTIFY between replicas

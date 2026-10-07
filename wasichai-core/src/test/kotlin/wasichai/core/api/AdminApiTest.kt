@@ -44,6 +44,9 @@ class AdminApiTest : WasichaiIntegrationTest() {
             .expectBody()
             .jsonPath("$.roles.length()")
             .isEqualTo(2)
+            // a fresh user sits in no unit (ADR-045)
+            .jsonPath("$.orgUnits.length()")
+            .isEqualTo(0)
 
         client
             .put()

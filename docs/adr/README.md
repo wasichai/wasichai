@@ -59,3 +59,8 @@ supersedes it and says so in its status line.
   person](0043-service-accounts.md)
 - [ADR-044: The append-only delete check runs under a row lock, in one transaction with the
   delete](0044-append-only-delete-check-under-a-row-lock.md)
+- [ADR-045: Organizational units: a tree per organization, and who belongs where](0045-organizational-units.md)
+- [ADR-046: A notifications module: audience matched on read, keyed sources that resolve themselves, tab
+  keys](0046-notifications-module.md)
+- [ADR-047: Server push over SSE, with PostgreSQL LISTEN/NOTIFY between
+  replicas](0047-server-push-over-sse-and-listen-notify.md)

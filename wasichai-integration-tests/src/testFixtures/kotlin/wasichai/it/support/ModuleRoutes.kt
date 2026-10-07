@@ -2,8 +2,9 @@ package wasichai.it.support
 
 import org.springframework.http.HttpMethod
 
-// every route a module adds, by module: the same 50 as AllModulesWiringTest.LEGACY_MODULE_ROUTES
-// (ModuleRoutesTest keeps the two equal). the module matrix probes the ones an app has not got.
+// every route a module adds, by module: the original's 50 (AllModulesWiringTest.LEGACY_MODULE_ROUTES) plus the
+// ones it never had (ADDED_MODULE_ROUTES, ADR-031). ModuleRoutesTest keeps them equal. the module matrix probes
+// the ones an app has not got: each must be a 404 (ADR-031 D1).
 object ModuleRoutes {
     const val PROBE_ID = "00000000-0000-0000-0000-00000000abcd"
 
@@ -66,6 +67,28 @@ object ModuleRoutes {
                     "DELETE /api/objects/{object}/document-types/{name}",
                     "GET /api/objects/{object}/records/{id}/documents",
                     "POST /api/objects/{object}/records/{id}/documents/{type}"
+                ),
+            "notifications" to
+                listOf(
+                    "GET /api/notifications",
+                    "POST /api/notifications",
+                    "GET /api/notifications/{id}",
+                    "PUT /api/notifications/{id}",
+                    "DELETE /api/notifications/{id}",
+                    "GET /api/auth/me/notifications",
+                    "GET /api/auth/me/notifications/summary",
+                    "GET /api/auth/me/notifications/stream",
+                    "POST /api/auth/me/notifications/{id}/read",
+                    "POST /api/auth/me/notifications/{id}/dismiss",
+                    "POST /api/auth/me/notifications/{id}/snooze",
+                    "POST /api/auth/me/notifications/read-all",
+                    "GET /api/notification-rules",
+                    "GET /api/objects/{object}/notification-rules",
+                    "POST /api/objects/{object}/notification-rules",
+                    "GET /api/objects/{object}/notification-rules/{name}",
+                    "PUT /api/objects/{object}/notification-rules/{name}",
+                    "DELETE /api/objects/{object}/notification-rules/{name}",
+                    "POST /api/objects/{object}/notification-rules/{name}/run"
                 ),
             "gis" to
                 listOf(
