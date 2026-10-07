@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository
 import wasichai.core.common.ValidationException
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 enum class RelationshipType {

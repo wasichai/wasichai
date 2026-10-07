@@ -146,31 +146,15 @@ class RecordService(
         reason: String?,
         viaApi: Boolean
     ): RecordResponse {
-        val changeReason = ChangeReason.normalize(reason)
-        val caller = caller()
-        val definition = metadata.loadDefinition(caller.organizationId, objectName)
-        if (viaApi) rejectApiOnly(definition)
-        caller.requirePermission(Actions.CREATE, definition.obj.id)
-        rejectDisabled(definition)
+        val write = open(objectName, Actions.CREATE, reason, viaApi)
+        val caller = write.caller
+        val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
-        guards.beforeWrite(
-            definition,
-            RecordWrite(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = null,
-                kind = RecordChangeKind.CREATED,
-                attributes = request.attributes,
-                reason = changeReason
-            ),
-            caller.user
-        )
+        write.guard(RecordChangeKind.CREATED, recordId = null, attributes = request.attributes, reader = caller.user)
         val created =
             store.insert(
                 definition.writableBy(fieldAccess),
@@ -183,27 +167,7 @@ class RecordService(
         // audit and listeners judge the record as stored, every field (ADR-0025): the port promises
         // nothing about what insert hands back, and a locked field left out would read as cleared
         val stored = storedRow(definition, caller.organizationId, created, workflow.attached)
-        audit.record(
-            organizationId = caller.organizationId,
-            userId = caller.userId,
-            objectName = objectName,
-            recordId = created.id,
-            operation = AuditOperation.CREATE,
-            after = stored.attributes,
-            reason = changeReason
-        )
-        notify(
-            RecordChange(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = created.id,
-                kind = RecordChangeKind.CREATED,
-                after = stored.attributes,
-                state = stored.state
-            )
-        )
+        write.recorded(RecordChangeKind.CREATED, created.id, after = stored.attributes, state = stored.state)
         return created.onlyReadable(definition, fieldAccess).toResponse()
     }
 
@@ -228,12 +192,9 @@ class RecordService(
         reason: String?,
         viaApi: Boolean
     ): RecordResponse {
-        val changeReason = ChangeReason.normalize(reason)
-        val caller = caller()
-        val definition = metadata.loadDefinition(caller.organizationId, objectName)
-        if (viaApi) rejectApiOnly(definition)
-        caller.requirePermission(Actions.UPDATE, definition.obj.id)
-        rejectDisabled(definition)
+        val write = open(objectName, Actions.UPDATE, reason, viaApi)
+        val caller = write.caller
+        val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
@@ -241,21 +202,7 @@ class RecordService(
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached)
                 ?: throw NotFoundException("Record $id does not exist")
-        guards.beforeWrite(
-            definition,
-            RecordWrite(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = id,
-                kind = RecordChangeKind.UPDATED,
-                before = before.attributes,
-                attributes = request.attributes,
-                reason = changeReason
-            ),
-            caller.user
-        )
+        write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = request.attributes, reader = caller.user)
         // locked fields keep their stored value: a full-replace PUT must not blank them.
         // the state is untouched here: it only moves through a transition.
         val updated =
@@ -270,29 +217,7 @@ class RecordService(
             )
         // before is a full read; after must be one too, or every locked field reads as cleared (ADR-0025)
         val stored = storedRow(definition, caller.organizationId, updated, workflow.attached)
-        audit.record(
-            organizationId = caller.organizationId,
-            userId = caller.userId,
-            objectName = objectName,
-            recordId = id,
-            operation = AuditOperation.UPDATE,
-            before = before.attributes,
-            after = stored.attributes,
-            reason = changeReason
-        )
-        notify(
-            RecordChange(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = id,
-                kind = RecordChangeKind.UPDATED,
-                before = before.attributes,
-                after = stored.attributes,
-                state = stored.state
-            )
-        )
+        write.recorded(RecordChangeKind.UPDATED, id, before = before.attributes, after = stored.attributes, state = stored.state)
         return updated.onlyReadable(definition, fieldAccess).toResponse()
     }
 
@@ -314,55 +239,18 @@ class RecordService(
         reason: String?,
         viaApi: Boolean
     ) {
-        val changeReason = ChangeReason.normalize(reason)
-        val caller = caller()
-        val definition = metadata.loadDefinition(caller.organizationId, objectName)
-        if (viaApi) rejectApiOnly(definition)
-        caller.requirePermission(Actions.DELETE, definition.obj.id)
-        rejectDisabled(definition)
+        val write = open(objectName, Actions.DELETE, reason, viaApi)
+        val caller = write.caller
+        val definition = write.definition
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter())
                 ?: throw NotFoundException("Record $id does not exist")
         // postgres would null or drop what append-only records hold of this one (ADR-040). checked
         // again under a row lock, with the delete, when anything append-only can point here (ADR-044)
-        references.deleting(caller.organizationId, definition, id, guard = {
-            guards.beforeWrite(
-                definition,
-                RecordWrite(
-                    organizationId = caller.organizationId,
-                    userId = caller.userId,
-                    objectId = definition.obj.id,
-                    objectName = definition.obj.name,
-                    recordId = id,
-                    kind = RecordChangeKind.DELETED,
-                    before = before.attributes,
-                    reason = changeReason
-                )
-            )
-        }) {
+        references.deleting(caller.organizationId, definition, id, guard = { write.guard(RecordChangeKind.DELETED, id, before = before.attributes) }) {
             store.delete(definition, caller.organizationId, id)
         }
-        audit.record(
-            organizationId = caller.organizationId,
-            userId = caller.userId,
-            objectName = objectName,
-            recordId = id,
-            operation = AuditOperation.DELETE,
-            before = before.attributes,
-            reason = changeReason
-        )
-        notify(
-            RecordChange(
-                organizationId = caller.organizationId,
-                userId = caller.userId,
-                objectId = definition.obj.id,
-                objectName = definition.obj.name,
-                recordId = id,
-                kind = RecordChangeKind.DELETED,
-                before = before.attributes,
-                state = before.state
-            )
-        )
+        write.recorded(RecordChangeKind.DELETED, id, before = before.attributes, state = before.state)
     }
 
     // rows rather than pages, for modules that render records their own way
@@ -439,6 +327,90 @@ class RecordService(
         changes.forEach { it.recordChanged(change) }
     }
 
+    // one write: who writes, on which object, and why (ADR-041). guards, the audit row and listeners
+    // are all told about it from here, so the three always describe the same write.
+    private class Write(
+        val caller: Caller,
+        val definition: ObjectDefinition,
+        val reason: String?
+    )
+
+    // the gate in front of every write, in this order: the reason's form, the caller, the object, the
+    // api-only door (ADR-040), the action, a disabled object. a refusal here stores nothing.
+    private suspend fun open(
+        objectName: String,
+        action: String,
+        reason: String?,
+        viaApi: Boolean
+    ): Write {
+        val changeReason = ChangeReason.normalize(reason)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        if (viaApi) rejectApiOnly(definition)
+        caller.requirePermission(action, definition.obj.id)
+        rejectDisabled(definition)
+        return Write(caller, definition, changeReason)
+    }
+
+    // [reader]: whose read scope the relation values must be in (D30). a delete sets none, so names nobody
+    private suspend fun Write.guard(
+        kind: RecordChangeKind,
+        recordId: UUID?,
+        before: Map<String, Any?>? = null,
+        attributes: Map<String, Any?>? = null,
+        reader: AuthenticatedUser? = null
+    ) {
+        guards.beforeWrite(
+            definition,
+            RecordWrite(
+                organizationId = caller.organizationId,
+                userId = caller.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = recordId,
+                kind = kind,
+                before = before,
+                attributes = attributes,
+                reason = reason
+            ),
+            reader
+        )
+    }
+
+    // what happened, once stored: the audit row, keyed by the object's name as history reads it, then
+    // every listener (ADR-0025)
+    private suspend fun Write.recorded(
+        kind: RecordChangeKind,
+        recordId: UUID,
+        before: Map<String, Any?>? = null,
+        after: Map<String, Any?>? = null,
+        state: String? = null
+    ) {
+        audit.record(
+            organizationId = caller.organizationId,
+            userId = caller.userId,
+            objectName = definition.obj.name,
+            recordId = recordId,
+            operation = kind.auditOperation(),
+            before = before,
+            after = after,
+            reason = reason
+        )
+        notify(
+            RecordChange(
+                organizationId = caller.organizationId,
+                userId = caller.userId,
+                objectId = definition.obj.id,
+                objectName = definition.obj.name,
+                recordId = recordId,
+                kind = kind,
+                before = before,
+                after = after,
+                state = state
+            )
+        )
+    }
+
     // sections no installed type owns are ignored, like any unknown property
     private fun installed(sections: Map<String, Map<String, Any?>>) = sections.filterKeys { it in types.sections }
 
@@ -503,6 +475,14 @@ internal fun rejectDisabled(definition: ObjectDefinition) {
         throw ConflictException("Object '${definition.obj.name}' is disabled and accepts no changes")
     }
 }
+
+// a transition is audited as the UPDATE it is: the audit CHECK knows no other operation
+private fun RecordChangeKind.auditOperation(): AuditOperation =
+    when (this) {
+        RecordChangeKind.CREATED -> AuditOperation.CREATE
+        RecordChangeKind.UPDATED, RecordChangeKind.TRANSITIONED -> AuditOperation.UPDATE
+        RecordChangeKind.DELETED -> AuditOperation.DELETE
+    }
 
 fun RecordRow.toResponse(): RecordResponse =
     RecordResponse(
