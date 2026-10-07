@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/wasichai/wasichai/compare/v0.3.3...v0.4.0) (2026-10-07)
+
+
+### Features
+
+* **notifications:** alerts for people, roles and organizational units ([6c354f8](https://github.com/wasichai/wasichai/commit/6c354f81e7be43dd9cdcfc7018b34503706728f8))
+* **notifications:** alerts for people, roles and organizational units ([6dfe776](https://github.com/wasichai/wasichai/commit/6dfe776447646a24cb23540fdf80fa6950c4041c))
+
 ## [0.3.3](https://github.com/wasichai/wasichai/compare/v0.3.2...v0.3.3) (2026-10-07)
 
 
