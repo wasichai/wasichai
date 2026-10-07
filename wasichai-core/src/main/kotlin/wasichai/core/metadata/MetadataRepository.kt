@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper
 import wasichai.core.platform.Rows
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 private const val OBJECT_COLUMNS =
@@ -213,7 +214,7 @@ class CustomFieldRepository(
                 .bind("indexed", field.indexed)
         attributeColumns.forEachIndexed { index, column ->
             val value = field.attributes[column]
-            spec = if (value == null) spec.bindNull("a$index", types.attributeColumns.getValue(column)) else spec.bind("a$index", value)
+            spec = spec.bindNullable("a$index", value, types.attributeColumns.getValue(column))
         }
         return spec.map(::mapField).one().awaitSingle()
     }
@@ -341,9 +342,3 @@ class CustomFieldRepository(
             indexed = Rows.bool(row, "indexed")
         )
 }
-
-// r2dbc rejects bind(null); nullable binds must declare the type.
-internal inline fun <reified T : Any> DatabaseClient.GenericExecuteSpec.bindNullable(
-    name: String,
-    value: T?
-): DatabaseClient.GenericExecuteSpec = if (value == null) bindNull(name, T::class.java) else bind(name, value)
