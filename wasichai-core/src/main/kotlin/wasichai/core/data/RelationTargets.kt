@@ -10,6 +10,8 @@ import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.RoleQueries
 import wasichai.core.metadata.CustomField
+import wasichai.core.metadata.CustomFieldRepository
+import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
@@ -22,8 +24,9 @@ import java.util.UUID
  * that never existed made a mistake on a field, a 400.
  *
  * With a reader (a person or a service account, not ADMIN) the record must also be one they can read
- * (issue 39, ADR-031 D30): READ on the target object, and their own record when they see only their
- * own. The same rules RecordService reads with, folded into the same read.
+ * (issue 39, ADR-031 D30): READ on the target object, their own record when they see only their own,
+ * and the app's read scope on the target (ADR-048). The same rules RecordService reads with, folded
+ * into the same read.
  *
  * Called by [RecordWriteGuards], after the built-in write rules and before the app's guards, so every
  * write path checks. One tenant-filtered read per target object, only for values sent, non-null and
@@ -33,7 +36,9 @@ import java.util.UUID
 open class RelationTargets(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
-    private val objects: CustomObjectRepository
+    private val objects: CustomObjectRepository,
+    private val fields: CustomFieldRepository,
+    private val readScopes: RecordReadScopes
 ) {
     // [before]: the stored row on an update. a value it already holds is not looked up again, in scope
     // or not: keeping a link is no new claim on its target.
@@ -88,18 +93,18 @@ open class RelationTargets(
         val target = objects.findById(organizationId, targetObjectId) ?: return emptySet()
         // no role grants nothing (RoleQueries): no read to ask
         if (scope != null && scope.roles.isEmpty()) return emptySet()
-        val sql =
-            buildString {
-                append("SELECT id FROM ${schemas.dataTable(target.physicalTable)} WHERE organization_id = :organizationId AND id = ANY(:ids)")
-                if (scope != null) {
-                    // READ on the target object, then the owner filter, as RecordService.get applies them
-                    append(" AND EXISTS (${RoleQueries.permissionQuery(schemas, objectScoped = true)})")
-                    append(" AND (created_by = :userId OR NOT COALESCE((${AccessPolicy.ownRecordsOnlyQuery(schemas)}), false))")
-                }
+        // the app's read scope on the target, as RecordService.get applies it. its values bind as c<n>
+        val bindings = mutableMapOf<String, Any>()
+        val terms =
+            if (scope == null || !readScopes.appliesTo(scope)) {
+                emptyList()
+            } else {
+                val definition = ObjectDefinition(target, fields.findByObject(target.id))
+                readScopes.criteria(scope, definition).map { it.term(definition, bindings) }
             }
         var spec =
             db
-                .sql(sql)
+                .sql(sql(target, scope != null, terms))
                 .bind("organizationId", organizationId)
                 .bind("ids", ids.toTypedArray())
         if (scope != null) {
@@ -110,6 +115,7 @@ open class RelationTargets(
                     .bind("objectId", targetObjectId)
                     .bind("userId", scope.userId)
         }
+        bindings.forEach { (name, value) -> spec = spec.bind(name, value) }
         return spec
             .map { row, _ -> row.get("id", UUID::class.java)!! }
             .all()
@@ -117,6 +123,22 @@ open class RelationTargets(
             .toList()
             .toSet()
     }
+
+    // pure, so it is tested directly. [scoped]: a reader's rules apply; [terms]: their read scope, in parens
+    internal fun sql(
+        target: CustomObject,
+        scoped: Boolean,
+        terms: List<String>
+    ): String =
+        buildString {
+            append("SELECT id FROM ${schemas.dataTable(target.physicalTable)} WHERE organization_id = :organizationId AND id = ANY(:ids)")
+            if (scoped) {
+                // READ on the target object, then the owner filter, then the read scope, as RecordService.get applies them
+                append(" AND EXISTS (${RoleQueries.permissionQuery(schemas, objectScoped = true)})")
+                append(" AND (created_by = :userId OR NOT COALESCE((${AccessPolicy.ownRecordsOnlyQuery(schemas)}), false))")
+                terms.forEach { append(" AND $it") }
+            }
+        }
 
     private fun uuidOf(value: Any?): UUID? =
         when (value) {

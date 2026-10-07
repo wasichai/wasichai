@@ -15,6 +15,7 @@ import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.FieldAccess
 import wasichai.core.metadata.CustomField
+import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
@@ -97,7 +98,8 @@ class RecordServiceTest {
                 organizationId: UUID,
                 id: UUID,
                 createdBy: UUID?,
-                withState: Boolean
+                withState: Boolean,
+                criteria: List<RecordCriterion>
             ): RecordRow? = stored?.copy(id = id)
 
             override suspend fun query(
@@ -140,7 +142,8 @@ class RecordServiceTest {
             types,
             emptyList(),
             RecordWriteGuards(emptyList(), relationTargets),
-            AppendOnlyReferencesFixtures.none()
+            AppendOnlyReferencesFixtures.none(),
+            RecordReadScopesFixtures.none()
         )
     }
 
@@ -150,7 +153,13 @@ class RecordServiceTest {
     private val withRelation = ObjectDefinition(ObjectDefinitionFixtures.obj, listOf(codigo, customer))
     private val scopes = mutableListOf<AuthenticatedUser?>()
     private val recordingTargets =
-        object : RelationTargets(mock(DatabaseClient::class.java), mock(WasichaiSchemas::class.java), mock(CustomObjectRepository::class.java)) {
+        object : RelationTargets(
+            mock(DatabaseClient::class.java),
+            mock(WasichaiSchemas::class.java),
+            mock(CustomObjectRepository::class.java),
+            mock(CustomFieldRepository::class.java),
+            RecordReadScopesFixtures.none()
+        ) {
             override suspend fun existing(
                 organizationId: UUID,
                 targetObjectId: UUID,

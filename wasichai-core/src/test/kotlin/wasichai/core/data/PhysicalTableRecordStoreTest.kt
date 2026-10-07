@@ -2,6 +2,7 @@ package wasichai.core.data
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.assertj.core.api.Assertions.entry
 import org.junit.jupiter.api.Test
 import org.mockito.Answers
 import org.mockito.Mockito.mock
@@ -105,6 +106,66 @@ class PhysicalTableRecordStoreTest {
 
         assertThat(where).isEqualTo("organization_id = :organizationId AND (x = :c1 OR y = :c2)")
         assertThat(bindings).containsEntry("c1", "v1").containsEntry("c2", "v2")
+    }
+
+    // issue 48 (ADR-048): a read by id with no owner and no scope is the query it always was
+    @Test
+    fun `a read by id with no owner and no criteria is unchanged`() {
+        val id = UUID.randomUUID()
+        val organizationId = UUID.randomUUID()
+
+        val (where, bindings) = store().byIdClause(ObjectDefinitionFixtures.empty(), organizationId, id, null, emptyList())
+
+        assertThat(where).isEqualTo("id = :id AND organization_id = :organizationId")
+        assertThat(bindings).containsExactly(entry("id", id), entry("organizationId", organizationId))
+    }
+
+    @Test
+    fun `a read by id puts the owner filter right behind the tenant, as before`() {
+        val owner = UUID.randomUUID()
+
+        val (where, bindings) = store().byIdClause(ObjectDefinitionFixtures.empty(), UUID.randomUUID(), UUID.randomUUID(), owner, emptyList())
+
+        assertThat(where).isEqualTo("id = :id AND organization_id = :organizationId AND created_by = :createdBy")
+        assertThat(bindings).containsEntry("createdBy", owner)
+    }
+
+    // an app's OR cannot widen the tenant or the owner filter: it ANDs in as one term
+    @Test
+    fun `a read scope on a read by id is parenthesized behind the tenant and the owner`() {
+        val scope = RecordCriterion { _, bind -> "project_id = ${bind("A")} OR project_id = ${bind("B")}" }
+
+        val (where, bindings) =
+            store().byIdClause(ObjectDefinitionFixtures.empty(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), listOf(scope))
+
+        assertThat(where).isEqualTo(
+            "id = :id AND organization_id = :organizationId AND created_by = :createdBy AND (project_id = :c3 OR project_id = :c4)"
+        )
+        assertThat(bindings).containsEntry("c3", "A").containsEntry("c4", "B")
+    }
+
+    @Test
+    fun `a read scope on a list joins after the module criteria, each in its own parens`() {
+        val bbox = RecordCriterion { _, bind -> "x = ${bind("v")}" }
+        val scope = RecordCriterion { _, bind -> "project_id = ${bind("A")} OR project_id = ${bind("B")}" }
+
+        val (where, _) =
+            store().whereClause(
+                ObjectDefinitionFixtures.empty(),
+                UUID.randomUUID(),
+                RecordQuery(page = PageRequest.of(0, 10), createdBy = UUID.randomUUID(), criteria = listOf(bbox, scope))
+            )
+
+        assertThat(where).isEqualTo(
+            "organization_id = :organizationId AND created_by = :createdBy AND (x = :c2) AND (project_id = :c3 OR project_id = :c4)"
+        )
+    }
+
+    @Test
+    fun `a blank criterion on a read by id is rejected too`() {
+        assertThatThrownBy {
+            store().byIdClause(ObjectDefinitionFixtures.empty(), UUID.randomUUID(), UUID.randomUUID(), null, listOf(RecordCriterion { _, _ -> " " }))
+        }.isInstanceOf(IllegalStateException::class.java)
     }
 
     @Test

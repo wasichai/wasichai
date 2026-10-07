@@ -1,5 +1,6 @@
 package wasichai.core.autoconfigure
 
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -11,6 +12,7 @@ import org.springframework.boot.security.autoconfigure.web.reactive.ReactiveWebS
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.reactive.ReactiveOAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.web.reactive.ReactiveOAuth2ResourceServerWebSecurityAutoConfiguration
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
+import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService
@@ -20,9 +22,14 @@ import org.springframework.security.web.server.SecurityWebFilterChain
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.admin.ServiceAccountService
 import wasichai.core.data.NoWorkflowStates
+import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
+import wasichai.core.data.RecordCriterion
+import wasichai.core.data.RecordReadScope
+import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
 import wasichai.core.data.WorkflowStates
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
@@ -30,6 +37,7 @@ import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.ObjectActionService
+import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumn
@@ -85,6 +93,7 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(RecordService::class.java)
             assertThat(context).hasSingleBean(ClusterLock::class.java)
+            assertThat(context).hasSingleBean(RecordReadScopes::class.java)
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountTokenService::class.java)
@@ -123,6 +132,43 @@ class WasichaiAutoConfigurationTest {
             assertThat(context.getBeansOfType(SecurityWebFilterChain::class.java)).containsKey("securityFilterChain")
             assertThat(context.beanFactory.findAnnotationOnBean("securityFilterChain", Order::class.java)?.value).isEqualTo(0)
         }
+    }
+
+    // issue 48 (ADR-048): an app's read scopes, every one, in @Order; asked for a person, never for ADMIN
+    @Test
+    fun `every app RecordReadScope is collected in order`() {
+        val asked = mutableListOf<String>()
+
+        fun scope(
+            name: String,
+            order: Int
+        ) = object : RecordReadScope, Ordered {
+            override fun getOrder() = order
+
+            override suspend fun criterion(
+                caller: AuthenticatedUser,
+                definition: ObjectDefinition
+            ): RecordCriterion {
+                asked += name
+                return RecordCriterion { _, _ -> name }
+            }
+        }
+        runner
+            .withBean("second", RecordReadScope::class.java, { scope("second", 2) })
+            .withBean("first", RecordReadScope::class.java, { scope("first", 1) })
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val scopes = context.getBean(RecordReadScopes::class.java)
+                val person = AuthenticatedUser(UUID.randomUUID(), UUID.randomUUID(), "ana@example.com", listOf("SOCIAL"))
+                val admin = person.copy(roles = listOf(AuthenticatedUser.ADMIN_ROLE))
+                val definition = ObjectDefinitionFixtures.empty()
+
+                val criteria = runBlocking { scopes.criteria(person, definition) }
+                runBlocking { scopes.criteria(admin, definition) }
+
+                assertThat(criteria.map { it.condition(definition) { "?" } }).containsExactly("first", "second")
+                assertThat(asked).containsExactly("first", "second")
+            }
     }
 
     @Test

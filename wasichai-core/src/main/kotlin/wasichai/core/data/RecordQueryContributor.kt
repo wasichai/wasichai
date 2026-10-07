@@ -13,6 +13,24 @@ fun interface RecordCriterion {
     ): String
 }
 
+// one WHERE term: the condition in parens, its values bound into [bindings] as c<n> (R7, ADR-048). unparenthesized,
+// an "x OR y" would AND in loosely enough to escape organization_id (and createdBy) in front of it - a tenancy leak.
+internal fun RecordCriterion.term(
+    definition: ObjectDefinition,
+    bindings: MutableMap<String, Any>
+): String {
+    val condition =
+        condition(definition) { value ->
+            val name = "c${bindings.size}"
+            bindings[name] = value
+            ":$name"
+        }
+    check(condition.isNotBlank()) {
+        "a RecordCriterion for '${definition.obj.name}' returned a blank condition"
+    }
+    return "($condition)"
+}
+
 // a module that owns query-string parameters turns them into criteria (R7)
 interface RecordQueryContributor {
     // never read as field filters, whether sent or not

@@ -43,7 +43,8 @@ class RelatedRecordService(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
     private val audit: AuditService,
-    private val guards: RecordWriteGuards
+    private val guards: RecordWriteGuards,
+    private val readScopes: RecordReadScopes
 ) {
     // records on the other side of a relationship, from one record
     suspend fun relatedRecords(
@@ -63,19 +64,22 @@ class RelatedRecordService(
             recordId,
             relationshipName,
             query.copy(createdBy = access.ownerFilter(user)),
-            narrow = { definition -> definition.readableBy(access.fieldAccess(user, definition.obj.id)) }
+            narrow = { definition -> definition.readableBy(access.fieldAccess(user, definition.obj.id)) },
+            reader = user
         )
     }
 
     // the same walk with no caller behind it: a module acting as the platform (ADR-016) has no user
-    // to check. callers that DO have a user pass `narrow` to put their field rules back.
+    // to check. callers that DO have a user pass `narrow` to put their field rules back, and `reader`
+    // to put the app's read scope on both sides (ADR-048).
     suspend fun relatedRows(
         organizationId: UUID,
         objectName: String,
         recordId: UUID,
         relationshipName: String,
         query: RecordQuery,
-        narrow: suspend (ObjectDefinition) -> ObjectDefinition = { it }
+        narrow: suspend (ObjectDefinition) -> ObjectDefinition = { it },
+        reader: AuthenticatedUser? = null
     ): Pair<ObjectDefinition, PageResponse<RecordRow>> {
         val obj =
             objects.findByName(organizationId, objectName)
@@ -84,29 +88,49 @@ class RelatedRecordService(
             relationships.findByName(organizationId, relationshipName)
                 ?: throw NotFoundException("Relationship '$relationshipName' does not exist")
         val view = relationshipService.side(relationship, obj)
-        val otherDefinition = narrow(metadata.loadDefinition(organizationId, view.otherObject.name))
+        val other = metadata.loadDefinition(organizationId, view.otherObject.name)
+        val otherDefinition = narrow(other)
+        val scoped = reader?.takeIf { readScopes.appliesTo(it) }
+        // the walk starts only from a record the reader reads: out of scope, it looks missing (ADR-048)
+        val start = scoped?.let { startInScope(it, organizationId, obj, recordId) }
+        val sideQuery = if (scoped == null) query else query.copy(criteria = query.criteria + readScopes.criteria(scoped, other))
 
         val resolved =
             when {
                 relationship.usesJoinTableFor() -> {
                     val ids = linkedIds(relationship, obj, recordId)
-                    store.query(otherDefinition, organizationId, query.copy(ids = ids))
+                    store.query(otherDefinition, organizationId, sideQuery.copy(ids = ids))
                 }
                 fkIsOn(relationship, obj) -> {
                     // this record carries the foreign key: follow it to a single record
                     val definition = metadata.loadDefinition(organizationId, obj.name)
                     val field = relationFieldOrFail(relationship)
-                    val value = store.findById(definition, organizationId, recordId)?.attributes?.get(field.name)
+                    val value = (start ?: store.findById(definition, organizationId, recordId))?.attributes?.get(field.name)
                     val targetId = (value as? String)?.let(UUID::fromString)
-                    store.query(otherDefinition, organizationId, query.copy(ids = listOfNotNull(targetId)))
+                    store.query(otherDefinition, organizationId, sideQuery.copy(ids = listOfNotNull(targetId)))
                 }
                 else -> {
                     // the other side points back at this record
                     val field = relationFieldOrFail(relationship)
-                    store.query(otherDefinition, organizationId, query.copy(filters = query.filters + (field.name to recordId.toString())))
+                    store.query(otherDefinition, organizationId, sideQuery.copy(filters = sideQuery.filters + (field.name to recordId.toString())))
                 }
             }
         return otherDefinition to resolved
+    }
+
+    // the record a walk starts from, read whole in the reader's scope, or a 404. null: no scope on its
+    // object, so the walk starts as it always did
+    private suspend fun startInScope(
+        reader: AuthenticatedUser,
+        organizationId: UUID,
+        obj: CustomObject,
+        recordId: UUID
+    ): RecordRow? {
+        val definition = metadata.loadDefinition(organizationId, obj.name)
+        val criteria = readScopes.criteria(reader, definition)
+        if (criteria.isEmpty()) return null
+        return store.findById(definition, organizationId, recordId, criteria = criteria)
+            ?: throw NotFoundException("Record $recordId does not exist")
     }
 
     @Transactional
@@ -242,11 +266,12 @@ class RelatedRecordService(
             rejectApiOnly(otherDefinition)
         }
         val owner = access.ownerFilter(user)
+        // and in the app's read scope (ADR-048): out of scope looks missing too
         val record =
-            store.findById(definition, user.organizationId, recordId, owner)
+            store.findById(definition, user.organizationId, recordId, owner, criteria = readScopes.criteria(user, definition))
                 ?: throw NotFoundException("Record $recordId does not exist")
         val other =
-            store.findById(otherDefinition, user.organizationId, otherId, owner)
+            store.findById(otherDefinition, user.organizationId, otherId, owner, criteria = readScopes.criteria(user, otherDefinition))
                 ?: throw NotFoundException("Record $otherId does not exist")
         return LinkEnds(user, relationship, definition, recordId, record, otherDefinition, otherId, other)
     }

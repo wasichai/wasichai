@@ -161,17 +161,12 @@ class PhysicalTableRecordStore(
         organizationId: UUID,
         id: UUID,
         createdBy: UUID?,
-        withState: Boolean
+        withState: Boolean,
+        criteria: List<RecordCriterion>
     ): RecordRow? {
-        val owner = if (createdBy == null) "" else " AND created_by = :createdBy"
-        var spec =
-            db
-                .sql(
-                    "SELECT ${selectList(definition, withState)} FROM ${tableOf(definition)} " +
-                        "WHERE id = :id AND organization_id = :organizationId$owner"
-                ).bind("id", id)
-                .bind("organizationId", organizationId)
-        if (createdBy != null) spec = spec.bind("createdBy", createdBy)
+        val (where, bindings) = byIdClause(definition, organizationId, id, createdBy, criteria)
+        var spec = db.sql("SELECT ${selectList(definition, withState)} FROM ${tableOf(definition)} WHERE $where")
+        bindings.forEach { (name, value) -> spec = spec.bind(name, value) }
         return spec
             .map { row, _ -> mapRow(definition, row, withState) }
             .one()
@@ -351,21 +346,28 @@ class PhysicalTableRecordStore(
             bindings["ids"] = ids.toTypedArray()
         }
 
-        // module conditions, parenthesized (R7): unparenthesized, an "x OR y" would AND in loosely
-        // enough to escape organization_id (and createdBy) above it - a tenancy leak.
-        query.criteria.forEach { criterion ->
-            val condition =
-                criterion.condition(definition) { value ->
-                    val name = "c${bindings.size}"
-                    bindings[name] = value
-                    ":$name"
-                }
-            check(condition.isNotBlank()) {
-                "a RecordCriterion for '${definition.obj.name}' returned a blank condition"
-            }
-            conditions += "($condition)"
-        }
+        // module conditions and the app's read scope, each parenthesized (R7, ADR-048)
+        query.criteria.forEach { conditions += it.term(definition, bindings) }
 
+        return conditions.joinToString(" AND ") to bindings
+    }
+
+    // pure, so it is tested directly: findById's WHERE. the same order as whereClause: tenant first,
+    // then the owner, then every criterion in parens (ADR-048)
+    internal fun byIdClause(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        id: UUID,
+        createdBy: UUID?,
+        criteria: List<RecordCriterion>
+    ): Pair<String, Map<String, Any>> {
+        val conditions = mutableListOf("id = :id", "organization_id = :organizationId")
+        val bindings = mutableMapOf<String, Any>("id" to id, "organizationId" to organizationId)
+        createdBy?.let { owner ->
+            conditions += "created_by = :createdBy"
+            bindings["createdBy"] = owner
+        }
+        criteria.forEach { conditions += it.term(definition, bindings) }
         return conditions.joinToString(" AND ") to bindings
     }
 

@@ -106,7 +106,8 @@ class RecordAuditSnapshotTest {
                 organizationId: UUID,
                 id: UUID,
                 createdBy: UUID?,
-                withState: Boolean
+                withState: Boolean,
+                criteria: List<RecordCriterion>
             ): RecordRow? {
                 findByIdCalls++
                 return rows[id]?.let { RecordRow(id, Instant.now(), Instant.now(), it) }
@@ -169,7 +170,8 @@ class RecordAuditSnapshotTest {
             FieldTypeRegistry(emptyList()),
             listOf(listener),
             RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
-            AppendOnlyReferencesFixtures.none()
+            AppendOnlyReferencesFixtures.none(),
+            RecordReadScopesFixtures.none()
         )
     }
 
