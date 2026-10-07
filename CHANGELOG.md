@@ -3,6 +3,13 @@
 ## [0.3.3](https://github.com/wasichai/wasichai/compare/v0.3.2...v0.3.3) (2026-10-07)
 
 
+### Notes
+
+* **core:** refactors with no change in behaviour: `RecordService` opens and describes each write in one place, user and service-account administration share one role assignment ([#47](https://github.com/wasichai/wasichai/pull/47)).
+* **core:** new public `wasichai.core.platform.bindNullable(name, value)` and `bindNullable(name, value, type)` for nullable R2DBC binds; the `internal` copy in `metadata` is gone ([#47](https://github.com/wasichai/wasichai/pull/47)).
+* **core:** a service account's role inserts skip a role already held, as a user's always did; only two concurrent saves of one account can tell ([#47](https://github.com/wasichai/wasichai/pull/47)).
+
+
 ### Performance Improvements
 
 * **core:** a role's permission payload reads each object once ([019a911](https://github.com/wasichai/wasichai/commit/019a911a387965b537b7942eaa001a88da58f7cb))
