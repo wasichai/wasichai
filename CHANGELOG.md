@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0](https://github.com/wasichai/wasichai/compare/v0.3.3...v0.4.0) (2026-10-07)
+
+
+### Notes
+
+* **core:** organizational units ([ADR-045](docs/adr/0045-organizational-units.md)): migration `V9__org_units` adds `org_units` and `user_org_units`, and runs on upgrade; routes `/api/org-units`, `PUT /api/users/{id}/org-units` and `GET /api/auth/me/org-units`; `AdminUserResponse` gains `orgUnits`. Units grant nothing and are not in the token
+* **core:** new ports for modules: `OrgUnitDirectory`, `UserDirectory`, `OrganizationRepository.ids()` and the public `Connections.unpooled`
+* **pages:** a `TAB` may carry a `key`, an upper-case token unique in its page; generated pages key their tabs `DETAILS`, `RELATED`, `HISTORY` and `MAP`. A component without a key is stored and sent as before
+* **notifications:** new opt-in module `wasichai-notifications` and starter `wasichai-spring-boot-starter-notifications` ([ADR-046](docs/adr/0046-notifications-module.md), [ADR-047](docs/adr/0047-server-push-over-sse-and-listen-notify.md)): notifications for everyone, a user, a role or a unit, published from code (`Notifications`), scheduled sources (`NotificationSource`) and date rules, an inbox at `/api/auth/me/notifications` and a live summary over SSE fed by PostgreSQL `LISTEN/NOTIFY`. Without the module every route answers `404`
+* the release guard now expects 22 artifacts
+
+
+### Features
+
+* **notifications:** alerts for people, roles and organizational units ([#46](https://github.com/wasichai/wasichai/pull/46), [#66](https://github.com/wasichai/wasichai/pull/66))
+
 ## [0.3.3](https://github.com/wasichai/wasichai/compare/v0.3.2...v0.3.3) (2026-10-07)
 
 
