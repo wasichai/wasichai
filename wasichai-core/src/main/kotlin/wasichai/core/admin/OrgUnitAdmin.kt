@@ -22,6 +22,9 @@ import wasichai.core.common.ConflictException
 import wasichai.core.common.FieldViolation
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
@@ -63,7 +66,8 @@ data class OrgUnitDetailResponse(
 
 // organizational units of the caller's tenant (ADR-045). MANAGE_ORGANIZATION, so never a service account.
 // every write takes the tenant's tree lock: two moves cannot cross into a cycle, a child cannot land on a unit
-// being deleted, and depth holds against a concurrent move.
+// being deleted, and depth holds against a concurrent move. every change leaves one admin audit entry (ADR-049):
+// a unit's under admin:org-unit, a person's membership under admin:user.
 @Service
 @Transactional
 class OrgUnitService(
@@ -72,7 +76,8 @@ class OrgUnitService(
     private val schemas: WasichaiSchemas,
     private val clusterLock: ClusterLock,
     private val directory: OrgUnitDirectory,
-    private val admin: AdminService
+    private val admin: AdminService,
+    private val audit: AdminAudit
 ) {
     suspend fun list(): List<OrgUnitResponse> = load(requireAdmin().organizationId, null)
 
@@ -104,7 +109,8 @@ class OrgUnitService(
     }
 
     suspend fun create(request: CreateOrgUnitRequest): OrgUnitResponse {
-        val organizationId = requireAdmin().organizationId
+        val actor = requireAdmin()
+        val organizationId = actor.organizationId
         val code = OrgUnitDirectory.normaliseCode(request.code.orEmpty())
         val violations = mutableListOf<FieldViolation>()
         if (!CODE.matches(code)) violations += FieldViolation("code", "must match ${CODE.pattern}")
@@ -129,7 +135,9 @@ class OrgUnitService(
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()
-            unitOrFail(organizationId, code).response
+            val created = unitOrFail(organizationId, code)
+            audit.record(actor, AdminEntity.ORG_UNIT, created.id, AdminOperation.CREATE, null, AdminSnapshots.orgUnit(created.response))
+            created.response
         }
     }
 
@@ -138,7 +146,8 @@ class OrgUnitService(
         code: String,
         body: Map<String, Any?>
     ): OrgUnitResponse {
-        val organizationId = requireAdmin().organizationId
+        val actor = requireAdmin()
+        val organizationId = actor.organizationId
         val violations = mutableListOf<FieldViolation>()
         body.keys.filter { it !in FIELDS }.forEach { violations += FieldViolation(it, "is not a unit property") }
         val label = if ("label" in body) validLabel(body["label"], violations) else null
@@ -166,13 +175,16 @@ class OrgUnitService(
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()
-            unitOrFail(organizationId, unit.response.code).response
+            val updated = unitOrFail(organizationId, unit.response.code).response
+            audit.record(actor, AdminEntity.ORG_UNIT, unit.id, AdminOperation.UPDATE, AdminSnapshots.orgUnit(unit.response), AdminSnapshots.orgUnit(updated))
+            updated
         }
     }
 
     // refused while it has sub-units or members: dropping people out of the tree silently is not an admin step
     suspend fun delete(code: String) {
-        val organizationId = requireAdmin().organizationId
+        val actor = requireAdmin()
+        val organizationId = actor.organizationId
         locked(organizationId) {
             val unit = unitOrFail(organizationId, code)
             if (hasChildren(organizationId, unit.id)) throw ConflictException("Organizational unit '${unit.response.code}' has sub-units")
@@ -184,6 +196,7 @@ class OrgUnitService(
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()
+            audit.record(actor, AdminEntity.ORG_UNIT, unit.id, AdminOperation.DELETE, AdminSnapshots.orgUnit(unit.response), null)
         }
     }
 
@@ -192,9 +205,12 @@ class OrgUnitService(
         userId: UUID,
         request: UserOrgUnitsRequest
     ): AdminUserResponse {
-        val organizationId = requireAdmin().organizationId
+        val actor = requireAdmin()
+        val organizationId = actor.organizationId
         admin.user(userId)
         return locked(organizationId) {
+            // read under the lock: the entry's before is what this change replaced
+            val before = admin.user(userId)
             val ids = directory.idsByCode(organizationId, request.units)
             val violations =
                 request.units.mapIndexedNotNull { index, code ->
@@ -216,7 +232,9 @@ class OrgUnitService(
                     .rowsUpdated()
                     .awaitSingle()
             }
-            admin.user(userId)
+            val updated = admin.user(userId)
+            audit.record(actor, AdminEntity.USER, userId, AdminOperation.UPDATE, AdminSnapshots.user(before), AdminSnapshots.user(updated))
+            updated
         }
     }
 

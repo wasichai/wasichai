@@ -74,14 +74,19 @@ class CurrentUser(
         action: String,
         objectId: UUID? = null
     ) {
+        if (!hasPermission(user, action, objectId)) throw ForbiddenException("Missing permission $action")
+    }
+
+    // the same rule, as an answer: for reads that leave out what the caller may not see instead of refusing
+    suspend fun hasPermission(
+        user: AuthenticatedUser,
+        action: String,
+        objectId: UUID? = null
+    ): Boolean {
         // administering the tenant (users, roles, service accounts) stays with people: a leaked
         // secret must not mint users or more accounts (ADR-043)
-        if (user.serviceAccount != null && action == Actions.MANAGE_ORGANIZATION) {
-            throw ForbiddenException("Missing permission $action")
-        }
-        if (user.isAdmin) return
-        if (!roleQueries.hasPermission(user.roles, user.organizationId, action, objectId)) {
-            throw ForbiddenException("Missing permission $action")
-        }
+        if (user.serviceAccount != null && action == Actions.MANAGE_ORGANIZATION) return false
+        if (user.isAdmin) return true
+        return roleQueries.hasPermission(user.roles, user.organizationId, action, objectId)
     }
 }

@@ -25,6 +25,9 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.ServiceAccountSecrets
@@ -58,12 +61,14 @@ data class ServiceAccountResponse(
 )
 
 // service accounts of the caller's tenant (ADR-043). MANAGE_ORGANIZATION, which a service account never passes.
+// every change leaves one admin audit entry, never the secret (ADR-049).
 @Service
 class ServiceAccountService(
     private val db: DatabaseClient,
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val audit: AdminAudit
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -111,7 +116,9 @@ class ServiceAccountService(
             .rowsUpdated()
             .awaitSingle()
         roles.replace(id, roleIds)
-        return accountOrFail(admin.organizationId, id).copy(clientSecret = secret)
+        val created = accountOrFail(admin.organizationId, id)
+        audit.record(admin, AdminEntity.SERVICE_ACCOUNT, id, AdminOperation.CREATE, null, AdminSnapshots.serviceAccount(created))
+        return created.copy(clientSecret = secret)
     }
 
     @Transactional
@@ -120,7 +127,7 @@ class ServiceAccountService(
         request: UpdateServiceAccountRequest
     ): ServiceAccountResponse {
         val admin = requireAdmin()
-        accountOrFail(admin.organizationId, id)
+        val before = accountOrFail(admin.organizationId, id)
         val roleIds = request.roles?.let { resolveRoles(admin.organizationId, it) }
         if (request.enabled != null) {
             db
@@ -133,14 +140,23 @@ class ServiceAccountService(
                 .awaitSingle()
         }
         roleIds?.let { roles.replace(id, it) }
-        return accountOrFail(admin.organizationId, id)
+        val updated = accountOrFail(admin.organizationId, id)
+        audit.record(
+            admin,
+            AdminEntity.SERVICE_ACCOUNT,
+            id,
+            AdminOperation.UPDATE,
+            AdminSnapshots.serviceAccount(before),
+            AdminSnapshots.serviceAccount(updated)
+        )
+        return updated
     }
 
     // the old secret stops working at once. tokens it already got run out their ttl.
     @Transactional
     suspend fun rotateSecret(id: UUID): ServiceAccountResponse {
         val admin = requireAdmin()
-        accountOrFail(admin.organizationId, id)
+        val before = accountOrFail(admin.organizationId, id)
         val secret = ServiceAccountSecrets.generate()
         db
             .sql(
@@ -154,14 +170,24 @@ class ServiceAccountService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        return accountOrFail(admin.organizationId, id).copy(clientSecret = secret)
+        val rotated = accountOrFail(admin.organizationId, id)
+        // that it rotated, never what to
+        audit.record(
+            admin,
+            AdminEntity.SERVICE_ACCOUNT,
+            id,
+            AdminOperation.UPDATE,
+            AdminSnapshots.serviceAccount(before),
+            AdminSnapshots.serviceAccount(rotated) + ("secretRotated" to true)
+        )
+        return rotated.copy(clientSecret = secret)
     }
 
     // deleting the backing user cascades to the account and its roles
     @Transactional
     suspend fun delete(id: UUID) {
         val admin = requireAdmin()
-        accountOrFail(admin.organizationId, id)
+        val before = accountOrFail(admin.organizationId, id)
         db
             .sql(
                 """
@@ -174,6 +200,7 @@ class ServiceAccountService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        audit.record(admin, AdminEntity.SERVICE_ACCOUNT, id, AdminOperation.DELETE, AdminSnapshots.serviceAccount(before), null)
     }
 
     private suspend fun requireAdmin(): AuthenticatedUser = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)

@@ -13,6 +13,9 @@ import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
@@ -24,7 +27,7 @@ import wasichai.core.platform.bindNullable
 import java.util.UUID
 
 // users, roles and the rules attached to them. every entry point is MANAGE_ORGANIZATION,
-// every query is pinned to the caller's tenant.
+// every query is pinned to the caller's tenant. every change leaves one admin audit entry (ADR-049).
 @Service
 class AdminService(
     private val db: DatabaseClient,
@@ -32,7 +35,8 @@ class AdminService(
     private val actions: ObjectActionRepository,
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val audit: AdminAudit
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -74,7 +78,9 @@ class AdminService(
             .rowsUpdated()
             .awaitSingle()
         roles.assign(id, roleIds)
-        return userOrFail(admin.organizationId, id)
+        val created = userOrFail(admin.organizationId, id)
+        audit.record(admin, AdminEntity.USER, id, AdminOperation.CREATE, null, AdminSnapshots.user(created))
+        return created
     }
 
     @Transactional
@@ -83,7 +89,7 @@ class AdminService(
         request: UpdateUserRequest
     ): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
-        userOrFail(admin.organizationId, id)
+        val before = userOrFail(admin.organizationId, id)
         // locking yourself out is never a valid administration step
         if (request.enabled == false && id == admin.userId) {
             throw ForbiddenException("You cannot disable your own account")
@@ -107,7 +113,16 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        return userOrFail(admin.organizationId, id)
+        val updated = userOrFail(admin.organizationId, id)
+        audit.record(
+            admin,
+            AdminEntity.USER,
+            id,
+            AdminOperation.UPDATE,
+            AdminSnapshots.user(before),
+            AdminSnapshots.userUpdated(updated, passwordChanged = request.password != null)
+        )
+        return updated
     }
 
     @Transactional
@@ -116,9 +131,11 @@ class AdminService(
         request: UserRolesRequest
     ): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
-        userOrFail(admin.organizationId, id)
+        val before = userOrFail(admin.organizationId, id)
         roles.replace(id, roles.resolve(admin.organizationId, request.roles))
-        return userOrFail(admin.organizationId, id)
+        val updated = userOrFail(admin.organizationId, id)
+        audit.record(admin, AdminEntity.USER, id, AdminOperation.UPDATE, AdminSnapshots.user(before), AdminSnapshots.user(updated))
+        return updated
     }
 
     @Transactional
@@ -127,7 +144,7 @@ class AdminService(
         if (id == admin.userId) {
             throw ForbiddenException("You cannot delete your own account")
         }
-        userOrFail(admin.organizationId, id)
+        val before = userOrFail(admin.organizationId, id)
         db
             .sql("DELETE FROM ${schemas.metadata}.users WHERE id = :id AND organization_id = :organizationId")
             .bind("id", id)
@@ -135,6 +152,7 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        audit.record(admin, AdminEntity.USER, id, AdminOperation.DELETE, AdminSnapshots.user(before), null)
     }
 
     // ------------------------------------------------------------------ roles
@@ -168,7 +186,9 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        return roleOrFail(admin.organizationId, name)
+        val created = roleOrFail(admin.organizationId, name)
+        audit.record(admin, AdminEntity.ROLE, UUID.fromString(created.id), AdminOperation.CREATE, null, AdminSnapshots.role(created))
+        return created
     }
 
     @Transactional
@@ -178,6 +198,7 @@ class AdminService(
     ): RoleResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val role = roleIdOrFail(admin.organizationId, name)
+        val before = roleOrFail(admin.organizationId, name.trim().uppercase())
         db
             .sql(
                 """
@@ -192,7 +213,9 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        return roleOrFail(admin.organizationId, name.trim().uppercase())
+        val updated = roleOrFail(admin.organizationId, name.trim().uppercase())
+        audit.record(admin, AdminEntity.ROLE, role, AdminOperation.UPDATE, AdminSnapshots.role(before), AdminSnapshots.role(updated))
+        return updated
     }
 
     @Transactional
@@ -203,12 +226,14 @@ class AdminService(
             throw ConflictException("The ADMIN role administers the tenant and cannot be deleted")
         }
         val id = roleIdOrFail(admin.organizationId, normalized)
+        val before = roleOrFail(admin.organizationId, normalized)
         db
             .sql("DELETE FROM ${schemas.metadata}.roles WHERE id = :id")
             .bind("id", id)
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        audit.record(admin, AdminEntity.ROLE, id, AdminOperation.DELETE, AdminSnapshots.role(before), null)
     }
 
     // replaces the whole action set of the role
@@ -220,6 +245,7 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val before = roleOrFail(admin.organizationId, normalized)
         val objects = ObjectLookup(admin.organizationId)
 
         val resolved =
@@ -264,7 +290,17 @@ class AdminService(
                 .rowsUpdated()
                 .awaitSingle()
         }
-        return roleOrFail(admin.organizationId, normalized)
+        val updated = roleOrFail(admin.organizationId, normalized)
+        // both whole sets: the diff shows the grants that changed
+        audit.record(
+            admin,
+            AdminEntity.PERMISSION,
+            roleId,
+            AdminOperation.UPDATE,
+            AdminSnapshots.permissions(before),
+            AdminSnapshots.permissions(updated)
+        )
+        return updated
     }
 
     // replaces the rules for the objects named in the payload. other objects keep theirs.
@@ -276,6 +312,7 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val normalized = name.trim().uppercase()
         val roleId = roleIdOrFail(admin.organizationId, normalized)
+        val before = roleOrFail(admin.organizationId, normalized)
         val objects = ObjectLookup(admin.organizationId)
 
         val touchedObjects = mutableSetOf<UUID>()
@@ -326,7 +363,16 @@ class AdminService(
                 .rowsUpdated()
                 .awaitSingle()
         }
-        return roleOrFail(admin.organizationId, normalized)
+        val updated = roleOrFail(admin.organizationId, normalized)
+        audit.record(
+            admin,
+            AdminEntity.PERMISSION,
+            roleId,
+            AdminOperation.UPDATE,
+            AdminSnapshots.fieldPermissions(before),
+            AdminSnapshots.fieldPermissions(updated)
+        )
+        return updated
     }
 
     // ---------------------------------------------------------------- loading

@@ -9,11 +9,15 @@ import wasichai.core.common.FieldViolation
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.SystemColumns
 import java.util.UUID
 
+// every change to an object or a field leaves one admin audit entry (ADR-049)
 @Service
 class MetadataService(
     private val objects: CustomObjectRepository,
@@ -25,8 +29,12 @@ class MetadataService(
     private val types: FieldTypeRegistry,
     private val systemColumns: SystemColumns,
     private val usages: List<FieldUsage>,
-    private val removals: List<ObjectRemovalListener>
+    private val removals: List<ObjectRemovalListener>,
+    actions: ObjectActionRepository,
+    private val audit: AdminAudit
 ) {
+    private val snapshots = MetadataSnapshots(objects, fields, actions)
+
     // objects you may read, not "every object if you may read something"
     suspend fun listObjects(): List<CustomObject> {
         val user = currentUser.require()
@@ -116,6 +124,7 @@ class MetadataService(
         val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types, minFields = 2)
         if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
+        audit.record(user, AdminEntity.OBJECT, stored.id, AdminOperation.CREATE, null, snapshots.obj(stored))
         return ObjectDefinition(stored, storedFields)
     }
 
@@ -123,6 +132,20 @@ class MetadataService(
     suspend fun addField(
         objectName: String,
         request: FieldRequest
+    ): CustomField = createField(objectName, request, audited = true)
+
+    // a relationship's own column, for RelationshipService: the relationship's entry tells of it, so it gets no
+    // field entry of its own (ADR-049)
+    @Transactional
+    suspend fun addRelationField(
+        objectName: String,
+        request: FieldRequest
+    ): CustomField = createField(objectName, request, audited = false)
+
+    private suspend fun createField(
+        objectName: String,
+        request: FieldRequest,
+        audited: Boolean
     ): CustomField {
         val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
         val obj =
@@ -134,6 +157,7 @@ class MetadataService(
         val position = fields.maxPosition(obj.id) + 1
         val stored = fields.insert(buildField(obj.id, request, position, user.organizationId))
         schema.addColumn(obj, stored, relationTables(listOf(stored), user.organizationId))
+        if (audited) audit.record(user, AdminEntity.FIELD, stored.id, AdminOperation.CREATE, null, snapshots.field(obj, stored))
         return stored
     }
 
@@ -214,7 +238,9 @@ class MetadataService(
         if (updated.enumOptions != existing.enumOptions && existing.type == FieldType.ENUM) {
             schema.replaceEnumCheck(obj, existing, updated.enumOptions.orEmpty())
         }
-        return fields.update(updated)
+        val saved = fields.update(updated)
+        audit.record(user, AdminEntity.FIELD, existing.id, AdminOperation.UPDATE, snapshots.field(obj, existing), snapshots.field(obj, saved))
+        return saved
     }
 
     @Transactional
@@ -251,8 +277,10 @@ class MetadataService(
             throw ConflictException("Field '$fieldName' is used by ${users.joinToString(", ")}. Change or delete them first.")
         }
 
+        val before = snapshots.field(obj, field)
         schema.dropColumn(obj, field)
         fields.delete(field.id)
+        audit.record(user, AdminEntity.FIELD, field.id, AdminOperation.DELETE, before, null)
     }
 
     @Transactional
@@ -272,6 +300,7 @@ class MetadataService(
                 "the name backs the table and the API path; create a new object instead"
             )
         }
+        val before = snapshots.obj(obj)
         val objectFields = fields.findByObject(obj.id)
         val indexes = request.indexes?.let { FieldSets.normalize(INDEXES, it, objectFields, types) } ?: obj.indexes
         val uniques =
@@ -302,6 +331,7 @@ class MetadataService(
                 schema.syncUniqueConstraints(ObjectDefinition(obj, objectFields), ObjectDefinition(updated, objectFields))
             }
         }
+        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(updated))
         return ObjectDefinition(updated, objectFields)
     }
 
@@ -332,6 +362,8 @@ class MetadataService(
             .mapNotNull { objects.findById(user.organizationId, it) }
             .forEach { rejectAppendOnly(it, "the links '$name' shares with it") }
 
+        // what is about to go, fields and declared actions included: they cascade with it
+        val before = snapshots.obj(obj)
         // metadata rows cascade, join tables do not: drop them here or they outlive the object
         owned.forEach { relationship ->
             relationship.joinTable?.let { schema.dropJoinTable(it) }
@@ -339,6 +371,7 @@ class MetadataService(
         removals.forEach { it.objectRemoved(obj) }
         schema.dropTable(obj)
         objects.delete(user.organizationId, obj.id)
+        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.DELETE, before, null)
     }
 
     // a unique the data already breaks: the caller's 409, not a server error. thrown inside the

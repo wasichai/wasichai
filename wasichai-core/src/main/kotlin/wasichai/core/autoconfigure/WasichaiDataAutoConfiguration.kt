@@ -9,6 +9,7 @@ import org.springframework.transaction.ReactiveTransactionManager
 import org.springframework.transaction.reactive.TransactionalOperator
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditController
+import wasichai.core.audit.AuditLogAdminAudit
 import wasichai.core.audit.AuditQueryService
 import wasichai.core.audit.AuditService
 import wasichai.core.data.AppendOnlyReferences
@@ -29,6 +30,7 @@ import wasichai.core.data.RelatedRecordService
 import wasichai.core.data.RelationTargets
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
@@ -52,6 +54,11 @@ class WasichaiDataAutoConfiguration {
         objectMapper: JsonMapper,
         schemas: WasichaiSchemas
     ): AuditService = AuditService(db, objectMapper, schemas)
+
+    // the admin trail (ADR-049): metadata, admin and organization write through this port, in their transaction
+    @Bean
+    @ConditionalOnMissingBean
+    fun adminAudit(audit: AuditService): AdminAudit = AuditLogAdminAudit(audit)
 
     @Bean
     @ConditionalOnMissingBean

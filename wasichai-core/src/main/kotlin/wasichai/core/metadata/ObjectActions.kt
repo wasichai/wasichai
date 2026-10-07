@@ -23,6 +23,9 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
@@ -164,12 +167,17 @@ class ObjectActionRepository(
             .awaitSingle() > 0
 }
 
+// declaring or removing an action changes the object: one admin:object entry, its actions before and after (ADR-049)
 @Service
 class ObjectActionService(
     private val objects: CustomObjectRepository,
     private val actions: ObjectActionRepository,
-    private val currentUser: CurrentUser
+    private val currentUser: CurrentUser,
+    fields: CustomFieldRepository,
+    private val audit: AdminAudit
 ) {
+    private val snapshots = MetadataSnapshots(objects, fields, actions)
+
     // what may be granted on the object. whoever may read the object may know its verbs.
     suspend fun list(objectName: String): List<ObjectAction> {
         val user = currentUser.require()
@@ -189,7 +197,10 @@ class ObjectActionService(
         if (actions.exists(user.organizationId, obj.id, name)) {
             throw ConflictException("Action '$name' already exists on '${obj.name}'")
         }
-        return actions.insert(user.organizationId, ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
+        val before = snapshots.obj(obj)
+        val declared = actions.insert(user.organizationId, ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
+        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
+        return declared
     }
 
     @Transactional
@@ -200,9 +211,11 @@ class ObjectActionService(
         val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
         val obj = objectOrFail(user.organizationId, objectName)
         val name = actionName.trim().uppercase()
+        val before = snapshots.obj(obj)
         if (!actions.delete(user.organizationId, obj.id, name)) {
             throw NotFoundException("Action '$name' does not exist on '${obj.name}'")
         }
+        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
     }
 
     private suspend fun objectOrFail(

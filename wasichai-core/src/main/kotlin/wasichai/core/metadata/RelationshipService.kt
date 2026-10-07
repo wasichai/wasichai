@@ -6,6 +6,9 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
 import wasichai.core.platform.SqlIdentifier
 import java.util.UUID
@@ -38,6 +41,7 @@ data class RelatedSide(
     val many: Boolean
 )
 
+// every change leaves one admin:relationship entry; the column or join table behind it is part of it (ADR-049)
 @Service
 class RelationshipService(
     private val relationships: RelationshipRepository,
@@ -45,7 +49,8 @@ class RelationshipService(
     private val fields: CustomFieldRepository,
     private val metadata: MetadataService,
     private val schema: ObjectSchemaManager,
-    private val currentUser: CurrentUser
+    private val currentUser: CurrentUser,
+    private val audit: AdminAudit
 ) {
     suspend fun list(): List<Relationship> {
         val user = currentUser.requireWithPermission(Actions.READ)
@@ -93,7 +98,7 @@ class RelationshipService(
                     .orEmpty()
                     .ifBlank { referenced.name }
             val field =
-                metadata.addField(
+                metadata.addRelationField(
                     owner.name,
                     FieldRequest(
                         name = fieldName,
@@ -106,20 +111,23 @@ class RelationshipService(
             relationFieldId = field.id
         }
 
-        return relationships.insert(
-            Relationship(
-                id = UUID.randomUUID(),
-                organizationId = user.organizationId,
-                name = name,
-                label = request.label.trim(),
-                inverseLabel = request.inverseLabel?.trim(),
-                type = type,
-                sourceObjectId = source.id,
-                targetObjectId = target.id,
-                relationFieldId = relationFieldId,
-                joinTable = joinTable
+        val created =
+            relationships.insert(
+                Relationship(
+                    id = UUID.randomUUID(),
+                    organizationId = user.organizationId,
+                    name = name,
+                    label = request.label.trim(),
+                    inverseLabel = request.inverseLabel?.trim(),
+                    type = type,
+                    sourceObjectId = source.id,
+                    targetObjectId = target.id,
+                    relationFieldId = relationFieldId,
+                    joinTable = joinTable
+                )
             )
-        )
+        audit.record(user, AdminEntity.RELATIONSHIP, created.id, AdminOperation.CREATE, null, snapshot(created))
+        return created
     }
 
     // the labels, and only the labels. moving the key means moving a column between tables, or
@@ -152,12 +160,15 @@ class RelationshipService(
         // a blank inverse label is no inverse label: side() then falls back to the other object's plural
         val inverseLabel = request.inverseLabel?.trim()?.ifBlank { null }
 
-        return relationships.update(
-            relationship.copy(
-                label = label ?: relationship.label,
-                inverseLabel = if (request.inverseLabel != null) inverseLabel else relationship.inverseLabel
+        val updated =
+            relationships.update(
+                relationship.copy(
+                    label = label ?: relationship.label,
+                    inverseLabel = if (request.inverseLabel != null) inverseLabel else relationship.inverseLabel
+                )
             )
-        )
+        audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.UPDATE, snapshot(relationship), snapshot(updated))
+        return updated
     }
 
     @Transactional
@@ -191,13 +202,28 @@ class RelationshipService(
             }
         }
 
+        val before = snapshot(relationship)
         relationship.joinTable?.let { schema.dropJoinTable(it) }
         column?.let { (owner, field) ->
             schema.dropColumn(owner, field)
             fields.delete(field.id)
         }
         relationships.delete(relationship.id)
+        audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.DELETE, before, null)
     }
+
+    // the admin trail's view of it (ADR-049): ends and column by name, as the api speaks them
+    private suspend fun snapshot(relationship: Relationship): Map<String, Any?> =
+        linkedMapOf(
+            "name" to relationship.name,
+            "label" to relationship.label,
+            "inverseLabel" to relationship.inverseLabel,
+            "type" to relationship.type.name,
+            "source" to objects.findById(relationship.organizationId, relationship.sourceObjectId)?.name,
+            "target" to objects.findById(relationship.organizationId, relationship.targetObjectId)?.name,
+            "fieldName" to relationship.relationFieldId?.let { fields.findById(it)?.name },
+            "joinTable" to relationship.joinTable
+        )
 
     // one relationship seen from one object. data walks records with it.
     suspend fun side(

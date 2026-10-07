@@ -9,6 +9,9 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
+import wasichai.core.identity.AdminAudit
+import wasichai.core.identity.AdminEntity
+import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.ObjectSchemaManager
@@ -23,6 +26,8 @@ data class OrganizationResponse(
     val createdAt: Instant?
 )
 
+// every change leaves one admin audit entry in the caller's tenant (ADR-049). audit_log has no foreign key to
+// organizations, so a deleted tenant's entries stay.
 @Service
 class OrganizationService(
     private val organizations: OrganizationRepository,
@@ -31,7 +36,8 @@ class OrganizationService(
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
     private val db: DatabaseClient,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val audit: AdminAudit
 ) {
     suspend fun current(): Organization {
         val user = currentUser.require()
@@ -41,31 +47,34 @@ class OrganizationService(
 
     @Transactional
     suspend fun updateCurrent(request: UpdateOrganizationRequest): Organization {
-        currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        val actor = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val organization = current()
-        return db
-            .sql(
-                """
-                UPDATE ${schemas.metadata}.organizations SET name = :name, updated_at = now()
-                WHERE id = :id
-                RETURNING id, name, slug, created_at, updated_at
-                """.trimIndent()
-            ).bind("id", organization.id)
-            .bind("name", request.name.trim())
-            .map { row, _ ->
-                Organization(
-                    id = row.get("id", UUID::class.java)!!,
-                    name = row.get("name", String::class.java)!!,
-                    slug = row.get("slug", String::class.java)!!
-                )
-            }.one()
-            .awaitSingle()
+        val updated =
+            db
+                .sql(
+                    """
+                    UPDATE ${schemas.metadata}.organizations SET name = :name, updated_at = now()
+                    WHERE id = :id
+                    RETURNING id, name, slug, created_at, updated_at
+                    """.trimIndent()
+                ).bind("id", organization.id)
+                .bind("name", request.name.trim())
+                .map { row, _ ->
+                    Organization(
+                        id = row.get("id", UUID::class.java)!!,
+                        name = row.get("name", String::class.java)!!,
+                        slug = row.get("slug", String::class.java)!!
+                    )
+                }.one()
+                .awaitSingle()
+        audit.record(actor, AdminEntity.ORGANIZATION, organization.id, AdminOperation.UPDATE, snapshot(organization), snapshot(updated))
+        return updated
     }
 
     // provisioning: a tenant plus the administrator who can then configure it
     @Transactional
     suspend fun provision(request: CreateOrganizationRequest): Organization {
-        currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        val actor = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val slug = request.slug.trim().lowercase()
         if (!SLUG.matches(slug)) {
             throw ValidationException("Invalid slug '$slug'", "slug", "must match ^[a-z][a-z0-9-]{1,48}$")
@@ -138,13 +147,25 @@ class OrganizationService(
             .rowsUpdated()
             .awaitSingle()
 
-        return Organization(id = organizationId, name = request.name.trim(), slug = slug)
+        val created = Organization(id = organizationId, name = request.name.trim(), slug = slug)
+        // the provisioner's act, in the provisioner's trail. the administrator by address, never the password
+        audit.record(
+            actor,
+            AdminEntity.ORGANIZATION,
+            organizationId,
+            AdminOperation.CREATE,
+            null,
+            snapshot(created) + ("adminEmail" to request.adminEmail.trim().lowercase())
+        )
+        return created
     }
 
     // metadata cascades, but business tables live outside those foreign keys: drop them first
     @Transactional
     suspend fun deleteCurrent() {
         val user = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        // null when already gone: deleting nothing stays a 204, and leaves no entry
+        val organization = organizations.findById(user.organizationId)
         objects.findAll(user.organizationId).forEach { schema.dropTable(it) }
         joinTablesOf(user.organizationId).forEach { schema.dropJoinTable(it) }
         db
@@ -153,7 +174,10 @@ class OrganizationService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        organization?.let { audit.record(user, AdminEntity.ORGANIZATION, it.id, AdminOperation.DELETE, snapshot(it), null) }
     }
+
+    private fun snapshot(organization: Organization): Map<String, Any?> = linkedMapOf("name" to organization.name, "slug" to organization.slug)
 
     private suspend fun joinTablesOf(organizationId: UUID): List<String> {
         val tables = mutableListOf<String>()
