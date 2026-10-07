@@ -190,6 +190,7 @@ below).
 | automation | `wasichai-spring-boot-starter-automation` | `@wasichai/automation` | Calls `DocumentIssuer` | [automation.md](../modules/automation.md) |
 | documents | `wasichai-spring-boot-starter-documents` | `@wasichai/documents` | Implements `DocumentIssuer` | [documents.md](../modules/documents.md) |
 | gis | `wasichai-spring-boot-starter-gis` | `@wasichai/gis` | PostGIS database; web needs `maplibre-gl`, a `workerUrl` | [gis.md](../modules/gis.md) |
+| notifications | `wasichai-spring-boot-starter-notifications` | `@wasichai/notifications` (planned) | None | [notifications.md](../modules/notifications.md) |
 | agent | `wasichai-spring-boot-starter-agent` | `@wasichai/agent` | Needs `ANTHROPIC_API_KEY` (or another provider) | [agent.md](../modules/agent.md) |
 
 `documents` and `automation` connect through `DocumentIssuer`: `automation`'s `GENERATE_DOCUMENT` action calls it,
@@ -216,6 +217,7 @@ dependencies {
     implementation("wasichai:wasichai-spring-boot-starter-documents")
     implementation("wasichai:wasichai-spring-boot-starter-gis")
     implementation("wasichai:wasichai-spring-boot-starter-agent")
+    implementation("wasichai:wasichai-spring-boot-starter-notifications")
 }
 ```
 
@@ -263,6 +265,7 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
+| Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
 
 ## Override a bean
 
@@ -370,6 +373,152 @@ and a job running as the platform must pass one too. It lands on the write's aud
 records.update("recibo", id, RecordRequest(mapOf("monto" to 120)), reason = "corrección por error de digitación")
 records.asPlatform(organizationId) { records.create("cierre", RecordRequest(values), reason = "cierre nocturno") }
 ```
+
+## Tell people what needs doing
+
+Staff should not have to open the right screen to learn that a turno is still open or a licence expires on Friday.
+Add the notifications module and tell them, by person, role or organizational unit, within a time window
+([notifications.md](../modules/notifications.md)):
+
+```kotlin
+implementation("wasichai:wasichai-spring-boot-starter-notifications")
+```
+
+An administrator publishes notices by hand (`POST /api/notifications`); the rest comes from your app, in one of three
+ways, depending on where the truth lives:
+
+| The truth is… | Example | Use |
+|---|---|---|
+| an event in your code | a turno closed with a cash difference, a mass job finished | `Notifications.publish`, inside the business transaction |
+| a state you compute | turnos of an earlier day still open, a reconciliation that does not balance | a `NotificationSource` |
+| a date field of a record | a licence's `vigencia_hasta` | a date rule, applied with your model |
+
+The frontend package, `@wasichai/notifications`, is planned
+([plan](../superpowers/plans/2026-10-06-notifications-wasichai-ui.md)); until it ships, a client reads
+`/api/auth/me/notifications` itself.
+
+### Publish from code
+
+Call the `Notifications` bean where the event happens. It joins your transaction: if the closing rolls back, so does
+the notification, and the live signal goes out only with the commit:
+
+```kotlin
+transactions.executeAndAwait {
+    records.update("turno", turnoId, RecordRequest(mapOf("estado" to "CERRADO")))
+    if (diferencia.signum() != 0) {
+        notifications.publish(
+            user.organizationId,
+            "caja.cierres",
+            NotificationDraft(
+                kind = NotificationKind.WARNING,
+                title = "Turno cerrado con una diferencia de S/ $diferencia",
+                audience = listOf(Audience.Role("SUPERVISOR_CAJA"), Audience.Email(cajero)),
+                link = NotificationLink.Route("caja:arqueo", mapOf("turnoId" to turnoId.toString())),
+                key = "cierre-$turnoId"
+            )
+        )
+    }
+}
+```
+
+- `source` (`"caja.cierres"`) names the producer: lower case, your app's prefix. `key` makes publishing again an update
+  of the same notification; `notifications.resolve(organizationId, "caja.cierres", "cierre-$turnoId")` takes it away
+  when the difference is explained, in that transaction too.
+- It never breaks your business work over people: an unknown role, unit or email is dropped with a WARN, and a title
+  over 200 characters is cut. A malformed draft (a bad key, route or URL) is an `IllegalArgumentException`: build keys
+  from ids and ISO dates.
+
+### Report computed states
+
+A state your code computes, rather than an event, is a `NotificationSource`: a bean the module asks every `interval`,
+once per cluster, for every organization, for everything that should be open now. What it stops answering is resolved,
+so nobody resolves anything by hand. Count rather than list: one notification saying how many, linking to the list,
+is read; fifty are ignored:
+
+```kotlin
+@Component
+class TurnosAbiertos(
+    private val records: RecordService
+) : NotificationSource {
+    override val key = "caja.turnos"
+    override val interval: Duration = Duration.ofMinutes(5)
+
+    override suspend fun currentNotifications(
+        organizationId: UUID,
+        now: Instant
+    ): List<NotificationDraft> {
+        val abiertos = records.list("turno", RecordQuery(page = PageRequest(0, 1), filters = mapOf("estado" to "ABIERTO")))
+        val total = abiertos.totalElements ?: 0
+        if (total == 0L) return emptyList()
+        return listOf(
+            NotificationDraft(
+                kind = NotificationKind.ACTION,
+                title = "$total turnos siguen abiertos",
+                audience = listOf(Audience.Role("SUPERVISOR_CAJA")),
+                link = NotificationLink.Route("caja:turnos"),
+                key = "abiertos"
+            )
+        )
+    }
+}
+```
+
+It runs outside any transaction (it may call another system) and as the platform, like the jobs of
+[Background work](#background-work). A new count updates the notification in place and keeps who read it. Give each
+source its own key and never `publish` under it. In a test, set `wasichai.notifications.tick=0s` and call
+`NotificationLoop.runSource("caja.turnos")`.
+
+### Date rules from your model
+
+A rule over a `DATE` or `DATETIME` field is metadata, applied over REST like the rest of your model. Keep the rules
+in `model/notifications.json`, next to `model/roles.json`, and apply them with a script the same way: for each rule,
+`GET /api/objects/{object}/notification-rules`, then `POST` one the object does not have, `PUT` one that differs, and
+leave an equal one alone. Saving runs the rule at once.
+
+```json
+{
+  "rules": [
+    {
+      "object": "licencia", "name": "licencia_por_vencer", "label": "Licencias por vencer", "enabled": true,
+      "field": "vigencia_hasta",
+      "stages": [{"fromDays": -15, "kind": "WARNING"}, {"fromDays": 0, "kind": "ACTION"}], "untilDays": 3,
+      "conditions": [{"field": "estado", "op": "EQ", "value": "VIGENTE"}],
+      "audience": [{"type": "UNIT", "value": "SGFT"}],
+      "title": "La licencia {{numero}} vence el {{date}}",
+      "tab": "VIGENCIA"
+    }
+  ]
+}
+```
+
+Each licence in the window becomes one notification linking to its record and tab, a warning from 15 days before,
+an action from the day itself; renewing it resolves it at once. The `object` key is the script's, to build the path;
+the rest is the rule's body ([../api/rest.md#notification-rules](../api/rest.md#notification-rules)). A rule's
+conditions are ANDed: "estado is VIGENTE or empty" is two rules.
+
+### Organizational units
+
+Units address people by where they sit (gerencia › subgerencia › área); a notification for a unit reaches its whole
+subtree. Keep them in `model/org_units.json` and apply them the same way, parents first:
+`GET /api/org-units`, `POST` a missing code, `PUT /api/org-units/{code}` a changed label or parent. A code never
+changes once your code or a rule names it; a label can. Who sits where is `PUT /api/users/{id}/org-units`
+([../api/rest.md#organizational-units](../api/rest.md#organizational-units)).
+
+```json
+{
+  "units": [
+    {"code": "GAT", "label": "Gerencia de Administración Tributaria"},
+    {"code": "SGFT", "label": "Subgerencia de Fiscalización Tributaria", "parent": "GAT"}
+  ]
+}
+```
+
+### Call them "Alertas"
+
+In a Spanish UI, call the feature **"Alertas"**, with three groups: Comunicados (`INFO`), Advertencias (`WARNING`)
+and Pendientes (`ACTION`). A municipal app already uses "notificación" for the legal act served on a taxpayer, and
+"aviso" may name a thing of its own (an advertisement); the code still says notifications. Titles say what is wrong
+and where, for the person who must act: "La licencia 0042 vence el 10/10/2026", not "Recordatorio".
 
 ## Write your own module
 

@@ -112,7 +112,171 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "CREATE UNIQUE INDEX service_accounts_name_unique_per_org ON META.service_accounts USING btree (organization_id, name)",
                 "index service_accounts.service_accounts_pkey CREATE UNIQUE INDEX service_accounts_pkey ON META.service_accounts USING btree (id)",
                 "table service_accounts"
-            ).associateWith { "ADR-031 D27: service accounts" }
+            ).associateWith { "ADR-031 D27: service accounts" } +
+            // organizational units (ADR-031 D31, ADR-045): two new core tables
+            listOf(
+                "column org_units.code #4 text NOT NULL",
+                "column org_units.created_at #6 timestamp with time zone NOT NULL DEFAULT now()",
+                "column org_units.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column org_units.label #5 text NOT NULL",
+                "column org_units.organization_id #2 uuid NOT NULL",
+                "column org_units.parent_id #3 uuid",
+                "column org_units.updated_at #7 timestamp with time zone NOT NULL DEFAULT now()",
+                "column user_org_units.unit_id #2 uuid NOT NULL",
+                "column user_org_units.user_id #1 uuid NOT NULL",
+                "constraint org_units.org_units_code_not_null NOT NULL code",
+                "constraint org_units.org_units_code_unique UNIQUE (organization_id, code)",
+                "constraint org_units.org_units_code_valid CHECK ((code ~ '^[A-Z][A-Z0-9_]{1,48}\$'::text))",
+                "constraint org_units.org_units_created_at_not_null NOT NULL created_at",
+                "constraint org_units.org_units_id_not_null NOT NULL id",
+                "constraint org_units.org_units_label_not_null NOT NULL label",
+                "constraint org_units.org_units_label_valid CHECK (((length(label) >= 1) AND (length(label) <= 120)))",
+                "constraint org_units.org_units_not_own_parent CHECK ((parent_id <> id))",
+                "constraint org_units.org_units_org_id_unique UNIQUE (organization_id, id)",
+                "constraint org_units.org_units_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint org_units.org_units_organization_id_not_null NOT NULL organization_id",
+                "constraint org_units.org_units_parent_fkey FOREIGN KEY (organization_id, parent_id) REFERENCES META.org_units(organization_id, id)",
+                "constraint org_units.org_units_pkey PRIMARY KEY (id)",
+                "constraint org_units.org_units_updated_at_not_null NOT NULL updated_at",
+                "constraint user_org_units.user_org_units_pkey PRIMARY KEY (user_id, unit_id)",
+                "constraint user_org_units.user_org_units_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES META.org_units(id) ON DELETE CASCADE",
+                "constraint user_org_units.user_org_units_unit_id_not_null NOT NULL unit_id",
+                "constraint user_org_units.user_org_units_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint user_org_units.user_org_units_user_id_not_null NOT NULL user_id",
+                "index org_units.org_units_code_unique CREATE UNIQUE INDEX org_units_code_unique ON META.org_units USING btree (organization_id, code)",
+                "index org_units.org_units_org_id_unique CREATE UNIQUE INDEX org_units_org_id_unique ON META.org_units USING btree (organization_id, id)",
+                "index org_units.org_units_parent_idx CREATE INDEX org_units_parent_idx ON META.org_units USING btree (parent_id)",
+                "index org_units.org_units_pkey CREATE UNIQUE INDEX org_units_pkey ON META.org_units USING btree (id)",
+                "index user_org_units.user_org_units_pkey CREATE UNIQUE INDEX user_org_units_pkey ON META.user_org_units USING btree (user_id, unit_id)",
+                "index user_org_units.user_org_units_unit_idx CREATE INDEX user_org_units_unit_idx ON META.user_org_units USING btree (unit_id)",
+                "table org_units",
+                "table user_org_units"
+            ).associateWith { "ADR-031 D31: organizational units" } +
+            // notifications (ADR-031 D32, ADR-046): the module's tables
+            listOf(
+                "column notification_receipts.dismissed_at #4 timestamp with time zone",
+                "column notification_receipts.notification_id #1 uuid NOT NULL",
+                "column notification_receipts.read_at #3 timestamp with time zone",
+                "column notification_receipts.snoozed_until #5 timestamp with time zone",
+                "column notification_receipts.user_id #2 uuid NOT NULL",
+                "column notification_rules.created_at #8 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_rules.definition #7 jsonb NOT NULL",
+                "column notification_rules.enabled #6 boolean NOT NULL DEFAULT true",
+                "column notification_rules.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column notification_rules.label #5 text NOT NULL",
+                "column notification_rules.name #4 text NOT NULL",
+                "column notification_rules.object_id #3 uuid NOT NULL",
+                "column notification_rules.organization_id #2 uuid NOT NULL",
+                "column notification_rules.updated_at #9 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_source_runs.last_run_at #2 timestamp with time zone NOT NULL",
+                "column notification_source_runs.source #1 text NOT NULL",
+                "column notification_targets.notification_id #1 uuid NOT NULL",
+                "column notification_targets.role_name #4 text",
+                "column notification_targets.type #2 text NOT NULL",
+                "column notification_targets.unit_id #5 uuid",
+                "column notification_targets.user_id #3 uuid",
+                "column notifications.body #5 text",
+                "column notifications.created_at #16 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notifications.created_by #15 uuid",
+                "column notifications.due_at #10 timestamp with time zone",
+                "column notifications.expires_at #9 timestamp with time zone",
+                "column notifications.fingerprint #13 text NOT NULL",
+                "column notifications.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column notifications.kind #3 text NOT NULL",
+                "column notifications.link #6 jsonb",
+                "column notifications.link_object_id #7 uuid",
+                "column notifications.organization_id #2 uuid NOT NULL",
+                "column notifications.publish_at #8 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notifications.resolved_at #14 timestamp with time zone",
+                "column notifications.source #11 text NOT NULL",
+                "column notifications.source_key #12 text",
+                "column notifications.title #4 text NOT NULL",
+                "column notifications.updated_at #17 timestamp with time zone NOT NULL DEFAULT now()",
+                "constraint notification_receipts.notification_receipts_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES " +
+                    "META.notifications(id) ON DELETE CASCADE",
+                "constraint notification_receipts.notification_receipts_notification_id_not_null NOT NULL notification_id",
+                "constraint notification_receipts.notification_receipts_pkey PRIMARY KEY (notification_id, user_id)",
+                "constraint notification_receipts.notification_receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notification_receipts.notification_receipts_user_id_not_null NOT NULL user_id",
+                "constraint notification_rules.notification_rules_created_at_not_null NOT NULL created_at",
+                "constraint notification_rules.notification_rules_definition_not_null NOT NULL definition",
+                "constraint notification_rules.notification_rules_enabled_not_null NOT NULL enabled",
+                "constraint notification_rules.notification_rules_id_not_null NOT NULL id",
+                "constraint notification_rules.notification_rules_label_not_null NOT NULL label",
+                "constraint notification_rules.notification_rules_name_not_null NOT NULL name",
+                "constraint notification_rules.notification_rules_name_unique UNIQUE (organization_id, name)",
+                "constraint notification_rules.notification_rules_name_valid CHECK ((name ~ '^[a-z][a-z0-9_]{1,48}\$'::text))",
+                "constraint notification_rules.notification_rules_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON " +
+                    "DELETE CASCADE",
+                "constraint notification_rules.notification_rules_object_id_not_null NOT NULL object_id",
+                "constraint notification_rules.notification_rules_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES " +
+                    "META.organizations(id) ON DELETE CASCADE",
+                "constraint notification_rules.notification_rules_organization_id_not_null NOT NULL organization_id",
+                "constraint notification_rules.notification_rules_pkey PRIMARY KEY (id)",
+                "constraint notification_rules.notification_rules_updated_at_not_null NOT NULL updated_at",
+                "constraint notification_source_runs.notification_source_runs_last_run_at_not_null NOT NULL last_run_at",
+                "constraint notification_source_runs.notification_source_runs_pkey PRIMARY KEY (source)",
+                "constraint notification_source_runs.notification_source_runs_source_not_null NOT NULL source",
+                "constraint notification_targets.notification_targets_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES " +
+                    "META.notifications(id) ON DELETE CASCADE",
+                "constraint notification_targets.notification_targets_notification_id_not_null NOT NULL notification_id",
+                "constraint notification_targets.notification_targets_shape CHECK ((((type = 'USER'::text) = (user_id IS NOT NULL)) AND ((type = " +
+                    "'ROLE'::text) = (role_name IS NOT NULL)) AND ((type = 'UNIT'::text) = (unit_id IS NOT NULL))))",
+                "constraint notification_targets.notification_targets_type_not_null NOT NULL type",
+                "constraint notification_targets.notification_targets_type_valid CHECK ((type = ANY (ARRAY['ALL'::text, 'USER'::text, 'ROLE'::text, " +
+                    "'UNIT'::text])))",
+                "constraint notification_targets.notification_targets_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES META.org_units(id) ON DELETE CASCADE",
+                "constraint notification_targets.notification_targets_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notifications.notifications_created_at_not_null NOT NULL created_at",
+                "constraint notifications.notifications_created_by_fkey FOREIGN KEY (created_by) REFERENCES META.users(id) ON DELETE SET NULL",
+                "constraint notifications.notifications_fingerprint_not_null NOT NULL fingerprint",
+                "constraint notifications.notifications_id_not_null NOT NULL id",
+                "constraint notifications.notifications_kind_not_null NOT NULL kind",
+                "constraint notifications.notifications_kind_valid CHECK ((kind = ANY (ARRAY['INFO'::text, 'WARNING'::text, 'ACTION'::text])))",
+                "constraint notifications.notifications_link_object_id_fkey FOREIGN KEY (link_object_id) REFERENCES META.custom_objects(id) ON " +
+                    "DELETE SET NULL",
+                "constraint notifications.notifications_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES META.organizations(id) ON " +
+                    "DELETE CASCADE",
+                "constraint notifications.notifications_organization_id_not_null NOT NULL organization_id",
+                "constraint notifications.notifications_pkey PRIMARY KEY (id)",
+                "constraint notifications.notifications_publish_at_not_null NOT NULL publish_at",
+                "constraint notifications.notifications_source_key_unique UNIQUE (organization_id, source, source_key)",
+                "constraint notifications.notifications_source_not_null NOT NULL source",
+                "constraint notifications.notifications_title_not_null NOT NULL title",
+                "constraint notifications.notifications_updated_at_not_null NOT NULL updated_at",
+                "constraint notifications.notifications_window_valid CHECK (((expires_at IS NULL) OR (expires_at > publish_at)))",
+                "index notification_receipts.notification_receipts_pkey CREATE UNIQUE INDEX notification_receipts_pkey ON META.notification_receipts " +
+                    "USING btree (notification_id, user_id)",
+                "index notification_receipts.notification_receipts_user_idx CREATE INDEX notification_receipts_user_idx ON " +
+                    "META.notification_receipts USING btree (user_id)",
+                "index notification_rules.notification_rules_name_unique CREATE UNIQUE INDEX notification_rules_name_unique ON " +
+                    "META.notification_rules USING btree (organization_id, name)",
+                "index notification_rules.notification_rules_object_idx CREATE INDEX notification_rules_object_idx ON META.notification_rules USING " +
+                    "btree (organization_id, object_id)",
+                "index notification_rules.notification_rules_pkey CREATE UNIQUE INDEX notification_rules_pkey ON META.notification_rules USING btree (id)",
+                "index notification_source_runs.notification_source_runs_pkey CREATE UNIQUE INDEX notification_source_runs_pkey ON " +
+                    "META.notification_source_runs USING btree (source)",
+                "index notification_targets.notification_targets_notification_idx CREATE INDEX notification_targets_notification_idx ON " +
+                    "META.notification_targets USING btree (notification_id)",
+                "index notification_targets.notification_targets_unit_idx CREATE INDEX notification_targets_unit_idx ON META.notification_targets " +
+                    "USING btree (unit_id) WHERE (unit_id IS NOT NULL)",
+                "index notification_targets.notification_targets_user_idx CREATE INDEX notification_targets_user_idx ON META.notification_targets " +
+                    "USING btree (user_id) WHERE (user_id IS NOT NULL)",
+                "index notifications.notifications_link_object_idx CREATE INDEX notifications_link_object_idx ON META.notifications USING btree " +
+                    "(link_object_id) WHERE (link_object_id IS NOT NULL)",
+                "index notifications.notifications_open_idx CREATE INDEX notifications_open_idx ON META.notifications USING btree (organization_id, " +
+                    "publish_at DESC) WHERE (resolved_at IS NULL)",
+                "index notifications.notifications_pkey CREATE UNIQUE INDEX notifications_pkey ON META.notifications USING btree (id)",
+                "index notifications.notifications_source_idx CREATE INDEX notifications_source_idx ON META.notifications USING btree " +
+                    "(organization_id, source) WHERE (resolved_at IS NULL)",
+                "index notifications.notifications_source_key_unique CREATE UNIQUE INDEX notifications_source_key_unique ON META.notifications USING " +
+                    "btree (organization_id, source, source_key)",
+                "table notification_receipts",
+                "table notification_rules",
+                "table notification_source_runs",
+                "table notification_targets",
+                "table notifications"
+            ).associateWith { "ADR-031 D32: notifications" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

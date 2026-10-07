@@ -20,11 +20,16 @@ interface PageComponentProvider {
 }
 
 // tab == null: it joins the details tab, after the form. otherwise it gets a tab of its own titled
-// `tab` (a key the client translates), after details and before related and history.
+// `tab` (a key the client translates), after details and before related and history. the title is
+// the tab's key too (D33), so it must be one: caught in the module's own test, not on a live page.
 data class GeneratedComponent(
     val component: PageComponent,
     val tab: String? = null
-)
+) {
+    init {
+        require(tab == null || TabKey.valid(tab)) { "generated tab must be a tab key (${TabKey.PATTERN.pattern}): '$tab'" }
+    }
+}
 
 // every type an admin may name: pages' own first, then the modules' in bean order
 class PageComponentTypes(

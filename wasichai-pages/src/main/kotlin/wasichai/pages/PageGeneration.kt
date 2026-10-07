@@ -12,20 +12,29 @@ suspend fun generatedTabs(
 ): List<PageComponent> {
     val details = mutableListOf(PageComponent(type = ComponentType.FORM))
     val moduleTabs = mutableListOf<PageComponent>()
+    // each tab is keyed by its title (D33). built-ins first: a module repeating a taken key keeps
+    // its tab but no key, so the page stays valid and ?tab= never means two tabs.
+    val keys = mutableSetOf(GeneratedTab.DETAILS, GeneratedTab.RELATED, GeneratedTab.HISTORY)
     for (provider in providers) {
         val generated = provider.generated(definition) ?: continue
         if (generated.tab == null) {
             details += generated.component
         } else {
-            moduleTabs += PageComponent(type = ComponentType.TAB, title = generated.tab, children = listOf(generated.component))
+            val key = generated.tab.takeIf { keys.add(it) }
+            moduleTabs += PageComponent(type = ComponentType.TAB, title = generated.tab, key = key, children = listOf(generated.component))
         }
     }
 
-    val tabs = mutableListOf(PageComponent(type = ComponentType.TAB, title = GeneratedTab.DETAILS, children = details))
+    val tabs = mutableListOf(tab(GeneratedTab.DETAILS, details))
     tabs += moduleTabs
     if (related.isNotEmpty()) {
-        tabs += PageComponent(type = ComponentType.TAB, title = GeneratedTab.RELATED, children = related)
+        tabs += tab(GeneratedTab.RELATED, related)
     }
-    tabs += PageComponent(type = ComponentType.TAB, title = GeneratedTab.HISTORY, children = listOf(PageComponent(type = ComponentType.HISTORY)))
+    tabs += tab(GeneratedTab.HISTORY, listOf(PageComponent(type = ComponentType.HISTORY)))
     return tabs
 }
+
+private fun tab(
+    title: String,
+    children: List<PageComponent>
+) = PageComponent(type = ComponentType.TAB, title = title, key = title, children = children)

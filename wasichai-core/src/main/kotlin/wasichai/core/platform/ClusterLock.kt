@@ -1,8 +1,6 @@
 package wasichai.core.platform
 
 import io.r2dbc.spi.Connection
-import io.r2dbc.spi.ConnectionFactory
-import io.r2dbc.spi.Wrapped
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
@@ -35,7 +33,8 @@ class ClusterLock(
      */
     suspend fun tryLock(key: String): Lease? {
         val id = lockId(key)
-        val factory = unpooled(db.connectionFactory)
+        // a pooled connection would outlive the lease and keep the lock: go under the pool
+        val factory = Connections.unpooled(db.connectionFactory)
         val connection = Mono.from(factory.create()).awaitSingle()
         val session = DatabaseClient.create(SingleConnectionFactory(connection, factory.metadata, true))
         val acquired =
@@ -120,13 +119,6 @@ class ClusterLock(
             require(key.isNotBlank()) { "A cluster lock key must not be blank" }
             val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
             return ByteBuffer.wrap(digest, 0, Long.SIZE_BYTES).long
-        }
-
-        // a pooled connection would outlive the lease and keep the lock: go under the pool
-        private fun unpooled(factory: ConnectionFactory): ConnectionFactory {
-            var current = factory
-            while (current is Wrapped<*>) current = (current.unwrap() as? ConnectionFactory) ?: break
-            return current
         }
 
         // non-cancellable: a cancelled caller must still give the session, and its lock, back

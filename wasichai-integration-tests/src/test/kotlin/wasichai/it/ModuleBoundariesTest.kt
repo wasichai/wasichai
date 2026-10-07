@@ -7,8 +7,8 @@ import java.io.File
 // the spec's module graph, checked on the sources: pages may use forms; every other link between
 // modules is an optional adapter, allowed only in the files that exist for it (M2).
 class ModuleBoundariesTest {
-    private val modules = listOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent")
-    private val reference = Regex("""\bwasichai\.(views|forms|pages|workflow|automation|documents|gis|agent)\.""")
+    private val modules = listOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications")
+    private val reference = Regex("""\bwasichai\.(views|forms|pages|workflow|automation|documents|gis|agent|notifications)\.""")
 
     // module -> (other module -> files allowed to name it)
     private val allowed: Map<String, Map<String, Set<String>>> =

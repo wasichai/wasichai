@@ -43,6 +43,12 @@ class AdminService(
         return loadUsers(user.organizationId, null)
     }
 
+    // for routes beside these that answer a user, as PUT /api/users/{id}/org-units does
+    suspend fun user(id: UUID): AdminUserResponse {
+        val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        return userOrFail(admin.organizationId, id)
+    }
+
     @Transactional
     suspend fun createUser(request: CreateUserRequest): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
@@ -334,7 +340,14 @@ class AdminService(
             .sql(
                 """
                 SELECT u.id, u.email, u.display_name, u.enabled, u.created_at,
-                       string_agg(r.name, ',' ORDER BY r.name) AS role_names
+                       string_agg(r.name, ',' ORDER BY r.name) AS role_names,
+                       ARRAY(
+                           SELECT ou.code
+                           FROM ${schemas.metadata}.user_org_units m
+                           JOIN ${schemas.metadata}.org_units ou ON ou.id = m.unit_id
+                           WHERE m.user_id = u.id AND ou.organization_id = u.organization_id
+                           ORDER BY ou.code
+                       ) AS org_units
                 FROM ${schemas.metadata}.users u
                 LEFT JOIN ${schemas.metadata}.user_roles ur ON ur.user_id = u.id
                 LEFT JOIN ${schemas.metadata}.roles r ON r.id = ur.role_id
@@ -353,6 +366,7 @@ class AdminService(
                     displayName = Rows.string(row, "display_name"),
                     enabled = Rows.bool(row, "enabled"),
                     roles = Rows.stringOrNull(row, "role_names")?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+                    orgUnits = row.get("org_units", Array<String>::class.java)?.toList() ?: emptyList(),
                     createdAt = Rows.instantOrNull(row, "created_at")
                 )
             }.all()

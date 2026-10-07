@@ -23,4 +23,18 @@ class PageComponentJsonTest {
         assertThat(definition.page.type).isEqualTo(ComponentType.PAGE)
         assertThat(definition.page.children.map { it.type }).containsExactly(ComponentType("WORKFLOW"), ComponentType("MAP"))
     }
+
+    // D33: a component without a key is written as before, with no key property at all
+    @Test
+    fun `a component without a key has no key property`() {
+        val json = mapper.writeValueAsString(PageComponent(type = ComponentType.TAB, title = "Ficha"))
+        assertThat(json).doesNotContain("\"key\"")
+    }
+
+    @Test
+    fun `a tab with a key carries it, and reads it back`() {
+        val json = mapper.writeValueAsString(PageComponent(type = ComponentType.TAB, title = "Ficha", key = "FICHA"))
+        assertThat(json).contains("\"key\":\"FICHA\"")
+        assertThat(mapper.readValue(json, PageComponent::class.java).key).isEqualTo("FICHA")
+    }
 }

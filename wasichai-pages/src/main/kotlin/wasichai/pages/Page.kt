@@ -1,6 +1,7 @@
 package wasichai.pages
 
 import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonValue
 import wasichai.core.common.ValidationException
 import java.util.UUID
@@ -155,11 +156,24 @@ data class PageComponent(
     val transition: String? = null,
     val target: String? = null,
     val url: String? = null,
-    val style: ActionStyle? = null
+    val style: ActionStyle? = null,
+    // TAB only: a stable name a link can use (?tab=KEY). upper-case token, unique in the page.
+    // null is left out, so a page without keys is written exactly as before (D33).
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val key: String? = null
 )
 
+// a tab's key: what a link names. one rule for the validator and for module tabs.
+object TabKey {
+    val PATTERN = Regex("^[A-Z][A-Z0-9_]{0,39}$")
+
+    // blank counts as none
+    fun normalise(raw: String?): String? = raw?.trim()?.uppercase()?.ifBlank { null }
+
+    fun valid(key: String): Boolean = PATTERN.matches(key)
+}
+
 // the tabs a generated page comes with. keys, not words: the backend has no language, so the
-// client translates these and prints anything else as it was typed.
+// client translates these and prints anything else as it was typed. each is its tab's key too.
 object GeneratedTab {
     const val DETAILS = "DETAILS"
     const val RELATED = "RELATED"
