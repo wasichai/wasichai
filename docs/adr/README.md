@@ -66,3 +66,5 @@ supersedes it and says so in its status line.
   replicas](0047-server-push-over-sse-and-listen-notify.md)
 - [ADR-048: A read scope SPI narrows what a caller reads of an
   object](0048-a-read-scope-narrows-what-a-caller-reads.md)
+- [ADR-049: Changes to users, roles, permissions and the model are in the audit
+  log](0049-admin-changes-in-the-audit-log.md)

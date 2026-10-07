@@ -2,6 +2,33 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-07 — Admin changes in the audit log: who granted, who dropped, who switched it off
+
+`audit_log` only knew record writes, so nobody could answer "who granted this role `DELETE`?", "who turned off
+`requiresReason`?" or "who dropped this field and its data?" ([#49](https://github.com/wasichai/wasichai/issues/49)).
+Now every change to users (create, update, roles, units, delete), roles, permission and field-permission sets, service
+accounts (create, update, secret rotation, delete), organizational units, objects (flags, indexes, uniques, declared
+actions), fields, relationships and the tenant (provision, rename, delete) writes one row of the same table, in the
+change's own transaction ([ADR-049](adr/0049-admin-changes-in-the-audit-log.md), ADR-031 D34). Rows carry a reserved
+`object_name` no object can have (`admin:user`, `admin:role`, `admin:permission`, `admin:service-account`,
+`admin:org-unit`, `admin:object`, `admin:field`, `admin:relationship`, `admin:organization`), the entity's id, the
+actor, and the entity before and after, without timestamps and never with a password, hash or client secret (a password
+change is `passwordChanged: true`, a rotation `secretRotated: true`). Permission sets are stored whole, one key per
+grant, so `AuditDiff` names only the grants that changed. `GET /api/audit?objectName=admin:…` answers them to
+`MANAGE_ORGANIZATION` and `[]` to anyone else; an unfiltered list leaves them out, in SQL, for everyone else; field
+permissions and read scopes do not touch them; their `CREATE` and `DELETE` list every key. Record entries and the
+`audit_log_operation_valid` CHECK are unchanged, and there is no migration: `audit_log` has no foreign keys, so a deleted
+tenant's rows stay. The services write through a new port in `identity`, `AdminAudit` (with `AdminEntity` and
+`AdminOperation`), because `metadata`, `admin` and `organization` sit below `audit` in core's DAG; `audit` implements
+it as `AuditLogAdminAudit`, bean `adminAudit`. `CurrentUser.hasPermission` answers what `requirePermission` enforces.
+Constructors: `MetadataService` (`ObjectActionRepository`, `AdminAudit`), `ObjectActionService`
+(`CustomFieldRepository`, `AdminAudit`), and `RelationshipService`, `AdminService`, `ServiceAccountService`,
+`OrgUnitService`, `OrganizationService` (`AdminAudit`); `MetadataService.addRelationField` adds a relationship's column
+without a field row of its own. New tests: `AdminSnapshotsTest`, `AuditQueryServiceAdminTest`, `AuditLogAdminAuditTest`,
+a case in `WasichaiAutoConfigurationTest`, and the integration test `AdminAuditApiTest` (every writer, the read rules,
+no secrets, refused and rolled-back calls, the unchanged CHECK). Docs: [rest.md](api/rest.md) "Administration entries",
+[core.md](modules/core.md). Plan: [2026-10-07-admin-audit.md](superpowers/plans/2026-10-07-admin-audit.md).
+
 ## 2026-10-07 — A read scope: an app keeps a caller to the records of their projects
 
 `own_records_only` was the only read rule below the object, and it narrows by who created a row. SGSPE runs several
