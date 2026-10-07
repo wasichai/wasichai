@@ -93,6 +93,14 @@ The check is one read per target object with the role and owner rules folded in,
 `ADMIN`, the platform and automations check the organization only. A value an update leaves as stored is not checked
 again (ADR-031 D30).
 
+An app can narrow reads further, by project, territory or region, with a `RecordReadScope` bean
+([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). Its criterion is ANDed, in parentheses, behind
+the tenant and owner filters into every read of the object: lists and counts, reads by id, related records on both
+sides, history, `/api/audit`, the `RELATION` check above, and the lookups before an update, delete, link or workflow
+transition, so GIS features and the assistant's tools follow it too. A record out of scope answers as a missing one,
+`404`, never `403`. It is asked for people and service accounts, never for `ADMIN`, the platform or automations.
+Without such a bean nothing changes.
+
 ## Organizational units
 
 An organization's units (gerencia › subgerencia › área) say where a person sits, not what they may do

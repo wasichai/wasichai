@@ -25,7 +25,9 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
 ## What it adds
 
 The assistant: nine read-only tools over the caller's own objects, definitions, records, relationships, history
-and workflow transitions — never a write tool ([ADR-014](../adr/0014-agents-through-the-api.md)).
+and workflow transitions — never a write tool ([ADR-014](../adr/0014-agents-through-the-api.md)). Every tool calls a
+core or workflow service as the caller, so the app's read scope holds for it too: a record out of scope is refused as
+missing and left out of every count ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)).
 
 REST routes:
 

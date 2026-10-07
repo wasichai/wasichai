@@ -169,15 +169,23 @@ authorization model.
   person or a service account passes them as `beforeWrite(definition, change, reader)`, so a target must be one that
   caller can read. A write with a `userId` that sets a `RELATION` value without its `reader` throws
   `IllegalStateException`; the platform and automations (`userId` null) check the organization only.
+- `RecordReadScope` — an app's rule for which records of an object a person or a service account reads, such as
+  "only the projects they are assigned to" ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). It
+  returns a `RecordCriterion`, or null for no restriction; `RecordReadScopes` ANDs every bean's, in `@Order` and in
+  parentheses, into every read of the object next to the owner filter: lists and counts, by id, related records on
+  both sides, the `RELATION` target check, history and `/api/audit`, the lookups before an update, delete, link or
+  transition, and so GIS features and the agent's tools. Out of scope reads as missing (`404`, or the `RELATION`
+  `400`). Never asked for `ADMIN`, the platform or automations.
 - `ObjectRemovalListener`, `FieldUsage` — a module's veto or note when an object or field is about to be removed.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));
   core registers its own (`core`) and its opt-in dev seed (`core_seed`).
 
 **Overridable beans:** every bean core declares is `@ConditionalOnMissingBean`, so an app replaces any of them by
-declaring its own bean of the same type, grouped by the auto-configuration that owns them. The one exception is
+declaring its own bean of the same type, grouped by the auto-configuration that owns them. The exceptions are
 `RecordWriteGuards`: `appendOnly` holds for everyone, so an app adds a `RecordWriteGuard` instead
-([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)).
+([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)); and `RecordReadScopes`: an app adds a
+`RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `healthController`.

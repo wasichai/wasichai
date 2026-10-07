@@ -2,6 +2,35 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-07 — A read scope: an app keeps a caller to the records of their projects
+
+`own_records_only` was the only read rule below the object, and it narrows by who created a row. SGSPE runs several
+projects in one tenant and must authorize by project, territory and region, so a person on project A must not read
+project B's records anywhere: lists, counts, maps, histories or the assistant
+([#48](https://github.com/wasichai/wasichai/issues/48)). Core gains a **`RecordReadScope` SPI**
+([ADR-048](adr/0048-a-read-scope-narrows-what-a-caller-reads.md)): `suspend fun criterion(caller, definition)` returns
+a `RecordCriterion`, `null` for no restriction, or one that matches nothing (`false`) for an empty scope. Every bean
+is collected in `@Order` by one non-replaceable `RecordReadScopes` and ANDed, each in its own parentheses behind the
+tenant and owner filters, into every read of the object, next to `AccessPolicy.ownerFilter`: `RecordService` list,
+count, get and `rows`, the lookups before update and delete, related records on both sides and the record the walk
+starts from, link and unlink, the `RELATION` target check of D30, `AuditQueryService.history` and `list`, and the
+workflow module's transitions. GIS features and the agent's tools read through those services, so they follow. Out of
+scope answers as missing: `404`, or the `400` of a `RELATION` value naming no record; `/api/audit` leaves those
+entries out, and those of a deleted record for every caller with a scope on its object. Asked for people and service
+accounts, never for `ADMIN`, the platform or automations; it is handed the object's full definition, so it may filter
+on a field the caller cannot read. With no bean nothing changes (same SQL, same answers), so there is no ADR-031 entry
+and no migration or route. Port and constructor changes: `RecordStore.findById` takes `criteria` (an app's own store
+passes it on), `RelatedRecordService.relatedRows` an optional `reader`, and `RecordService`, `RelatedRecordService`,
+`RelationTargets`, `AuditQueryService` and `WorkflowService` a `RecordReadScopes`. Audit asks through a port of its own,
+`AuditRecordScope`, because it sits below `data` in core's DAG. Not reached: GeoServer layers, wasichai-documents (it
+skips `own_records_only` too) and notification links. New tests: `RecordReadScopesTest`, `RecordServiceReadScopeTest`,
+`RelationTargetsReadScopeTest`, `AuditQueryServiceScopeTest`, cases in `PhysicalTableRecordStoreTest` and
+`WasichaiAutoConfigurationTest`, and the integration tests `RecordReadScopeApiTest` (two callers with different scopes
+on the same objects, across every core route) and `RecordReadScopeModulesTest` (GIS features, the agent's tools and
+workflow transitions). Docs: [build-your-app.md](guides/build-your-app.md) "Who reads which records",
+[core.md](modules/core.md), [rest.md](api/rest.md) "Read scope", [authentication.md](security/authentication.md).
+Plan: [2026-10-07-record-read-scope.md](superpowers/plans/2026-10-07-record-read-scope.md).
+
 ## 2026-10-06 — Notifications for people, roles and organizational units
 
 Municipal staff learned what they had to do only by opening the right screen, and the urgent cases were log lines

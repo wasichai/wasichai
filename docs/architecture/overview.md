@@ -82,6 +82,7 @@ uses all of them: units and emails to address people, the tenants for its loop, 
 | `SystemColumnContributor` → `SystemColumns` | `wasichai-core` (`platform`) | Registry | modules that add a reserved column name (list) |
 | `RecordChangeListener` | `wasichai-core` (`data`) | Observer | modules that react to a record write (list) |
 | `RecordWriteGuard` → `RecordWriteGuards` | `wasichai-core` (`data`) | Chain (veto) | apps and modules that veto a write before it lands (ADR-040) |
+| `RecordReadScope` → `RecordReadScopes` | `wasichai-core` (`data`) | Strategy (ANDed) | apps that narrow what a caller reads, say by project (ADR-048) |
 | `ObjectRemovalListener`, `FieldUsage` | `wasichai-core` (`metadata`) | Observer / Chain | modules that store something about an object or field (list) |
 | `WorkflowStates` | `wasichai-core` (`data`) | Null Object | `NoWorkflowStates` (core default); wasichai-workflow's real implementation |
 | `ModuleMigration` | `wasichai-core` (`platform`) | Registry | every module, one entry each, plus core's own and its dev seed |
