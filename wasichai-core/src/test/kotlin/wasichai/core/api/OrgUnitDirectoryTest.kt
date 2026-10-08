@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.OrgUnitRef
+import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.UserDirectory
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
@@ -23,6 +24,9 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
 
     @Autowired
     private lateinit var users: UserDirectory
+
+    @Autowired
+    private lateinit var roles: RoleDirectory
 
     @Autowired
     private lateinit var db: DatabaseClient
@@ -129,6 +133,49 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
             assertThat(users.emailsById(DEMO, listOf(ana, elsewhere))).isEqualTo(mapOf(ana to email))
         }
 
+    // ADR-060: a delivery names people one by one, so a unit, a role and everyone are fanned out
+    @Test
+    fun `a unit's members are found down its subtree, enabled people of the tenant only`(): Unit =
+        runBlocking {
+            val gerencia = unit(DEMO, code("GER"), "Gerencia")
+            val area = unit(DEMO, code("AREA"), "Area", gerencia)
+            val sibling = unit(DEMO, code("SIB"), "Sibling")
+            val boss = user(DEMO, "${uniqueName("p")}@x.test")
+            val clerk = user(DEMO, "${uniqueName("p")}@x.test")
+            val off = user(DEMO, "${uniqueName("p")}@x.test", enabled = false)
+            val elsewhere = user(DEMO, "${uniqueName("p")}@x.test")
+            member(boss, gerencia)
+            member(clerk, area)
+            member(off, area)
+            member(elsewhere, sibling)
+
+            assertThat(units.memberIdsWithin(DEMO, listOf(gerencia))).containsExactlyInAnyOrder(boss, clerk)
+            assertThat(units.memberIdsWithin(DEMO, listOf(area))).containsExactly(clerk)
+            assertThat(units.memberIdsWithin(DEMO, listOf(area, sibling))).containsExactlyInAnyOrder(clerk, elsewhere)
+            // another tenant's unit ids reach nobody
+            assertThat(units.memberIdsWithin(organization(), listOf(gerencia))).isEmpty()
+        }
+
+    @Test
+    fun `a role's holders and everyone are enabled people of the tenant, never a service account`(): Unit =
+        runBlocking {
+            val org = organization()
+            val role = "R_" + uniqueName("").uppercase()
+            role(org, role)
+            val ana = user(org, "${uniqueName("p")}@x.test")
+            val luis = user(org, "${uniqueName("p")}@x.test")
+            val off = user(org, "${uniqueName("p")}@x.test", enabled = false)
+            grant(ana, org, role)
+            grant(off, org, role)
+            val stranger = user(organization(), "${uniqueName("p")}@x.test")
+
+            assertThat(roles.holderIds(org, listOf(role, "NOPE"))).containsExactly(ana)
+            assertThat(roles.holderIds(DEMO, listOf(role))).isEmpty()
+            assertThat(users.enabledIds(org)).containsExactlyInAnyOrder(ana, luis)
+            assertThat(users.enabledIds(org)).doesNotContain(off, stranger)
+            assertThat(users.enabledIds(DEMO)).doesNotContain(serviceAccount())
+        }
+
     @Test
     fun `empty inputs answer empty`(): Unit =
         runBlocking {
@@ -141,6 +188,8 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
             assertThat(users.idsByEmail(DEMO, emptyList())).isEmpty()
             assertThat(users.existing(DEMO, emptyList())).isEmpty()
             assertThat(users.emailsById(DEMO, emptyList())).isEmpty()
+            assertThat(units.memberIdsWithin(DEMO, emptyList())).isEmpty()
+            assertThat(roles.holderIds(DEMO, emptyList())).isEmpty()
         }
 
     // the db is shared: every unit code is unique to its test
@@ -188,6 +237,36 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
             .sql("INSERT INTO ${schemas.metadata}.user_org_units (user_id, unit_id) VALUES (:userId, :unitId)")
             .bind("userId", user)
             .bind("unitId", unit)
+            .fetch()
+            .rowsUpdated()
+            .awaitSingle()
+    }
+
+    private suspend fun role(
+        organizationId: UUID,
+        name: String
+    ) {
+        db
+            .sql("INSERT INTO ${schemas.metadata}.roles (organization_id, name, label) VALUES (:organizationId, :name, :name)")
+            .bind("organizationId", organizationId)
+            .bind("name", name)
+            .fetch()
+            .rowsUpdated()
+            .awaitSingle()
+    }
+
+    private suspend fun grant(
+        user: UUID,
+        organizationId: UUID,
+        role: String
+    ) {
+        db
+            .sql(
+                "INSERT INTO ${schemas.metadata}.user_roles (user_id, role_id) " +
+                    "SELECT :userId, r.id FROM ${schemas.metadata}.roles r WHERE r.organization_id = :organizationId AND r.name = :role"
+            ).bind("userId", user)
+            .bind("organizationId", organizationId)
+            .bind("role", role)
             .fetch()
             .rowsUpdated()
             .awaitSingle()

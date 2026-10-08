@@ -45,10 +45,18 @@ write, the `ISSUE` row of a document they issue and the runs their writes queue 
 ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)). A run with no id (a platform write, or
 queued before this) writes rows without one.
 
-Action kinds (`ActionType`): `UPDATE_FIELD`, `CREATE_RECORD`, `WEBHOOK`, `GENERATE_DOCUMENT`. `WEBHOOK` posts JSON
+Action kinds (`ActionType`): `UPDATE_FIELD`, `CREATE_RECORD`, `WEBHOOK`, `GENERATE_DOCUMENT`, `NOTIFY`. `WEBHOOK` posts JSON
 to an admin-supplied URL; the URL is validated on save and again before every call, and a host that resolves to a
 loopback, private, link-local or multicast address is refused unless `wasichai.automation.allow-private-webhooks` is
 set, since an automation is the one place the platform makes an outbound call on a user's say-so.
+
+`NOTIFY` tells people through wasichai-notifications ([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)):
+`{ "type": "NOTIFY", "to": "{{responsable}}, role:SUPERVISOR", "title": "Tramite {{codigo}} aprobado", "body": "…",
+"kind": "WARNING" }`. `to`, `title` and `body` take `{{field}}` like the other actions; `to` lists user ids, emails,
+`role:<NAME>` and `unit:<CODE>`, and an entry naming nobody is dropped. `kind` is `INFO` (default) or `WARNING`. Paired
+with `STATE_ENTERED`, the record's arrival in a state notifies its responsible person or a whole role; entering the
+state again is news again on the same notification ([../api/rest.md#automations](../api/rest.md#automations)). The
+step prints the notification's id and outcome, or `notified nobody`. Its placeholders are not field usages.
 
 REST routes:
 
@@ -95,6 +103,10 @@ wasichai-documents implements it when both modules are installed; without wasich
 answers, so the action is refused when it is saved. No auto-configuration order has to be right for this: the bean
 is looked up (`ObjectProvider<DocumentIssuer>`), not required.
 
+**Defines:** `AutomationNotifier`, the same kind of port for `NOTIFY` (`available`, `notify(NotifyRequest)`, the
+request carrying the rendered `to`, `title` and `body`, the record and the action's index). wasichai-notifications
+implements it; without it `NoAutomationNotifier` answers and `NOTIFY` is refused when saved.
+
 **Overridable beans:** `automationRepository`, `automationRunRepository`, `automationDispatcher`,
 `automationFieldUsage`, `webhookSender`, `automationRunner`, `automationService`, `automationDrain`,
 `automationController` — all `@ConditionalOnMissingBean`, so an app can replace any of them. The migration bean is
@@ -129,12 +141,15 @@ See [`packages/automation` in wasichai-ui](https://github.com/wasichai/wasichai-
 Nothing reacts to record changes: no rows are matched or queued, and the rule builder and run log routes answer
 `404` ([ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D1), so the frontend shows neither nav entry's
 target. Any other module's `GENERATE_DOCUMENT`-shaped feature has nothing to call into, since `DocumentIssuer` is
-this module's own port.
+this module's own port; the same holds for `NOTIFY` and `AutomationNotifier`.
 
 ## Behaviour differences
 
 [ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D3: a `GENERATE_DOCUMENT` automation action is refused
 at save time when wasichai-documents is absent, rather than failing later.
+
+D46: a `NOTIFY` action, refused at save time when wasichai-notifications is absent
+([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)).
 
 D35: a rule's audit rows say `source: automation:<name>` and carry the triggering request's correlation id; the run
 keeps it in the new `automation_runs.correlation_id` column (ADR-050).

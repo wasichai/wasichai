@@ -135,7 +135,7 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 
 `RecordService.createAll(objectName, requests, reason = null)` creates a list of records of one object as the current
 caller, a person, a service account or the platform inside `asPlatform`
-([ADR-060](../adr/0060-batch-record-creation.md)):
+([ADR-062](../adr/0062-batch-record-creation.md)):
 
 ```kotlin
 val cuotas: List<RecordResponse> =

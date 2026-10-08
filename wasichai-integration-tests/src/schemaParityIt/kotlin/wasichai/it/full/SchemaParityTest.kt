@@ -334,7 +334,109 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "table idempotency_keys"
             ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" } +
             // token revocation marker (ADR-031 D44, ADR-059)
-            mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation")
+            mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation") +
+            // delivery channels (ADR-031 D46, ADR-060): two more tables of the notifications module
+            listOf(
+                "column notification_deliveries.attempts #7 integer NOT NULL DEFAULT 0",
+                "column notification_deliveries.channel #5 text NOT NULL",
+                "column notification_deliveries.created_at #11 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_deliveries.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column notification_deliveries.last_error #8 text",
+                "column notification_deliveries.next_attempt_at #9 timestamp with time zone NOT NULL",
+                "column notification_deliveries.notification_id #2 uuid NOT NULL",
+                "column notification_deliveries.organization_id #3 uuid NOT NULL",
+                "column notification_deliveries.sent_at #10 timestamp with time zone",
+                "column notification_deliveries.status #6 text NOT NULL DEFAULT 'PENDING'::text",
+                "column notification_deliveries.updated_at #12 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_deliveries.user_id #4 uuid NOT NULL",
+                "column notification_preferences.channel #2 text NOT NULL",
+                "column notification_preferences.kinds #3 text[] NOT NULL",
+                "column notification_preferences.updated_at #4 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_preferences.user_id #1 uuid NOT NULL",
+                "constraint notification_deliveries.notification_deliveries_attempts_not_null NOT NULL attempts",
+                "constraint notification_deliveries.notification_deliveries_channel_not_null NOT NULL channel",
+                "constraint notification_deliveries.notification_deliveries_created_at_not_null NOT NULL created_at",
+                "constraint notification_deliveries.notification_deliveries_id_not_null NOT NULL id",
+                "constraint notification_deliveries.notification_deliveries_next_attempt_at_not_null NOT NULL next_attempt_at",
+                "constraint notification_deliveries.notification_deliveries_notification_id_fkey FOREIGN KEY (notification_id) " +
+                    "REFERENCES META.notifications(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_notification_id_not_null NOT NULL notification_id",
+                "constraint notification_deliveries.notification_deliveries_organization_id_fkey FOREIGN KEY (organization_id) " +
+                    "REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_organization_id_not_null NOT NULL organization_id",
+                "constraint notification_deliveries.notification_deliveries_pkey PRIMARY KEY (id)",
+                "constraint notification_deliveries.notification_deliveries_status_not_null NOT NULL status",
+                "constraint notification_deliveries.notification_deliveries_status_valid CHECK ((status = ANY " +
+                    "(ARRAY['PENDING'::text, 'SENT'::text, 'FAILED'::text, 'SKIPPED'::text])))",
+                "constraint notification_deliveries.notification_deliveries_unique UNIQUE (notification_id, user_id, channel)",
+                "constraint notification_deliveries.notification_deliveries_updated_at_not_null NOT NULL updated_at",
+                "constraint notification_deliveries.notification_deliveries_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_user_id_not_null NOT NULL user_id",
+                "constraint notification_preferences.notification_preferences_channel_not_null NOT NULL channel",
+                "constraint notification_preferences.notification_preferences_kinds_not_null NOT NULL kinds",
+                "constraint notification_preferences.notification_preferences_kinds_valid CHECK ((kinds <@ ARRAY['INFO'::text, " +
+                    "'WARNING'::text, 'ACTION'::text]))",
+                "constraint notification_preferences.notification_preferences_pkey PRIMARY KEY (user_id, channel)",
+                "constraint notification_preferences.notification_preferences_updated_at_not_null NOT NULL updated_at",
+                "constraint notification_preferences.notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notification_preferences.notification_preferences_user_id_not_null NOT NULL user_id",
+                "index notification_deliveries.notification_deliveries_due_idx CREATE INDEX notification_deliveries_due_idx ON " +
+                    "META.notification_deliveries USING btree (organization_id, next_attempt_at) WHERE (status = 'PENDING'::text)",
+                "index notification_deliveries.notification_deliveries_pkey CREATE UNIQUE INDEX notification_deliveries_pkey " +
+                    "ON META.notification_deliveries USING btree (id)",
+                "index notification_deliveries.notification_deliveries_unique CREATE UNIQUE INDEX " +
+                    "notification_deliveries_unique ON META.notification_deliveries USING btree (notification_id, user_id, channel)",
+                "index notification_deliveries.notification_deliveries_user_idx CREATE INDEX notification_deliveries_user_idx " +
+                    "ON META.notification_deliveries USING btree (user_id)",
+                "index notification_preferences.notification_preferences_pkey CREATE UNIQUE INDEX " +
+                    "notification_preferences_pkey ON META.notification_preferences USING btree (user_id, channel)",
+                "table notification_deliveries",
+                "table notification_preferences"
+            ).associateWith { "ADR-031 D46: notification delivery channels and preferences" } +
+            // the files module (ADR-031 D47, ADR-061): its table, its descriptor function, two field settings, and
+            // FILE and IMAGE appended to the type list. the body hash changes when V1's function does
+            listOf(
+                "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
+                    "$FIELD_TYPES])))",
+                "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
+                    "$FIELD_TYPES, 'FILE'::text, 'IMAGE'::text])))",
+                "column custom_fields.file_max_bytes #23 bigint",
+                "column custom_fields.file_content_types #24 text",
+                "constraint custom_fields.custom_fields_file_max_bytes_valid CHECK (((file_max_bytes IS NULL) OR (file_max_bytes > 0)))",
+                "column stored_files.id #1 uuid NOT NULL",
+                "column stored_files.organization_id #2 uuid NOT NULL",
+                "column stored_files.object_id #3 uuid NOT NULL",
+                "column stored_files.field_name #4 text NOT NULL",
+                "column stored_files.object_key #5 text NOT NULL",
+                "column stored_files.file_name #6 text NOT NULL",
+                "column stored_files.content_type #7 text NOT NULL",
+                "column stored_files.size_bytes #8 bigint NOT NULL",
+                "column stored_files.sha256 #9 text NOT NULL",
+                "column stored_files.created_by #10 uuid",
+                "column stored_files.created_at #11 timestamp with time zone NOT NULL DEFAULT now()",
+                "constraint stored_files.stored_files_created_by_fkey FOREIGN KEY (created_by) REFERENCES META.users(id) ON DELETE SET NULL",
+                "constraint stored_files.stored_files_object_key_unique UNIQUE (object_key)",
+                "constraint stored_files.stored_files_pkey PRIMARY KEY (id)",
+                "constraint stored_files.stored_files_sha256_valid CHECK ((sha256 ~ '^[0-9a-f]{64}\$'::text))",
+                "constraint stored_files.stored_files_size_valid CHECK ((size_bytes >= 0))",
+                "constraint stored_files.stored_files_id_not_null NOT NULL id",
+                "constraint stored_files.stored_files_organization_id_not_null NOT NULL organization_id",
+                "constraint stored_files.stored_files_object_id_not_null NOT NULL object_id",
+                "constraint stored_files.stored_files_field_name_not_null NOT NULL field_name",
+                "constraint stored_files.stored_files_object_key_not_null NOT NULL object_key",
+                "constraint stored_files.stored_files_file_name_not_null NOT NULL file_name",
+                "constraint stored_files.stored_files_content_type_not_null NOT NULL content_type",
+                "constraint stored_files.stored_files_size_bytes_not_null NOT NULL size_bytes",
+                "constraint stored_files.stored_files_sha256_not_null NOT NULL sha256",
+                "constraint stored_files.stored_files_created_at_not_null NOT NULL created_at",
+                "function stored_file_descriptor(file_id uuid, org uuid) returns text body 7e0b910eb55899284f8b561c77b50634",
+                "index stored_files.stored_files_object_key_unique CREATE UNIQUE INDEX stored_files_object_key_unique ON META.stored_files " +
+                    "USING btree (object_key)",
+                "index stored_files.stored_files_org_created_idx CREATE INDEX stored_files_org_created_idx ON META.stored_files " +
+                    "USING btree (organization_id, created_at)",
+                "index stored_files.stored_files_pkey CREATE UNIQUE INDEX stored_files_pkey ON META.stored_files USING btree (id)",
+                "table stored_files"
+            ).associateWith { "ADR-031 D47: FILE and IMAGE field types" }
 
     @Test
     fun `the fixture is the original's whole schema`() {
@@ -399,6 +501,11 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, 'MANAGE_ORGANIZATION'::text]"
 
         // and since core's V15, MANAGE_TENANTS too
+        // the original's field type list, GEOMETRY last
+        const val FIELD_TYPES =
+            "'TEXT'::text, 'LONG_TEXT'::text, 'INTEGER'::text, 'DECIMAL'::text, 'BOOLEAN'::text, 'DATE'::text, 'DATETIME'::text, " +
+                "'ENUM'::text, 'EMAIL'::text, 'URL'::text, 'UUID'::text, 'RELATION'::text, 'GEOMETRY'::text"
+
         const val BUILT_IN_ACTIONS_V15 =
             "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, " +
                 "'MANAGE_ORGANIZATION'::text, 'MANAGE_TENANTS'::text]"

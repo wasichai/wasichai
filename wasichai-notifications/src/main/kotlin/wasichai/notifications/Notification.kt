@@ -72,13 +72,19 @@ object Sources {
 
     fun rule(name: String): String = RULE_PREFIX + name
 
+    // an automation's NOTIFY action (ADR-060)
+    const val AUTOMATION_PREFIX = "automation:"
+
+    fun automation(name: String): String = AUTOMATION_PREFIX + name
+
     // the loop's own run keys (notification_source_runs, its locks): not a source, and nobody publishes under them
     const val PURGE = "purge"
     const val RULES = "rules"
+    const val DELIVERIES = "deliveries"
 
-    fun isOwnedByModule(source: String): Boolean = source == MANUAL || source.startsWith(RULE_PREFIX)
+    fun isOwnedByModule(source: String): Boolean = source == MANUAL || source.startsWith(RULE_PREFIX) || source.startsWith(AUTOMATION_PREFIX)
 
-    fun isLoopKey(source: String): Boolean = source == PURGE || source == RULES
+    fun isLoopKey(source: String): Boolean = source == PURGE || source == RULES || source == DELIVERIES
 
     // anything else is "of a source": not edited or deleted over REST, its ACTIONs not dismissed (the app resolves them)
     fun isManual(source: String): Boolean = source == MANUAL

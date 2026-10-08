@@ -27,7 +27,7 @@ its new last constructor argument (the auto-configuration passes the `ReactiveTr
 `IdempotencyKeys`). New internal pieces: `RelationTargets.Checked` (a batch's lookups, refused by `rejectMissing` for
 any other reader) and `RelationTargets.check`, and a `RecordWriteGuards` overload that takes it; the public
 `beforeWrite(definition, change, reader)` is unchanged. No route, property or migration. Nothing changes for `create` or
-over REST, so no ADR-031 entry ([ADR-060](adr/0060-batch-record-creation.md), refines ADR-038). Measured on the issue's
+over REST, so no ADR-031 entry ([ADR-062](adr/0062-batch-record-creation.md), refines ADR-038). Measured on the issue's
 case by `RecordBatchCreateApiTest`: 2.21 statements per record for `ADMIN` against 12.00 for a `create` loop, 2.25
 against 14.00 for a scoped reader, the `id = ANY` lookups 4 per batch instead of 192. New tests:
 `RecordServiceBatchTest` (definition, permission and field access once for N records; one `existing` per target object
@@ -40,6 +40,72 @@ up; a target it found missing is read again, so one an earlier record's listener
 missing and an unreadable target with `create`'s error and nothing stored or audited, and rolls the batch back with the
 caller's transaction, and runs inside `asPlatform`. Docs: [core.md](modules/core.md#many-records-of-one-object),
 [build-your-app.md](guides/build-your-app.md) "Write several records atomically".
+
+## 2026-10-08 — FILE and IMAGE fields: the files module
+
+Apps that keep evidence (photos, scanned forms, signed PDFs) built their own store, endpoints, permission checks and
+history next to the platform's ([#54](https://github.com/wasichai/wasichai/issues/54)). New optional module
+`wasichai-files`, starter `wasichai-spring-boot-starter-files`, switch `wasichai.files.enabled`
+([ADR-061](adr/0061-file-and-image-fields-with-a-storage-spi.md), ADR-031 D47). The field types `FILE` and `IMAGE`
+(`FileFieldType`, ADR-025) keep a `uuid` naming a `stored_files` row and read, in records and in the audit trail, as
+`{id, name, contentType, size, sha256}` through the SQL function `stored_file_descriptor`; settings `maxBytes` and
+`contentTypes` (`IMAGE` defaults to PNG, JPEG, WebP). Bytes go to a `FileStore` SPI: `LocalFileStore`
+(`wasichai.files.local.path`) or `S3FileStore` (`wasichai.files.store=s3`, `wasichai.files.s3.*`, AWS SDK v2 async
+client, only when the app adds `software.amazon.awssdk:s3`), keys `<organization id>/<file id>`. Routes `POST` and
+`GET /api/objects/{object}/records/{id}/files/{field}` and `POST /api/objects/{object}/files/{field}` (staged upload
+for creates and append-only objects): an upload is written through the new `RecordService.patchViaApi`, so every
+record rule, the audit row and the listeners apply, and a refused one leaves nothing stored; a download reads the
+record through `RecordService.get`; `IMAGE` inline, everything else an attachment, always `nosniff`. Sizes are capped
+while reading (`wasichai.files.max-bytes`, default `10MB`) and types sniffed from magic numbers (`ContentSniffer`).
+`StoredFileGuard` (a `RecordWriteGuard`) lets a write attach only its writer's own recent upload. `StoredFileCleanup`
+(`wasichai.files.cleanup.interval` `1h`, `.delay` `24h`, `ClusterLock` `wasichai.files.cleanup`) deletes files no
+record names: replaced, cleared, of deleted records, fields, objects or tenants, never attached. Migration
+`db/wasichai/files/V1__files.sql` (`stored_files`, `custom_fields.file_max_bytes`/`file_content_types`, the function),
+and the callback `afterMigrate__file_types.sql`, which appends `FILE` and `IMAGE` to core's type check on every start;
+the module migrates after the others (`MODULE_ORDER + 1`). The module joins the BOM, the publication guard, the full
+test app (with its schema-parity deviations), the module route matrix and a `filesOnly` slice. New tests:
+`ContentSnifferTest`, `FileFieldTypeTest`, `LocalFileStoreTest`, `StoredFileGuardTest`, `FilesMigrationSqlTest`,
+`WasichaiFilesAutoConfigurationTest`, and the integration tests `FilesApiTest` (every acceptance item on the local
+store), `S3FilesApiTest` (s3mock container) and `FilesOnlyApiTest`. Docs: [files.md](modules/files.md),
+[rest.md](api/rest.md#files), [metadata-model.md](domain/metadata-model.md),
+[build-your-app.md](guides/build-your-app.md).
+
+## 2026-10-08 — Notifications go out by email, people choose which kinds, and an automation can notify
+
+`wasichai-notifications` (ADR-046) kept everything in the app: no email, no choice of what reaches a person outside
+it, and no automation action to notify ([#57](https://github.com/wasichai/wasichai/issues/57)). The inbox, audiences,
+producers, purge and loop the issue asked for already existed; this adds the rest
+([ADR-060](adr/0060-delivery-channels-and-automation-notify.md), ADR-031 D46). **Delivery channels**: the SPI
+`DeliveryChannel` (`name`, `deliver(DeliveryMessage, DeliveryRecipient)`), the inbox being always on and no channel.
+News (a notification created, reopened or whose kind changed) is fanned out, in the writer's transaction, to the
+enabled people of the tenant its audience reaches then, through new core port methods (`UserDirectory.enabledIds`,
+`RoleDirectory.holderIds`, `OrgUnitDirectory.memberIdsWithin`), as one `PENDING` row per person and channel in the
+module's new table `notification_deliveries` (`V2__deliveries.sql`); `NotificationRepository` tells `Deliveries` at
+those points, so every producer gets it. A loop item, `deliveries` (every `delivery-interval`, 1 minute, once per
+cluster under `ClusterLock`), sends at most `delivery-batch` (100) due rows per organization: `SENT`; `SKIPPED` when
+the notification ended or the person was disabled; on a failure retried after `delivery-backoff` (1 minute) doubled
+each time, `FAILED` with `last_error` after `delivery-max-attempts` (5). The write never waits on a channel. A message
+carries no `RECORD` link. **Email**: `EmailChannel` over Spring Mail (`compileOnly`; the app adds
+`spring-boot-starter-mail`), declared by `WasichaiNotificationsEmailAutoConfiguration` only with
+`wasichai.notifications.email.enabled=true` and a `MailSender`; `email.from` is then required, `email.subject-prefix`
+optional. **Preferences**: `GET/PUT /api/auth/me/notification-preferences` (ADR-034's map; every kind by default;
+`[]` stops a channel), stored in the module's `notification_preferences`. **`NOTIFY`**: a new automation action
+(`to`, `title`, `body`, `kind` `INFO` or `WARNING`, `{{field}}` templates), through automation's new port
+`AutomationNotifier` (fallback `NoAutomationNotifier`: refused when saved), implemented by the module's
+`AutomationNotifierAdapter` (`WasichaiNotificationsAutomationAutoConfiguration`, `compileOnly` on automation, as
+documents does): source `automation:<name>`, keyed `<recordId>.<n>`, linking to the record. `automation:` and the loop
+key `deliveries` are now reserved. Retention was already there (ADR-046's daily purge; deliveries go with their
+notification). With no channel nothing is fanned out or scheduled and every answer is as before. New tests:
+`DeliveriesTest` (PENDING to SENT once, a failing SMTP server retried with backoff then FAILED and never failing the
+write, a rollback takes the rows, fan-out by role, unit subtree and everyone to enabled people of the tenant only,
+news again sent again and an edit not, scheduled and ended notifications, a disabled person, two replicas sending once,
+preferences over REST), `AutomationNotifyTest` (STATE_ENTERED to a record's user and a role, validation, nobody
+left), `DeliveryChannelsWiringTest`, `DeliveriesMigrationSqlTest`, `NoAutomationNotifierTest`, cases in
+`OrgUnitDirectoryTest`, `WasichaiNotificationsAutoConfigurationTest`, `WasichaiAutomationAutoConfigurationTest`,
+`NotificationValidationTest`, `NotificationLoopTest`, `NotificationsOnlyApiTest`, `AutomationOnlyApiTest`,
+`AutomationApiTest` (a real transition), and the new routes and tables in `ModuleRoutes`, `AllModulesWiringTest`,
+`ModuleBoundariesTest` and `SchemaParityTest`. Docs: [notifications.md](modules/notifications.md#email-and-delivery-channels),
+[automation.md](modules/automation.md), [rest.md](api/rest.md) "Automations" and "Preferences".
 
 ## 2026-10-08 — Token revocation, sign-in attempt limits and a password policy
 

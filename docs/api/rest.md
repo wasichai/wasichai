@@ -29,6 +29,7 @@ installed (its starter is on the classpath and `wasichai.<module>.enabled` is no
 | notifications | `/api/{,auth/me/}notifications/**`, `/api/{,objects/{object}/}notification-rules/**` | [notifications.md](../modules/notifications.md) |
 | gis | `/api/gis/layers/**`, `/api/gis/services`, `/api/gis/objects/{object}/features/**` | [gis.md](../modules/gis.md) |
 | agent | `/api/agent/status`, `/api/agent/ask` | [agent.md](../modules/agent.md) |
+| files | `/api/objects/{object}/files/{field}`, `/api/objects/{object}/records/{id}/files/{field}` | [files.md](../modules/files.md) |
 
 A route of a module that is not installed answers `404` to an authenticated caller and `401` without a token, never
 `403`. The frontend relies on that `404` to tell "not installed" from "not allowed" (ADR-031 D1).
@@ -43,6 +44,7 @@ GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
 GET  /api/auth/me/org-units     the caller's own organizational units (see below)
 GET  /api/auth/me/notifications  the caller's notifications, with wasichai-notifications (see below)
+GET  /api/auth/me/notification-preferences  which kinds reach the caller by email, with wasichai-notifications
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
 PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
@@ -1296,6 +1298,42 @@ Returns GeoJSON in **EPSG:4326**, whatever the field's storage CRS. A GeoJSON `F
 geometry, so a request serves one, named by `geometry` or the object's first. Feature ids are
 `<record>:<geometry>`, and the record's own id is repeated in `properties.__id`.
 
+## Files
+
+Module: wasichai-files ([files.md](../modules/files.md), ADR-061). A `FILE` or `IMAGE` field reads, in a record's
+`attributes` and in its audit `before`/`after`, as a descriptor, never the bytes:
+
+```json
+"acta": { "id": "7c0e…", "name": "acta.pdf", "contentType": "application/pdf", "size": 48213, "sha256": "9f2c…" }
+```
+
+```http
+POST /api/objects/{object}/records/{id}/files/{field}    multipart/form-data, part "file"
+GET  /api/objects/{object}/records/{id}/files/{field}
+POST /api/objects/{object}/files/{field}                 multipart/form-data, part "file"
+```
+
+- **Replace** (`POST …/records/{id}/files/{field}`): stores the upload and writes it to the field as a `PATCH` of that
+  one field, so it answers like one: `200` with the record and its `ETag`. Everything a record write checks applies:
+  `UPDATE` (`403`), the record as the caller sees it (owner, read scope: `404`), field write access (`400` on the
+  field), `apiOnly` (`403`), `appendOnly` (`409`), `requiresReason` (`X-Change-Reason`, `400` on `reason`),
+  `If-Match` (`412`), write guards. A refused upload leaves nothing stored.
+- **Download** (`GET`): `READ` on the record and the field, as for reading it (`403`/`404`). `IMAGE` is served
+  `Content-Disposition: inline`, everything else `attachment`; always `X-Content-Type-Options: nosniff`, the stored
+  content type and length. A field the caller cannot read, or that holds no file, is `404`.
+- **Staged upload** (`POST /api/objects/{object}/files/{field}`, `CREATE`): `201` with the descriptor. Its `id`, sent
+  as the field's value in `POST /api/objects/{object}/records`, attaches it: the way to give a new record (or a record
+  of an `appendOnly` object) its file. Unattached, the cleanup removes it.
+- **Validation**: over the field's `maxBytes`, empty, or of a content type its `contentTypes` refuses: `400` on the
+  field. The type is sniffed from the bytes (magic numbers), never trusted from the header.
+- In a record body, a file field takes only `null` (clears), the id it already holds (a `PUT` sends back what it read),
+  or the id of the caller's own upload for that object and field within half of `wasichai.files.cleanup.delay`;
+  anything else is `400` on the field. It cannot be filtered or sorted on.
+
+A field declares its settings next to `type` in `POST /api/metadata/objects/{object}/fields`: `maxBytes` (1 to
+`wasichai.files.max-bytes`, the default) and `contentTypes` (`["application/pdf", "image/*"]`; `IMAGE` defaults to
+`image/png`, `image/jpeg`, `image/webp`). The field's JSON carries `"file": { "maxBytes", "contentTypes" }`.
+
 ## Audit and history
 
 ```http
@@ -1511,9 +1549,25 @@ Triggers are `RECORD_CREATED`, `RECORD_UPDATED`, `RECORD_DELETED`, `TRANSITION_A
 naming a transition) and `STATE_ENTERED` (naming a state). Operators are `EQUALS`, `NOT_EQUALS`,
 `GREATER_THAN`, `LESS_THAN`, `CONTAINS`, `IS_EMPTY`, `IS_NOT_EMPTY` and `CHANGED`; numbers compare as
 numbers. `field` may be a Custom Field or `state`. Actions are `UPDATE_FIELD`, `CREATE_RECORD`
-(`targetObject` plus `values`), `WEBHOOK` (`url`) and `GENERATE_DOCUMENT` (`documentType`). Every
-text value accepts `{{field}}` out of the record, plus `{{id}}`, `{{state}}`, `{{user}}`,
-`{{today}}` and `{{now}}`.
+(`targetObject` plus `values`), `WEBHOOK` (`url`), `GENERATE_DOCUMENT` (`documentType`) and `NOTIFY`
+(`to`, `title`, `body`, `kind`). Every text value accepts `{{field}}` out of the record, plus `{{id}}`,
+`{{state}}`, `{{user}}`, `{{today}}` and `{{now}}`.
+
+`NOTIFY` tells people, through the notifications module ([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)):
+
+```json
+{ "type": "NOTIFY", "to": "{{responsable}}, role:SUPERVISOR", "kind": "WARNING",
+  "title": "Tramite {{codigo}} aprobado", "body": "Pase a {{state}}" }
+```
+
+`to` is a comma-separated list, rendered per run: a user id (or `user:<id>`), an email, `role:<NAME>` or
+`unit:<CODE>`. `kind` is `INFO` (the default) or `WARNING`; an `ACTION` is refused, since nothing would resolve it.
+`to` and `title` are required. Without the notifications module the action is `400 NOTIFY needs the notifications
+module` when saved. A run creates one notification per record and action, of source `automation:<name>`, keyed
+`<recordId>.<n>` and linking to the record: entering the state again reopens or updates that one, never a second.
+An entry that names nobody (an empty field, an unknown person) is dropped; with nobody left the step says
+`notified nobody` and the run still succeeds. Its `{{field}}` placeholders are not field usages: deleting such a
+field is allowed and prints empty.
 
 `GENERATE_DOCUMENT` is how a workflow state issues a document: pair it with a `STATE_ENTERED`
 trigger and the record issues that type on arriving. The type must belong to the automation's
@@ -1629,6 +1683,8 @@ POST /api/auth/me/notifications/{id}/read              →  204
 POST /api/auth/me/notifications/{id}/dismiss           →  204
 POST /api/auth/me/notifications/{id}/snooze            { "until": "2026-10-07T08:00:00Z" }  →  204
 POST /api/auth/me/notifications/read-all               { "kind"?: "INFO" }  →  204
+GET  /api/auth/me/notification-preferences             { "email": ["INFO", "WARNING", "ACTION"] }
+PUT  /api/auth/me/notification-preferences             { "email"?: ["ACTION"] }  →  the stored preferences
 ```
 
 A person sees a notification of their tenant that is not resolved, inside its window (`publishAt` passed, `expiresAt`
@@ -1675,6 +1731,20 @@ The summary counts the caller's active items per kind, and names the newest acti
   }
 }
 ```
+
+### Preferences
+
+`/api/auth/me/notification-preferences` says which kinds reach the caller on each delivery channel of the app
+([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)), the way `/api/auth/me/preferences` does
+(ADR-034): `GET` answers every channel the app has, with its kinds in enum order (every kind until the person chooses);
+`PUT` takes a map, a channel left out keeps what it had, `[]` stops the channel, kind names are case-insensitive, and
+the answer is the whole map. A key that is not a channel of the app (`in-app` included: the inbox is always on) or a
+value that is not a list of `INFO`, `WARNING`, `ACTION` is `400` naming that key. An app without channels answers `{}`
+and refuses every key. A service account gets `403`.
+
+A delivery leaves news only (a notification created, reopened, or whose kind changed), never an edit of the text, so
+an email is not resent for a new count in a title. Who gets it is decided when the news is written; the email goes out
+within `delivery-interval`, or when a scheduled notification is published.
 
 ### The stream
 

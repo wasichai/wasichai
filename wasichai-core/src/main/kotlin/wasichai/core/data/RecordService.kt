@@ -73,7 +73,7 @@ data class RecordResponse(
     fun flattened(): Map<String, Map<String, Any?>> = sections
 }
 
-// [transactions]: resolved on first createAll, as in IdempotencyKeys. createAll opens one only when the caller has none (ADR-060)
+// [transactions]: resolved on first createAll, as in IdempotencyKeys. createAll opens one only when the caller has none (ADR-062)
 @Service
 class RecordService(
     private val metadata: MetadataService,
@@ -275,7 +275,7 @@ class RecordService(
     }
 
     /**
-     * Creates a record for each of [requests], in order, as [create] would (issue 77, ADR-060). The
+     * Creates a record for each of [requests], in order, as [create] would (issue 77, ADR-062). The
      * answers come back in request order, each one exactly what [create] answers for its request.
      *
      * The object, the permission, the caller's field access, the workflow and every distinct RELATION
@@ -453,6 +453,19 @@ class RecordService(
         viaApi: Boolean,
         expectedUpdatedAt: List<Instant>?
     ): RecordResponse = write(objectName, id, request, reason, viaApi, expectedUpdatedAt, partial = true)
+
+    /**
+     * [patch] as the record API's own PATCH does it, for a module route that writes a record field (the
+     * files module's upload, ADR-061): an apiOnly object refuses it (ADR-040), and [expectedUpdatedAt] is
+     * what [RecordETag.parseIfMatch] answered for the request's `If-Match`, null for none (ADR-051).
+     */
+    suspend fun patchViaApi(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String?,
+        expectedUpdatedAt: List<Instant>?
+    ): RecordResponse = patch(objectName, id, request, reason, viaApi = true, expectedUpdatedAt = expectedUpdatedAt)
 
     // PUT and PATCH: one path, so the two can never drift apart on a rule
     private suspend fun write(

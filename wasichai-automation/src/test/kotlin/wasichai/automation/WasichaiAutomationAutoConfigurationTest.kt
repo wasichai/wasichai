@@ -64,6 +64,25 @@ class WasichaiAutomationAutoConfigurationTest {
         }
     }
 
+    // ADR-060: NOTIFY's port, the same way
+    @Test
+    fun `without a notifications module it falls back to the null notifier, else uses the one next to it`() {
+        runner.run { context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(AutomationService::class.java), "notifier")).isInstanceOf(NoAutomationNotifier::class.java)
+            assertThat(ReflectionTestUtils.getField(context.getBean(AutomationRunner::class.java), "notifier")).isInstanceOf(NoAutomationNotifier::class.java)
+        }
+        val notifier =
+            object : AutomationNotifier {
+                override val available = true
+
+                override suspend fun notify(request: NotifyRequest) = "sent"
+            }
+        runner.withBean(AutomationNotifier::class.java, { notifier }).run { context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(AutomationService::class.java), "notifier")).isSameAs(notifier)
+            assertThat(ReflectionTestUtils.getField(context.getBean(AutomationRunner::class.java), "notifier")).isSameAs(notifier)
+        }
+    }
+
     @Test
     fun `settings bind under wasichai automation`() {
         runner.withPropertyValues("wasichai.automation.allow-private-webhooks=true", "wasichai.automation.max-depth=5").run { context ->

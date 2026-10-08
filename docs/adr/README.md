@@ -88,4 +88,8 @@ supersedes it and says so in its status line.
   record](0058-idempotency-key-on-record-creation.md)
 - [ADR-059: Token revocation by a per-user marker, sign-in attempt limits and a password
   policy](0059-token-revocation-login-limits-and-password-policy.md)
-- [ADR-060: RecordService.createAll, a batch create that looks things up once](0060-batch-record-creation.md)
+- [ADR-060: Notifications leave the app through delivery channels, fanned out to people when news is
+  written](0060-delivery-channels-and-automation-notify.md)
+- [ADR-061: FILE and IMAGE fields, stored through a FileStore SPI and written as record
+  writes](0061-file-and-image-fields-with-a-storage-spi.md)
+- [ADR-062: RecordService.createAll, a batch create that looks things up once](0062-batch-record-creation.md)

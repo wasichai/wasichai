@@ -24,7 +24,7 @@ class TenantDirectoryBoundaryTest {
     @Test
     fun `the scan finds the controllers of core and the modules`() {
         val packages = controllers().map { it.packageName.split('.')[1] }.toSet()
-        assertThat(packages).contains("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications")
+        assertThat(packages).contains("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications", "files")
     }
 
     @Test

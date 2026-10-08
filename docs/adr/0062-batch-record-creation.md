@@ -1,4 +1,4 @@
-# ADR-060: RecordService.createAll, a batch create that looks things up once
+# ADR-062: RecordService.createAll, a batch create that looks things up once
 
 **Status**: accepted · 2026-10-08 · refines [ADR-038](0038-record-service-joins-the-callers-transaction.md); keeps
 ADR-031 D29 and D30 ([ADR-031](0031-deliberate-deviations-from-sapgis.md))

@@ -1,5 +1,6 @@
 package wasichai.automation
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import wasichai.core.data.RecordChangeKind
 import java.util.UUID
 
@@ -19,7 +20,7 @@ enum class TriggerType(
 
 enum class ConditionOperator { EQUALS, NOT_EQUALS, GREATER_THAN, LESS_THAN, CONTAINS, IS_EMPTY, IS_NOT_EMPTY, CHANGED }
 
-enum class ActionType { UPDATE_FIELD, CREATE_RECORD, WEBHOOK, GENERATE_DOCUMENT }
+enum class ActionType { UPDATE_FIELD, CREATE_RECORD, WEBHOOK, GENERATE_DOCUMENT, NOTIFY }
 
 // transition/state only mean something for the trigger that names them
 data class AutomationTrigger(
@@ -47,7 +48,12 @@ data class AutomationAction(
     // WEBHOOK
     val url: String? = null,
     // GENERATE_DOCUMENT
-    val documentType: String? = null
+    val documentType: String? = null,
+    // NOTIFY (ADR-060). left out of the json when unset, so the other actions read as before
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val to: String? = null,
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val kind: String? = null,
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val title: String? = null,
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val body: String? = null
 )
 
 data class AutomationDefinition(

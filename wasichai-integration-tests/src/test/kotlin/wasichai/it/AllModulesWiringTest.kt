@@ -19,6 +19,10 @@ import wasichai.core.platform.SystemColumns
 import wasichai.documents.DocumentIssuerAdapter
 import wasichai.documents.autoconfigure.WasichaiDocumentsAutoConfiguration
 import wasichai.documents.autoconfigure.WasichaiDocumentsAutomationAutoConfiguration
+import wasichai.files.FILE
+import wasichai.files.IMAGE
+import wasichai.files.autoconfigure.WasichaiFilesAutoConfiguration
+import wasichai.files.autoconfigure.WasichaiFilesS3AutoConfiguration
 import wasichai.forms.autoconfigure.WasichaiFormsAutoConfiguration
 import wasichai.gis.GEOMETRY
 import wasichai.gis.MapPageComponent
@@ -59,7 +63,9 @@ class AllModulesWiringTest {
                     WasichaiGisPagesAutoConfiguration::class.java,
                     WasichaiAgentAutoConfiguration::class.java,
                     WasichaiAgentWorkflowAutoConfiguration::class.java,
-                    WasichaiNotificationsAutoConfiguration::class.java
+                    WasichaiNotificationsAutoConfiguration::class.java,
+                    WasichaiFilesS3AutoConfiguration::class.java,
+                    WasichaiFilesAutoConfiguration::class.java
                 )
             ).withPropertyValues("wasichai.automation.poll-interval=0s")
 
@@ -68,8 +74,8 @@ class AllModulesWiringTest {
         runner.run { context ->
             assertThat(context).hasNotFailed()
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name })
-                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "notifications")
-            assertThat(context.getBean(FieldTypeRegistry::class.java).types.last()).isEqualTo(GEOMETRY)
+                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "notifications", "files")
+            assertThat(context.getBean(FieldTypeRegistry::class.java).types).contains(GEOMETRY, FILE, IMAGE)
             assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(WorkflowStatesAdapter::class.java)
             val components = context.getBean(PageComponentTypes::class.java)
@@ -153,11 +159,12 @@ class AllModulesWiringTest {
                 "PUT /api/pages/{name}"
             )
 
-        // routes the original never had: notifications (ADR-031 D32). org units are core's, not here
+        // routes the original never had: notifications (ADR-031 D32, D46), files (D47). org units are core's, not here
         val ADDED_MODULE_ROUTES =
             listOf(
                 "DELETE /api/notifications/{id}",
                 "DELETE /api/objects/{object}/notification-rules/{name}",
+                "GET /api/auth/me/notification-preferences",
                 "GET /api/auth/me/notifications",
                 "GET /api/auth/me/notifications/stream",
                 "GET /api/auth/me/notifications/summary",
@@ -173,8 +180,13 @@ class AllModulesWiringTest {
                 "POST /api/notifications",
                 "POST /api/objects/{object}/notification-rules",
                 "POST /api/objects/{object}/notification-rules/{name}/run",
+                "PUT /api/auth/me/notification-preferences",
                 "PUT /api/notifications/{id}",
-                "PUT /api/objects/{object}/notification-rules/{name}"
+                "PUT /api/objects/{object}/notification-rules/{name}",
+                // files (ADR-031 D47)
+                "POST /api/objects/{object}/files/{field}",
+                "GET /api/objects/{object}/records/{id}/files/{field}",
+                "POST /api/objects/{object}/records/{id}/files/{field}"
             )
     }
 }

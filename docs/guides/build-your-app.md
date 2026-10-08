@@ -191,6 +191,7 @@ below).
 | documents | `wasichai-spring-boot-starter-documents` | `@wasichai/documents` | Implements `DocumentIssuer` | [documents.md](../modules/documents.md) |
 | gis | `wasichai-spring-boot-starter-gis` | `@wasichai/gis` | PostGIS database; web needs `maplibre-gl`, a `workerUrl` | [gis.md](../modules/gis.md) |
 | notifications | `wasichai-spring-boot-starter-notifications` | `@wasichai/notifications` (planned) | None | [notifications.md](../modules/notifications.md) |
+| files | `wasichai-spring-boot-starter-files` | (planned) | S3 store needs `software.amazon.awssdk:s3` | [files.md](../modules/files.md) |
 | agent | `wasichai-spring-boot-starter-agent` | `@wasichai/agent` | Needs `ANTHROPIC_API_KEY` (or another provider) | [agent.md](../modules/agent.md) |
 
 `documents` and `automation` connect through `DocumentIssuer`: `automation`'s `GENERATE_DOCUMENT` action calls it,
@@ -218,6 +219,7 @@ dependencies {
     implementation("wasichai:wasichai-spring-boot-starter-gis")
     implementation("wasichai:wasichai-spring-boot-starter-agent")
     implementation("wasichai:wasichai-spring-boot-starter-notifications")
+    implementation("wasichai:wasichai-spring-boot-starter-files")
 }
 ```
 
@@ -267,6 +269,7 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Sign-in hardening | `wasichai.security.jwt.revocation`, `…login.*`, `…password.*` | [authentication.md](../security/authentication.md) |
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
+| File store, size cap, cleanup | `wasichai.files.store`, `…local.path`, `…s3.*`, `…max-bytes`, `…cleanup.*` | [files.md](../modules/files.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
 | Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
 
@@ -395,7 +398,7 @@ Many records of one object, such as a year of cuotas for a predio, go in one cal
 `records.createAll("cuota_arbitrio", requests)`. It looks up the definition, your access and each distinct `RELATION`
 target once per batch instead of once per record, answers in request order, and fails with the error the first failing
 record would get from `create`. It is all or nothing on its own: it joins your transaction, or opens one when you have
-none ([ADR-060](../adr/0060-batch-record-creation.md)).
+none ([ADR-062](../adr/0062-batch-record-creation.md)).
 
 ## Background work
 
@@ -659,6 +662,13 @@ ways, depending on where the truth lives:
 | an event in your code | a turno closed with a cash difference, a mass job finished | `Notifications.publish`, inside the business transaction |
 | a state you compute | turnos of an earlier day still open, a reconciliation that does not balance | a `NotificationSource` |
 | a date field of a record | a licence's `vigencia_hasta` | a date rule, applied with your model |
+| a record reaching a workflow state | a trámite approved, a task assigned | an automation with a `NOTIFY` action (`STATE_ENTERED`) |
+
+To reach people outside the app too, add `org.springframework.boot:spring-boot-starter-mail`, set `spring.mail.host`
+and `wasichai.notifications.email.enabled=true` with `wasichai.notifications.email.from`: every new notification is
+then also emailed to the people it reaches, sent in the background and retried, and each person picks the kinds they
+want by email (`/api/auth/me/notification-preferences`). Another way out (a push service) is a `DeliveryChannel` bean
+([notifications.md](../modules/notifications.md#email-and-delivery-channels)).
 
 The frontend package, `@wasichai/notifications`, is planned
 ([plan](../superpowers/plans/2026-10-06-notifications-wasichai-ui.md)); until it ships, a client reads

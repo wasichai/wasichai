@@ -100,10 +100,17 @@ internal object NotificationValidation {
         when {
             !SOURCE.matches(source) -> listOf(FieldViolation("source", "must match ${SOURCE.pattern}"))
             !allowReserved && Sources.isOwnedByModule(source) ->
-                listOf(FieldViolation("source", "'${Sources.MANUAL}' and '${Sources.RULE_PREFIX}…' belong to the notifications module"))
+                listOf(
+                    FieldViolation(
+                        "source",
+                        "'${Sources.MANUAL}', '${Sources.RULE_PREFIX}…' and '${Sources.AUTOMATION_PREFIX}…' belong to the notifications module"
+                    )
+                )
             // reserved even for the module: a notification under a loop key would share its run row and lock
             Sources.isLoopKey(source) ->
-                listOf(FieldViolation("source", "'${Sources.PURGE}' and '${Sources.RULES}' are the notifications loop's own keys"))
+                listOf(
+                    FieldViolation("source", "'${Sources.PURGE}', '${Sources.RULES}' and '${Sources.DELIVERIES}' are the notifications loop's own keys")
+                )
             else -> emptyList()
         }
 
