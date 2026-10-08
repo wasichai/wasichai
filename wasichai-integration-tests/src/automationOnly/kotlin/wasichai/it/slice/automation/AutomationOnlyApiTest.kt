@@ -161,6 +161,78 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
             .doesNotExist()
     }
 
+    // issue 60: what CREATE_RECORD leaves out takes the field's default, a required one and a locked one included
+    @Test
+    fun `a rule's CREATE_RECORD stores the target's defaults`() {
+        val target = uniqueName("bitacora")
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to target,
+                    "label" to "Bitacora",
+                    "fields" to
+                        listOf(
+                            mapOf("name" to "codigo", "type" to "TEXT"),
+                            mapOf("name" to "estado", "type" to "TEXT", "required" to true, "defaultValue" to "PENDIENTE"),
+                            mapOf("name" to "prioridad", "type" to "INTEGER", "defaultValue" to "2"),
+                            mapOf("name" to "origen", "type" to "TEXT", "editable" to false, "defaultValue" to "regla")
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        // the required estado is left out: its default fills it, so the rule is accepted
+        client
+            .post()
+            .uri("/api/objects/$objectName/automations")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to uniqueName("auto"),
+                    "label" to "Bitacora",
+                    "definition" to
+                        mapOf(
+                            "trigger" to mapOf("type" to "RECORD_CREATED"),
+                            "actions" to listOf(mapOf("type" to "CREATE_RECORD", "targetObject" to target, "values" to mapOf("codigo" to "LOG-{{codigo}}")))
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        client
+            .post()
+            .uri("/api/objects/$objectName/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("attributes" to mapOf("codigo" to "D-1")))
+            .exchange()
+            .expectStatus()
+            .isCreated
+
+        assertThat(runBlocking { runner.drainOnce(50) }).isGreaterThanOrEqualTo(1)
+
+        client
+            .get()
+            .uri("/api/objects/$target/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.totalElements")
+            .isEqualTo(1)
+            .jsonPath("$.content[0].attributes.codigo")
+            .isEqualTo("LOG-D-1")
+            .jsonPath("$.content[0].attributes.estado")
+            .isEqualTo("PENDIENTE")
+            .jsonPath("$.content[0].attributes.prioridad")
+            .isEqualTo(2)
+            .jsonPath("$.content[0].attributes.origen")
+            .isEqualTo("regla")
+    }
+
     private fun revisionWithRule(rule: String = uniqueName("auto")): String {
         val name = uniqueName("revision")
         client

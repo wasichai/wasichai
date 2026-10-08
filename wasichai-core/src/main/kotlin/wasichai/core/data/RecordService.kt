@@ -16,6 +16,7 @@ import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.FieldAccess
+import wasichai.core.metadata.FieldDefaults
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
@@ -167,16 +168,19 @@ class RecordService(
         val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
+        // only what the caller sent is theirs to be refused; a default is the field's own value (issue 60)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
+        val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess), request.attributes, types)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
-        write.guard(RecordChangeKind.CREATED, recordId = null, attributes = request.attributes, reader = caller.user)
+        // a guard judges what the record will hold, defaults included: a RELATION default is checked like a sent value
+        write.guard(RecordChangeKind.CREATED, recordId = null, attributes = attributes, reader = caller.user)
         val created =
             store.insert(
-                definition.writableBy(fieldAccess),
+                target,
                 caller.organizationId,
                 caller.userId,
-                request.attributes,
+                attributes,
                 sections,
                 workflow
             )
@@ -556,14 +560,15 @@ class RecordService(
         }
     }
 
-    // a required field nobody may write would fail on NOT NULL: say so instead of a 500
+    // a required field nobody may write would fail on NOT NULL: say so instead of a 500. one with a
+    // default gets it on create, so it passes
     private fun rejectUnwritableRequired(
         definition: ObjectDefinition,
         fieldAccess: FieldAccess
     ) {
         if (fieldAccess.unrestricted) return
         val blocked =
-            definition.fields.firstOrNull { it.required && it.defaultValue == null && !fieldAccess.canWrite(it.id) }
+            definition.fields.firstOrNull { it.required && !FieldDefaults.appliesTo(it, types) && !fieldAccess.canWrite(it.id) }
                 ?: return
         throw ForbiddenException(
             "Field '${blocked.name}' is required but your roles may not write it, so you cannot create ${definition.obj.name}"

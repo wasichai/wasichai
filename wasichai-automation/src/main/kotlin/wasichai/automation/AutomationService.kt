@@ -7,6 +7,7 @@ import wasichai.core.common.ConflictException
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.CurrentUser
+import wasichai.core.metadata.FieldDefaults
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
@@ -278,9 +279,9 @@ class AutomationService(
         request.values.keys.firstOrNull { key -> target.fields.none { it.name == key } }?.let {
             throw ValidationException("Unknown field '$it'", "actions", "no field '$it' on '${target.obj.name}'")
         }
-        // a required field nobody fills fails at insert time, long after the admin left
+        // a required field nobody fills fails at insert time, long after the admin left. a default fills it (issue 60)
         target.fields
-            .firstOrNull { it.required && it.defaultValue == null && it.name !in request.values }
+            .firstOrNull { it.required && FieldDefaults.of(it) == null && it.name !in request.values }
             ?.let {
                 throw ValidationException(
                     "Field '${it.name}' is required on '${target.obj.name}'",

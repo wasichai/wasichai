@@ -57,7 +57,9 @@ data class UpdateFieldRequest(
     val visible: Boolean? = null,
     val editable: Boolean? = null,
     val position: Int? = null,
-    val indexed: Boolean? = null
+    val indexed: Boolean? = null,
+    // checked as the type parses it; blank clears it (issue 60)
+    val defaultValue: String? = null
 )
 
 data class UpdateObjectRequest(

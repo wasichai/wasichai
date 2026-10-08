@@ -12,6 +12,8 @@ import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
+import wasichai.core.metadata.FieldDefaults
+import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ChangeOrigin
 
@@ -28,7 +30,8 @@ class AutomationRunner(
     private val dispatcher: AutomationDispatcher,
     private val webhooks: WebhookSender,
     private val documents: DocumentIssuer,
-    private val guards: RecordWriteGuards
+    private val guards: RecordWriteGuards,
+    private val types: FieldTypeRegistry
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -159,7 +162,9 @@ class AutomationRunner(
                 action.targetObject ?: throw ValidationException("Action has no target object", "actions", "targetObject is required")
             )
         val change = run.toChange()
-        val attributes = action.values.mapValues { (_, template) -> AutomationRules.render(template, change) }
+        val rendered = action.values.mapValues { (_, template) -> AutomationRules.render(template, change) }
+        // what the rule leaves out takes the field's default, as any create does (issue 60)
+        val (writable, attributes) = FieldDefaults.applied(target, rendered, types)
         val workflow = workflows.stateOf(run.organizationId, target.obj.id)
         guards.beforeWrite(
             target,
@@ -175,7 +180,7 @@ class AutomationRunner(
             )
         )
         val created =
-            store.insert(target, run.organizationId, run.userId, attributes, emptyMap(), workflow)
+            store.insert(writable, run.organizationId, run.userId, attributes, emptyMap(), workflow)
         audit.record(
             organizationId = run.organizationId,
             userId = null,
