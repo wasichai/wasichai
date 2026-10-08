@@ -90,3 +90,5 @@ supersedes it and says so in its status line.
   policy](0059-token-revocation-login-limits-and-password-policy.md)
 - [ADR-060: Notifications leave the app through delivery channels, fanned out to people when news is
   written](0060-delivery-channels-and-automation-notify.md)
+- [ADR-061: FILE and IMAGE fields, stored through a FileStore SPI and written as record
+  writes](0061-file-and-image-fields-with-a-storage-spi.md)

@@ -402,6 +402,26 @@ These are the only intended differences. Anything else that behaves differently 
   `DeliveriesTest`, `AutomationNotifyTest`, `DeliveryChannelsWiringTest`, `NotificationsOnlyApiTest`,
   `AutomationOnlyApiTest` and `AutomationApiTest`.
 
+**Because evidence is a file**
+
+- **D47. `FILE` and `IMAGE` fields, with upload and download routes.** The original had no file type and no
+  multipart route. With wasichai-files installed, a `FILE` or `IMAGE` field reads, in the record JSON and the audit
+  `before`/`after`, as `{id, name, contentType, size, sha256}`; its JSON carries `file: {maxBytes, contentTypes}`.
+  `POST /api/objects/{object}/records/{id}/files/{field}` (multipart part `file`) replaces the file as a `PATCH` of
+  the field: `200` with the record and its `ETag`, and every record write answer (`403` without `UPDATE` or on an
+  `apiOnly` object, `404` for a record out of reach, `400` on a field the caller cannot write, `409` on an
+  `appendOnly` object, `400` on `reason` without `X-Change-Reason` where it is required, `412` on a stale
+  `If-Match`). `GET` on the same path streams the bytes for a caller who may read the record and the field (`403`,
+  `404` otherwise), `IMAGE` inline and anything else as an attachment, always with `X-Content-Type-Options: nosniff`.
+  `POST /api/objects/{object}/files/{field}` stages an upload (`201`, the descriptor) whose `id` a create may send as
+  the field's value. Over `maxBytes`, empty or of a type the field refuses (sniffed from the bytes): `400` on the
+  field, nothing stored. A record body may set a file field only to `null`, the file it holds, or the caller's own
+  recent upload for it; anything else is a `400` on the field. Without the module the routes are `404` (D1) and the
+  types unknown ([ADR-061](0061-file-and-image-fields-with-a-storage-spi.md)). Its table, columns, function and the
+  longer type list are known schema-parity deviations. Tested by `FilesApiTest`, `S3FilesApiTest`,
+  `FilesOnlyApiTest`, `FileFieldTypeTest`, `StoredFileGuardTest`, `ContentSnifferTest`, `LocalFileStoreTest` and
+  `WasichaiFilesAutoConfigurationTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

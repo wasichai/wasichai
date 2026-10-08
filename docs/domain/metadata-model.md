@@ -29,7 +29,8 @@ editing one that already exists answers `409` (ADR-031 D2).
 
 Types today: `TEXT`, `LONG_TEXT`, `INTEGER`, `DECIMAL`, `BOOLEAN`, `DATE`, `DATETIME`, `ENUM`,
 `EMAIL`, `URL`, `UUID`, `RELATION`, registered by core (`ScalarFieldTypes`), plus `GEOMETRY` when
-wasichai-gis is installed. Planned: `CURRENCY`, `FILE`, `IMAGE`, `PHONE`, `FORMULA`, `ROLLUP`, `JSON`.
+wasichai-gis is installed, and `FILE` and `IMAGE` when wasichai-files is ([files module](../modules/files.md)).
+Planned: `CURRENCY`, `PHONE`, `FORMULA`, `ROLLUP`, `JSON`.
 Adding one means a `FieldTypeHandler` bean (ADR-025), which owns the column type, validation and SQL.
 A module ships it, and core does not change.
 

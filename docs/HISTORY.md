@@ -2,6 +2,35 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — FILE and IMAGE fields: the files module
+
+Apps that keep evidence (photos, scanned forms, signed PDFs) built their own store, endpoints, permission checks and
+history next to the platform's ([#54](https://github.com/wasichai/wasichai/issues/54)). New optional module
+`wasichai-files`, starter `wasichai-spring-boot-starter-files`, switch `wasichai.files.enabled`
+([ADR-061](adr/0061-file-and-image-fields-with-a-storage-spi.md), ADR-031 D47). The field types `FILE` and `IMAGE`
+(`FileFieldType`, ADR-025) keep a `uuid` naming a `stored_files` row and read, in records and in the audit trail, as
+`{id, name, contentType, size, sha256}` through the SQL function `stored_file_descriptor`; settings `maxBytes` and
+`contentTypes` (`IMAGE` defaults to PNG, JPEG, WebP). Bytes go to a `FileStore` SPI: `LocalFileStore`
+(`wasichai.files.local.path`) or `S3FileStore` (`wasichai.files.store=s3`, `wasichai.files.s3.*`, AWS SDK v2 async
+client, only when the app adds `software.amazon.awssdk:s3`), keys `<organization id>/<file id>`. Routes `POST` and
+`GET /api/objects/{object}/records/{id}/files/{field}` and `POST /api/objects/{object}/files/{field}` (staged upload
+for creates and append-only objects): an upload is written through the new `RecordService.patchViaApi`, so every
+record rule, the audit row and the listeners apply, and a refused one leaves nothing stored; a download reads the
+record through `RecordService.get`; `IMAGE` inline, everything else an attachment, always `nosniff`. Sizes are capped
+while reading (`wasichai.files.max-bytes`, default `10MB`) and types sniffed from magic numbers (`ContentSniffer`).
+`StoredFileGuard` (a `RecordWriteGuard`) lets a write attach only its writer's own recent upload. `StoredFileCleanup`
+(`wasichai.files.cleanup.interval` `1h`, `.delay` `24h`, `ClusterLock` `wasichai.files.cleanup`) deletes files no
+record names: replaced, cleared, of deleted records, fields, objects or tenants, never attached. Migration
+`db/wasichai/files/V1__files.sql` (`stored_files`, `custom_fields.file_max_bytes`/`file_content_types`, the function),
+and the callback `afterMigrate__file_types.sql`, which appends `FILE` and `IMAGE` to core's type check on every start;
+the module migrates after the others (`MODULE_ORDER + 1`). The module joins the BOM, the publication guard, the full
+test app (with its schema-parity deviations), the module route matrix and a `filesOnly` slice. New tests:
+`ContentSnifferTest`, `FileFieldTypeTest`, `LocalFileStoreTest`, `StoredFileGuardTest`, `FilesMigrationSqlTest`,
+`WasichaiFilesAutoConfigurationTest`, and the integration tests `FilesApiTest` (every acceptance item on the local
+store), `S3FilesApiTest` (MinIO container) and `FilesOnlyApiTest`. Docs: [files.md](modules/files.md),
+[rest.md](api/rest.md#files), [metadata-model.md](domain/metadata-model.md),
+[build-your-app.md](guides/build-your-app.md).
+
 ## 2026-10-08 — Notifications go out by email, people choose which kinds, and an automation can notify
 
 `wasichai-notifications` (ADR-046) kept everything in the app: no email, no choice of what reaches a person outside

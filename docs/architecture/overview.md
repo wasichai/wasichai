@@ -23,7 +23,7 @@ One deployable per app: still a modular monolith ([ADR-001](../adr/0001-modular-
 The backend graph is acyclic:
 
 ```
-core  <-  views, forms, workflow, automation, documents, gis, agent, notifications
+core  <-  views, forms, workflow, automation, documents, gis, agent, notifications, files
 core  <-  forms  <-  pages
 automation  ->  documents, only through the optional DocumentIssuer port (documents implements it)
 ```
@@ -39,6 +39,7 @@ automation  ->  documents, only through the optional DocumentIssuer port (docume
 | documents | `wasichai-documents` | `wasichai-spring-boot-starter-documents` | `@wasichai/documents` | [documents](../modules/documents.md) |
 | gis | `wasichai-gis` | `wasichai-spring-boot-starter-gis` | `@wasichai/gis` | [gis](../modules/gis.md) |
 | notifications | `wasichai-notifications` | `wasichai-spring-boot-starter-notifications` | planned | [notifications](../modules/notifications.md) |
+| files | `wasichai-files` | `wasichai-spring-boot-starter-files` | planned | [files](../modules/files.md) |
 | agent | `wasichai-agent` | `wasichai-spring-boot-starter-agent` | `@wasichai/agent` | [agent](../modules/agent.md) |
 | testing | `wasichai-test` | — | `@wasichai/testing` | [testing](../modules/testing.md) |
 
@@ -89,6 +90,7 @@ uses all of them: units and emails to address people, the tenants for its loop, 
 | `PageComponentProvider` | `wasichai-pages` | Strategy | wasichai-pages itself (the HISTORY component); other modules that add a page component |
 | `DocumentIssuer` | `wasichai-automation` | Port | `NoDocumentIssuer` (automation default); `DocumentIssuerAdapter` in wasichai-documents |
 | `NotificationSource` | `wasichai-notifications` | Strategy | apps: computed states the module's loop turns into notifications (ADR-046) |
+| `FileStore` | `wasichai-files` | Strategy | `LocalFileStore` (default), `S3FileStore`; an app's own store (ADR-061) |
 
 Listener and contributor lists run in `@Order`, synchronously, inside the caller's own call: `RecordService` opens
 no transaction of its own, so a listener that needs atomicity opens one itself. An empty list means no module
@@ -167,3 +169,4 @@ Every decision is an ADR: [../adr/README.md](../adr/README.md). This page leans 
 - [ADR-045](../adr/0045-organizational-units.md) — organizational units in core
 - [ADR-046](../adr/0046-notifications-module.md) — a notifications module: audience matched on read, keyed sources
 - [ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md) — server push over SSE, LISTEN/NOTIFY between replicas
+- [ADR-061](../adr/0061-file-and-image-fields-with-a-storage-spi.md) — FILE and IMAGE fields, a FileStore SPI, uploads as record writes

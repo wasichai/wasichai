@@ -29,6 +29,7 @@ installed (its starter is on the classpath and `wasichai.<module>.enabled` is no
 | notifications | `/api/{,auth/me/}notifications/**`, `/api/{,objects/{object}/}notification-rules/**` | [notifications.md](../modules/notifications.md) |
 | gis | `/api/gis/layers/**`, `/api/gis/services`, `/api/gis/objects/{object}/features/**` | [gis.md](../modules/gis.md) |
 | agent | `/api/agent/status`, `/api/agent/ask` | [agent.md](../modules/agent.md) |
+| files | `/api/objects/{object}/files/{field}`, `/api/objects/{object}/records/{id}/files/{field}` | [files.md](../modules/files.md) |
 
 A route of a module that is not installed answers `404` to an authenticated caller and `401` without a token, never
 `403`. The frontend relies on that `404` to tell "not installed" from "not allowed" (ADR-031 D1).
@@ -1296,6 +1297,42 @@ GET /api/gis/objects/{object}/features/{id}?geometry=lote
 Returns GeoJSON in **EPSG:4326**, whatever the field's storage CRS. A GeoJSON `Feature` holds one
 geometry, so a request serves one, named by `geometry` or the object's first. Feature ids are
 `<record>:<geometry>`, and the record's own id is repeated in `properties.__id`.
+
+## Files
+
+Module: wasichai-files ([files.md](../modules/files.md), ADR-061). A `FILE` or `IMAGE` field reads, in a record's
+`attributes` and in its audit `before`/`after`, as a descriptor, never the bytes:
+
+```json
+"acta": { "id": "7c0e…", "name": "acta.pdf", "contentType": "application/pdf", "size": 48213, "sha256": "9f2c…" }
+```
+
+```http
+POST /api/objects/{object}/records/{id}/files/{field}    multipart/form-data, part "file"
+GET  /api/objects/{object}/records/{id}/files/{field}
+POST /api/objects/{object}/files/{field}                 multipart/form-data, part "file"
+```
+
+- **Replace** (`POST …/records/{id}/files/{field}`): stores the upload and writes it to the field as a `PATCH` of that
+  one field, so it answers like one: `200` with the record and its `ETag`. Everything a record write checks applies:
+  `UPDATE` (`403`), the record as the caller sees it (owner, read scope: `404`), field write access (`400` on the
+  field), `apiOnly` (`403`), `appendOnly` (`409`), `requiresReason` (`X-Change-Reason`, `400` on `reason`),
+  `If-Match` (`412`), write guards. A refused upload leaves nothing stored.
+- **Download** (`GET`): `READ` on the record and the field, as for reading it (`403`/`404`). `IMAGE` is served
+  `Content-Disposition: inline`, everything else `attachment`; always `X-Content-Type-Options: nosniff`, the stored
+  content type and length. A field the caller cannot read, or that holds no file, is `404`.
+- **Staged upload** (`POST /api/objects/{object}/files/{field}`, `CREATE`): `201` with the descriptor. Its `id`, sent
+  as the field's value in `POST /api/objects/{object}/records`, attaches it: the way to give a new record (or a record
+  of an `appendOnly` object) its file. Unattached, the cleanup removes it.
+- **Validation**: over the field's `maxBytes`, empty, or of a content type its `contentTypes` refuses: `400` on the
+  field. The type is sniffed from the bytes (magic numbers), never trusted from the header.
+- In a record body, a file field takes only `null` (clears), the id it already holds (a `PUT` sends back what it read),
+  or the id of the caller's own upload for that object and field within half of `wasichai.files.cleanup.delay`;
+  anything else is `400` on the field. It cannot be filtered or sorted on.
+
+A field declares its settings next to `type` in `POST /api/metadata/objects/{object}/fields`: `maxBytes` (1 to
+`wasichai.files.max-bytes`, the default) and `contentTypes` (`["application/pdf", "image/*"]`; `IMAGE` defaults to
+`image/png`, `image/jpeg`, `image/webp`). The field's JSON carries `"file": { "maxBytes", "contentTypes" }`.
 
 ## Audit and history
 
