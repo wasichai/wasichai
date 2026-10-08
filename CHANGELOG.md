@@ -3,6 +3,15 @@
 ## [0.5.0](https://github.com/wasichai/wasichai/compare/v0.4.0...v0.5.0) (2026-10-08)
 
 
+### Notes
+
+* **migrations, run on upgrade:** core `V10__audit_origin` (`audit_log.correlation_id`, `source`), `V12__audit_user_index`, `V13__audit_log_immutable` (triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` on `audit_log` for every role, ADR-054), `V15__manage_tenants` and the repeatable `R__audit_purge_role`; automation `V2__run_correlation_id`
+* **core:** new properties `wasichai.audit.purge-role` (the only login that may purge the audit log, none by default) and `wasichai.organizations.separate-provisioning` (default `false`: creating and deleting tenants stays with whoever passes `MANAGE_ORGANIZATION`, through the new built-in action `MANAGE_TENANTS`, ADR-055); `spring.reactor.context-propagation` defaults to `auto`
+* **core:** behaviour an upgrade sees: a create fills each attribute it leaves out with the field's `defaultValue` (ADR-031 D40); records answer an `ETag` and take `If-Match` and `PATCH` (ADR-051), and `updated_at` moves with `clock_timestamp()`; every response carries `X-Correlation-Id` (ADR-050); `GET /api/auth/me/permissions` adds `capabilities`; a self-relationship is listed twice, forward then inverse (D42)
+* **core:** API for apps and modules: the `RecordReadScope` SPI (ADR-048) and `TenantDirectory` (ADR-057); `RecordService`, `RelatedRecordService`, `AuditQueryService`, `WorkflowService` and the admin services take new constructor arguments; `RecordStore.findById` takes `criteria` and the port gains `updateIfUnchanged`, `deleteIfUnchanged` and `transitionStateIfUnchanged` with refusing defaults; `OrganizationRepository.ids()` is gone and `CustomObjectRepository.findAllOrganizations()` is deprecated
+* **build:** security floors over the Spring Boot BOM (Jackson 2 and 3, SCRAM, logback, the Kotlin plugin), applied as `api` so apps on the modules get them
+
+
 ### Features
 
 * **automation:** a run keeps the request's correlation id and labels its writes ([0345303](https://github.com/wasichai/wasichai/commit/0345303718d57cf77cb7ae5566156edc96a03bfb)), closes [#50](https://github.com/wasichai/wasichai/issues/50)
