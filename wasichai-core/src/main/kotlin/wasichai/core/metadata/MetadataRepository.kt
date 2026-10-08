@@ -269,7 +269,7 @@ class CustomFieldRepository(
                 UPDATE $table
                 SET label = :label, required = :required, is_unique = :unique, description = :description,
                     position = :position, enum_options = CAST(:enumOptions AS jsonb), visible = :visible,
-                    editable = :editable, indexed = :indexed, updated_at = now()
+                    editable = :editable, indexed = :indexed, default_value = :defaultValue, updated_at = now()
                 WHERE id = :id
                 RETURNING $selectColumns
                 """.trimIndent()
@@ -283,6 +283,7 @@ class CustomFieldRepository(
             .bind("visible", field.visible)
             .bind("editable", field.editable)
             .bind("indexed", field.indexed)
+            .bindNullable("defaultValue", field.defaultValue)
             .map(::mapField)
             .one()
             .awaitSingle()

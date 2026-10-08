@@ -26,6 +26,7 @@ import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.CurrentUser
+import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
@@ -84,9 +85,22 @@ class WasichaiAutomationAutoConfiguration {
         dispatcher: AutomationDispatcher,
         webhooks: WebhookSender,
         documents: ObjectProvider<DocumentIssuer>,
-        guards: RecordWriteGuards
+        guards: RecordWriteGuards,
+        types: FieldTypeRegistry
     ): AutomationRunner =
-        AutomationRunner(automations, runs, metadata, store, workflows, audit, dispatcher, webhooks, documents.getIfAvailable { NoDocumentIssuer() }, guards)
+        AutomationRunner(
+            automations,
+            runs,
+            metadata,
+            store,
+            workflows,
+            audit,
+            dispatcher,
+            webhooks,
+            documents.getIfAvailable { NoDocumentIssuer() },
+            guards,
+            types
+        )
 
     @Bean
     @ConditionalOnMissingBean

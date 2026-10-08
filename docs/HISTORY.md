@@ -2,6 +2,29 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — A field's default is applied on create
+
+A field took `defaultValue`, stored it and answered it, and nothing used it: a create that left the field out stored
+`NULL` or failed on a `required` one, and a `required` field with a default that the caller may not write passed
+`RecordService`'s create check and the automation rule check, then failed on `NOT NULL`; every client had to re-apply
+each default itself ([#60](https://github.com/wasichai/wasichai/issues/60)). Now every create (`POST`,
+`RecordService.create`, `asPlatform`, an automation's `CREATE_RECORD`) fills each attribute key it leaves out with
+the field's default; a key sent, `null` included, wins, so `null` still stores `NULL` or is a `400` on a `required`
+field (ADR-031 D40). The new `FieldDefaults` parses the stored text through the field type's own handler and hands it
+on as the API carries a value (`"5"` becomes `5`), so guards, listeners and the audit row's `after` see it as stored. It
+is the field's value, not the caller's input: it is written where the caller's field permissions or `editable: false`
+forbid writing the field (only keys the caller sent are refused), which makes the two `defaultValue == null` checks
+true. A `RELATION` default is checked like a sent value, in the caller's read scope (D30). A default the type cannot
+parse is a `400` naming `defaultValue` when the field is created; `PUT …/fields/{field}` now takes `defaultValue`
+(checked the same way, blank clears it), and new `enumOptions` that leave the default out are a `400` naming
+`enumOptions`. A blank default is none everywhere. A stored default that no longer parses is a `400` on the field at
+record create, fixable with that `PUT`. Updates (`PUT`, `PATCH`) never apply a default, existing records are not
+touched (no migration), and the column gets no SQL `DEFAULT`, so a direct insert still gets `NULL`. `AutomationRunner`
+takes the `FieldTypeRegistry`. wasichai-ui may stop prefilling defaults (it does not read them today) and needs no
+change. New tests: `FieldDefaultsTest`, `RecordServiceDefaultsTest`, the integration suite `FieldDefaultValueApiTest`
+(coreOnly) and `a rule's CREATE_RECORD stores the target's defaults` in `AutomationOnlyApiTest`. Docs:
+[rest.md](api/rest.md) "Fields" and "Defaults" under Records, [metadata-model.md](domain/metadata-model.md).
+
 ## 2026-10-08 — The audit log is append-only in the database
 
 `audit_log` was append-only by convention only: the credential wasichai connects with, by default the one Flyway

@@ -379,6 +379,8 @@ Core is always installed.
   `after=` and `X-Next-Cursor`, exposed by the CORS default; the index `audit_log_user_time_idx` (ADR-052).
 - D39: `audit_log` refuses `UPDATE`, `DELETE` and `TRUNCATE` through triggers, but for the document `SET NULL` and a
   purge by the configured role; two functions and two triggers on the table (ADR-054).
+- D40: a field's `defaultValue` fills what a create leaves out, even a field the caller may not write; it is checked
+  when set (`400` on `defaultValue`) and `PUT …/fields/{field}` takes it; updates never apply it.
 
 ## Known limitations
 

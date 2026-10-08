@@ -285,6 +285,21 @@ These are the only intended differences. Anything else that behaves differently 
   `CoreMigrationSqlTest`, `WasichaiMigrationsTest`, `AuditLogOwnershipCheckTest`, `AuditLogAppendOnlyApiTest`,
   `AdminAuditApiTest` and `DocumentsOnlyApiTest`.
 
+**Because a metadata author's default must mean something**
+
+- **D40. A field's `defaultValue` is applied on create, and checked when it is set.** The original stored and answered
+  `defaultValue` and never used it: a create that left the field out stored `NULL`, or failed on a `required` one,
+  and a `required` field with a default that the caller may not write passed the create check and then failed on `NOT
+  NULL`. Now every create (`POST`, `RecordService.create`, `asPlatform`, an automation's `CREATE_RECORD`) fills each
+  attribute key it leaves out with the field's default, parsed by the field type's handler; a key sent, `null`
+  included, wins. The default is written even where the caller's field permissions or `editable: false` forbid writing
+  the field; a `RELATION` default is checked like a sent value, in the caller's read scope. A default the type cannot
+  parse is a `400` naming `defaultValue` on field create, and a stored one that no longer parses is a `400` on the
+  field at record create. `PUT …/fields/{field}` takes `defaultValue` (blank clears it), and new `enumOptions` that
+  leave the default out are a `400` naming `enumOptions`; a blank default is none everywhere. Updates never apply a
+  default, existing records are not touched, and the column gets no SQL `DEFAULT`. Tested by `FieldDefaultsTest`,
+  `RecordServiceDefaultsTest`, `FieldDefaultValueApiTest` and `AutomationOnlyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

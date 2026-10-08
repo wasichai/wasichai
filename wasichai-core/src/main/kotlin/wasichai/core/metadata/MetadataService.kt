@@ -210,6 +210,22 @@ class MetadataService(
                 }
             } ?: existing.enumOptions
 
+        // checked against the field as it will be, new options included; blank clears it. an update that
+        // touches neither never trips over a default stored before defaults were checked (issue 60)
+        val defaultValue =
+            when {
+                request.defaultValue != null -> FieldDefaults.checked(existing.copy(enumOptions = enumOptions, defaultValue = request.defaultValue), types)
+                request.enumOptions != null ->
+                    existing.defaultValue.also {
+                        FieldDefaults.checked(
+                            existing.copy(enumOptions = enumOptions),
+                            types,
+                            "enumOptions"
+                        )
+                    }
+                else -> existing.defaultValue
+            }
+
         val updated =
             existing.copy(
                 label = request.label?.trim()?.ifBlank { existing.label } ?: existing.label,
@@ -220,7 +236,8 @@ class MetadataService(
                 enumOptions = enumOptions,
                 visible = request.visible ?: existing.visible,
                 editable = request.editable ?: existing.editable,
-                indexed = request.indexed ?: existing.indexed
+                indexed = request.indexed ?: existing.indexed,
+                defaultValue = defaultValue
             )
 
         // metadata and table move together, in one transaction
@@ -458,7 +475,8 @@ class MetadataService(
                 indexed = request.indexed
             )
         if (field.indexed) FieldSets.requireIndexable(field, "indexed", types)
-        return field
+        // a default every later create would trip over is refused now, once (issue 60)
+        return field.copy(defaultValue = FieldDefaults.checked(field, types))
     }
 
     // "<name>__<first 8 of org uuid>": readable, unique per tenant, fits an identifier
