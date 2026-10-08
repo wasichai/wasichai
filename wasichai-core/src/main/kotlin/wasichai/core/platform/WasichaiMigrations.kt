@@ -15,11 +15,21 @@ import org.springframework.beans.factory.InitializingBean
 // called by the container, so migrations still run either way. a module bean that touches the
 // database at init must declare @DependsOn("wasichaiMigrations") so it does not race the migration
 // that creates its tables — keep that bean name stable.
+//
+// audit: the purge role core's R__audit_purge_role.sql writes (ADR-054).
 class WasichaiMigrations(
     private val database: WasichaiDatabaseProperties,
     private val schemas: WasichaiSchemas,
-    migrations: List<ModuleMigration>
+    migrations: List<ModuleMigration>,
+    private val audit: WasichaiAuditProperties
 ) : InitializingBean {
+    // the form an app compiled against before the purge role: no purge role
+    constructor(
+        database: WasichaiDatabaseProperties,
+        schemas: WasichaiSchemas,
+        migrations: List<ModuleMigration>
+    ) : this(database, schemas, migrations, WasichaiAuditProperties())
+
     val plan: List<ModuleMigration> = migrations.sortedWith(compareBy({ it.order }, { it.name }))
 
     init {
@@ -44,6 +54,7 @@ class WasichaiMigrations(
             // every module after the first finds the schema in use; baseline 0 still runs its V1
             .baselineOnMigrate(true)
             .baselineVersion("0")
-            .placeholders(mapOf("metadataSchema" to schemas.metadata, "dataSchema" to schemas.data))
-            .load()
+            .placeholders(
+                mapOf("metadataSchema" to schemas.metadata, "dataSchema" to schemas.data, "auditPurgeRole" to audit.purgeRolePlaceholder)
+            ).load()
 }
