@@ -37,7 +37,8 @@ An app overrides any core bean by declaring its own bean of the same type — se
 ## What it adds
 
 - Identity: login and the signed-in user, under `/api/auth` (`POST /api/auth/login`, `GET /api/auth/me`,
-  `GET /api/auth/me/permissions` for caller permissions), and `POST /api/auth/token` for service accounts.
+  `GET /api/auth/me/permissions` for caller permissions per object and tenant-wide `capabilities`, ADR-053), and
+  `POST /api/auth/token` for service accounts.
 - Organizations: the tenant itself, under `/api/organizations`.
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.

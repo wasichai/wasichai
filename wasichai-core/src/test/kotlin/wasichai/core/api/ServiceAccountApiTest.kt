@@ -347,6 +347,28 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
             .isForbidden
     }
 
+    // issue 53 (ADR-053): what the account is told matches what it is refused above
+    @Test
+    fun `a service account's capabilities never include MANAGE_ORGANIZATION`() {
+        val manager = newRole()
+        grant(manager, listOf(null to "MANAGE_METADATA", null to "MANAGE_ORGANIZATION"))
+        val created = createAccount(uniqueName("rentas"), listOf(manager))
+        val sa = tokenFor(created.clientId, created.secret)
+
+        client
+            .get()
+            .uri("/api/auth/me/permissions")
+            .header(HttpHeaders.AUTHORIZATION, sa)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.admin")
+            .isEqualTo(false)
+            .jsonPath("$.capabilities")
+            .isEqualTo(listOf("MANAGE_METADATA"))
+    }
+
     @Test
     fun `an organization manages only its own accounts`() {
         val created = createAccount(uniqueName("rentas"), listOf(role))

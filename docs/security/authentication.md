@@ -89,7 +89,7 @@ its own, such as `ANULAR_AJENO` on `recibo`: they are granted on that object onl
 Field- and record-level permissions are enforced: `own_records_only` limits a role to the records it created (a
 caller with several roles is restricted only if every one of them sets it), and field access hides unreadable fields
 from responses and refuses writes to unwritable ones. `GET /api/auth/me/permissions` tells the caller what they may do
-(ADR-020).
+(ADR-020), the tenant-wide `MANAGE_METADATA` and `MANAGE_ORGANIZATION` included, as `capabilities` (ADR-053).
 
 A write may only point at what the caller can read. A `RELATION` value sent by a person or a service account must name
 a record of the target object the caller holds `READ` on, created by them when they are own-records-only; anything

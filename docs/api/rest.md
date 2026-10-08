@@ -47,7 +47,7 @@ PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  â†
 ```
 
 ```json
-{ "admin": false, "objects": { "predio": ["READ", "CREATE", "UPDATE"] } }
+{ "admin": false, "capabilities": ["MANAGE_METADATA"], "objects": { "predio": ["READ", "CREATE", "UPDATE"] } }
 ```
 
 Only objects the caller may `READ` are listed, as in `GET /api/objects`, each with the record actions
@@ -55,6 +55,16 @@ the caller holds on it: `READ`, `CREATE`, `UPDATE`, `DELETE`, followed by the [d
 they hold, by name (`["READ", "CREATE", "ANULAR_AJENO"]`). The administrator gets all four on every
 object, plus every action the object declares. Field access is not repeated here: the definition endpoints already leave out the fields the
 caller cannot read and mark the ones they cannot write `editable: false`.
+
+`capabilities` lists the built-in actions that are not tied to an object which the caller holds tenant-wide, that is
+granted with no object (`objectName: null`): `MANAGE_METADATA` (objects, fields, relationships, declared actions) and
+`MANAGE_ORGANIZATION` (users, roles, service accounts, units, the organization), always in that order. The key is
+always present, `[]` when the caller holds neither. The administrator holds both; a
+[service account](#service-accounts) never holds `MANAGE_ORGANIZATION`, whatever its roles. A grant on one object does
+not count, and does not show in that object's array either: the arrays list record and declared actions only. It is
+the same check the endpoints enforce, so a client may show or hide its admin screens on it
+([ADR-053](../adr/0053-the-caller-is-told-their-tenant-wide-capabilities.md)). wasichai-ui may read it; older clients
+ignore it. A later read scope gets a key of its own.
 
 The answer is for hiding actions a client would be refused, and it grants nothing: every write is
 still checked by the service that performs it (ADR-020).

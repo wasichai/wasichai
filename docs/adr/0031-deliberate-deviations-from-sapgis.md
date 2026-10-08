@@ -261,6 +261,16 @@ These are the only intended differences. Anything else that behaves differently 
   request without the new parameters answers the same body. The index `audit_log_user_time_idx` is a known
   schema-parity deviation. Tested by `AuditPagingTest`, `WasichaiAutoConfigurationTest` and `AuditPagingApiTest`.
 
+**Because a client builds its navigation from what the caller may do**
+
+- **D38. Tenant-wide capabilities in the caller's permissions.** The original's `GET /api/auth/me/permissions`
+  answered `admin` and `objects` only, so a role granted `MANAGE_METADATA` or `MANAGE_ORGANIZATION` with no object
+  looked like one granted nothing. Now the answer also carries `capabilities`, always present: the object-less
+  built-in actions the caller holds with no object, in a fixed order (`MANAGE_METADATA`, `MANAGE_ORGANIZATION`),
+  answered by the check the services enforce, so `ADMIN` holds both and a service account never holds
+  `MANAGE_ORGANIZATION` ([ADR-053](0053-the-caller-is-told-their-tenant-wide-capabilities.md)). `admin` and `objects`
+  are unchanged. Tested by `CallerPermissionsServiceTest`, `PermissionEnforcementTest` and `ServiceAccountApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
