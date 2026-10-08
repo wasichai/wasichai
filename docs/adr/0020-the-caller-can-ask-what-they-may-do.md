@@ -1,6 +1,6 @@
 # ADR-020: The caller can ask what they may do, and asking grants nothing
 
-**Status**: accepted · 2026-09-18
+**Status**: accepted · 2026-09-18 · amended by [ADR-053](0053-the-caller-is-told-their-tenant-wide-capabilities.md)
 
 > Imported from sapgis on 2026-09-25. Identifiers renamed sapgis → chawpi; the decision is unchanged. See [sapgis origin](../sapgis-origin.md).
 

@@ -2,6 +2,25 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — The caller's permissions report tenant-wide capabilities
+
+`GET /api/auth/me/permissions` answered `admin` and per-object record actions only, so a role granted `MANAGE_METADATA`
+or `MANAGE_ORGANIZATION` with no object looked like one granted nothing, and a client either showed admin screens that
+answer `403` or hid them from people who may use them ([#53](https://github.com/wasichai/wasichai/issues/53)). Now the
+answer carries an additive key, `capabilities`, always present: the object-less built-in actions the caller holds with
+no object, in a fixed order (`MANAGE_METADATA`, `MANAGE_ORGANIZATION`), `[]` when none
+([ADR-053](adr/0053-the-caller-is-told-their-tenant-wide-capabilities.md), which amends ADR-020; ADR-031 D38). It is
+answered by `CurrentUser.hasPermission`, the check the services enforce, so `ADMIN` holds both and a service account
+never holds `MANAGE_ORGANIZATION` (ADR-043); a grant on one object counts for neither, and the object's array still
+lists record and declared actions only. The list is `CallerPermissionsService.CAPABILITIES`: one more object-less
+action is one more entry. `admin` and `objects` are unchanged, byte for byte; no migration, no new route. wasichai-ui
+may read `capabilities` and needs no change. New tests: `CallerPermissionsServiceTest`, and the integration cases
+`an org-wide MANAGE_METADATA grant is reported as a capability and lets the caller create an object`, `object-level
+grants give no capability, and the object's actions are the record ones they always were` and `the administrator holds
+both capabilities, admin and objects unchanged` in `PermissionEnforcementTest`, and `a service account's capabilities
+never include MANAGE_ORGANIZATION` in `ServiceAccountApiTest`. Docs: [rest.md](api/rest.md) "Auth",
+[core.md](modules/core.md), [authentication.md](security/authentication.md).
+
 ## 2026-10-08 — The audit list pages by cursor and narrows by period and user
 
 `GET /api/audit` answered the newest 500 rows of the tenant at most, with no period and no user filter, so the rest of

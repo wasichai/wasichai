@@ -74,3 +74,5 @@ supersedes it and says so in its status line.
   PATCH](0051-optimistic-locking-and-partial-update-of-records.md)
 - [ADR-052: The audit list pages by cursor and narrows by period and
   user](0052-audit-pages-by-cursor-period-and-user.md)
+- [ADR-053: The caller is told their tenant-wide capabilities
+  too](0053-the-caller-is-told-their-tenant-wide-capabilities.md)
