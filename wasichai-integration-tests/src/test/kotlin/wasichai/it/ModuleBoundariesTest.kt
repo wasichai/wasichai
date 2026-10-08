@@ -15,6 +15,7 @@ class ModuleBoundariesTest {
         mapOf(
             "pages" to mapOf("forms" to setOf("*")),
             "documents" to mapOf("automation" to setOf("DocumentIssuerAdapter.kt", "WasichaiDocumentsAutomationAutoConfiguration.kt")),
+            "notifications" to mapOf("automation" to setOf("AutomationNotifierAdapter.kt", "WasichaiNotificationsAutomationAutoConfiguration.kt")),
             "agent" to mapOf("workflow" to setOf("WorkflowRecordTransitions.kt", "WasichaiAgentWorkflowAutoConfiguration.kt")),
             "gis" to mapOf("pages" to setOf("MapPageComponent.kt", "WasichaiGisPagesAutoConfiguration.kt")),
             "workflow" to mapOf("pages" to setOf("WorkflowPageComponent.kt", "WasichaiWorkflowPagesAutoConfiguration.kt"))

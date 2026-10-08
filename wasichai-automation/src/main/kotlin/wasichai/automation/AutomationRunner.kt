@@ -31,7 +31,8 @@ class AutomationRunner(
     private val webhooks: WebhookSender,
     private val documents: DocumentIssuer,
     private val guards: RecordWriteGuards,
-    private val types: FieldTypeRegistry
+    private val types: FieldTypeRegistry,
+    private val notifier: AutomationNotifier = NoAutomationNotifier()
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -51,7 +52,7 @@ class AutomationRunner(
             // every write below says automation:<name> and carries the triggering request's id (ADR-050),
             // the document an action issues and the runs it queues included
             ChangeOrigin.within(ChangeOrigin.automation(automation.name), run.correlationId) {
-                automation.definition.actions.forEach { steps += perform(automation, run, it) }
+                automation.definition.actions.forEachIndexed { index, action -> steps += perform(automation, run, action, index) }
             }
             runs.finish(run.id, RunStatus.SUCCEEDED, steps, null)
         } catch (e: Exception) {
@@ -65,13 +66,15 @@ class AutomationRunner(
     private suspend fun perform(
         automation: Automation,
         run: AutomationRun,
-        action: AutomationAction
+        action: AutomationAction,
+        index: Int
     ): RunStep =
         when (action.type) {
             ActionType.UPDATE_FIELD -> updateField(automation, run, action)
             ActionType.CREATE_RECORD -> createRecord(automation, run, action)
             ActionType.WEBHOOK -> webhook(automation, run, action)
             ActionType.GENERATE_DOCUMENT -> generateDocument(run, action)
+            ActionType.NOTIFY -> notify(automation, run, action, index)
         }
 
     // the condition judged the snapshot; the write lands on the row as it is now. reusing the
@@ -224,6 +227,31 @@ class AutomationRunner(
                 "record" to (run.payload.after ?: run.payload.before)
             )
         return RunStep(ActionType.WEBHOOK, webhooks.post(url, body))
+    }
+
+    // to, title and body take {{field}} like the other actions; the notifications module resolves who that is
+    private suspend fun notify(
+        automation: Automation,
+        run: AutomationRun,
+        action: AutomationAction,
+        index: Int
+    ): RunStep {
+        val change = run.toChange()
+        val detail =
+            notifier.notify(
+                NotifyRequest(
+                    organizationId = run.organizationId,
+                    automation = automation.name,
+                    objectName = run.objectName,
+                    recordId = run.recordId,
+                    actionIndex = index,
+                    to = AutomationRules.render(action.to.orEmpty(), change),
+                    kind = action.kind ?: "INFO",
+                    title = AutomationRules.render(action.title.orEmpty(), change),
+                    body = action.body?.let { AutomationRules.render(it, change) }
+                )
+            )
+        return RunStep(ActionType.NOTIFY, detail)
     }
 
     // issuedBy stays null: the platform issues it, same as the audit row for every other action

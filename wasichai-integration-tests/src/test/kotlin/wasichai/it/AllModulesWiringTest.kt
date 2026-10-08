@@ -153,11 +153,12 @@ class AllModulesWiringTest {
                 "PUT /api/pages/{name}"
             )
 
-        // routes the original never had: notifications (ADR-031 D32). org units are core's, not here
+        // routes the original never had: notifications (ADR-031 D32, D46). org units are core's, not here
         val ADDED_MODULE_ROUTES =
             listOf(
                 "DELETE /api/notifications/{id}",
                 "DELETE /api/objects/{object}/notification-rules/{name}",
+                "GET /api/auth/me/notification-preferences",
                 "GET /api/auth/me/notifications",
                 "GET /api/auth/me/notifications/stream",
                 "GET /api/auth/me/notifications/summary",
@@ -173,6 +174,7 @@ class AllModulesWiringTest {
                 "POST /api/notifications",
                 "POST /api/objects/{object}/notification-rules",
                 "POST /api/objects/{object}/notification-rules/{name}/run",
+                "PUT /api/auth/me/notification-preferences",
                 "PUT /api/notifications/{id}",
                 "PUT /api/objects/{object}/notification-rules/{name}"
             )

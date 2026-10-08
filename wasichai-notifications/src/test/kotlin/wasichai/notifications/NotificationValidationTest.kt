@@ -62,19 +62,22 @@ class NotificationValidationTest {
     }
 
     @Test
-    fun `manual and rule sources are the module's own`() {
+    fun `manual, rule and automation sources are the module's own`() {
         assertThat(fields(draft, source = "manual")).containsExactly("source")
         assertThat(fields(draft, source = "rule:tasa_por_vencer")).containsExactly("source")
+        assertThat(fields(draft, source = "automation:aprobado")).containsExactly("source")
         assertThat(fields(draft, source = "manual", allowReserved = true)).isEmpty()
         assertThat(fields(draft, source = "rule:tasa_por_vencer", allowReserved = true)).isEmpty()
+        assertThat(fields(draft, source = "automation:aprobado", allowReserved = true)).isEmpty()
         assertThat(fields(draft, source = "manuals")).isEmpty()
+        assertThat(fields(draft, source = "automation.app")).isEmpty()
     }
 
     @Test
-    fun `purge and rules are the loop's keys, not a source of anyone's`() {
-        listOf("purge", "rules").forEach { key ->
+    fun `purge, rules and deliveries are the loop's keys, not a source of anyone's`() {
+        listOf("purge", "rules", "deliveries").forEach { key ->
             assertThat(check(draft, source = key).violations).containsExactly(
-                FieldViolation("source", "'purge' and 'rules' are the notifications loop's own keys")
+                FieldViolation("source", "'purge', 'rules' and 'deliveries' are the notifications loop's own keys")
             )
             assertThat(fields(draft, source = key, allowReserved = true)).containsExactly("source")
         }
@@ -90,7 +93,7 @@ class NotificationValidationTest {
                 Clock.fixed(now, ZoneOffset.UTC)
             )
         val org = UUID.randomUUID()
-        listOf("purge", "rules").forEach { key ->
+        listOf("purge", "rules", "deliveries").forEach { key ->
             assertThatThrownBy { runBlocking { notifications.publish(org, key, draft.copy(key = "k")) } }
                 .isInstanceOf(IllegalArgumentException::class.java)
                 .hasMessageContaining("loop's own keys")

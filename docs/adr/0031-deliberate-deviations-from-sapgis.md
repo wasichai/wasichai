@@ -385,6 +385,23 @@ These are the only intended differences. Anything else that behaves differently 
   Without the header nothing changes. The table is a known schema-parity deviation. Tested by `IdempotencyKeysTest`,
   `WasichaiAutoConfigurationTest` and `RecordIdempotencyApiTest`.
 
+**Because people are told outside the app too**
+
+- **D46. Notifications reach people by email, and an automation can notify.** The original had no notifications
+  (D32). With `wasichai-notifications` installed, `GET` and `PUT /api/auth/me/notification-preferences` say which
+  kinds reach the caller on each delivery channel of the app (a map; every kind by default; `{}` without channels; a
+  key that is not a channel, or a value that is not a list of kinds, is `400`; a service account `403`). With
+  `wasichai.notifications.email.enabled=true` and a mail sender, news (a notification created, reopened, or whose kind
+  changed) is also queued per person and sent by email within `delivery-interval`, retried with backoff, then `FAILED`
+  with its error, once per cluster, never failing the write that published it. Automations gain the action `NOTIFY`
+  (`to`, `title`, `body`, `kind` `INFO` or `WARNING`), refused with a `400` when saved without the module. The source
+  prefix `automation:` and the loop key `deliveries` are reserved like `manual`, `rule:`, `purge` and `rules`: an app's
+  source of that name is refused. Without the module every route above is a `404` (D1); without channels nothing is
+  queued or sent and every other answer is as before ([ADR-060](0060-delivery-channels-and-automation-notify.md)). The
+  `notification_deliveries` and `notification_preferences` tables are a known schema-parity deviation. Tested by
+  `DeliveriesTest`, `AutomationNotifyTest`, `DeliveryChannelsWiringTest`, `NotificationsOnlyApiTest`,
+  `AutomationOnlyApiTest` and `AutomationApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

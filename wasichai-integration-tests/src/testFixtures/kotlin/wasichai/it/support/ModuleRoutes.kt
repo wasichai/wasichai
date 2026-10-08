@@ -82,6 +82,8 @@ object ModuleRoutes {
                     "POST /api/auth/me/notifications/{id}/dismiss",
                     "POST /api/auth/me/notifications/{id}/snooze",
                     "POST /api/auth/me/notifications/read-all",
+                    "GET /api/auth/me/notification-preferences",
+                    "PUT /api/auth/me/notification-preferences",
                     "GET /api/notification-rules",
                     "GET /api/objects/{object}/notification-rules",
                     "POST /api/objects/{object}/notification-rules",

@@ -65,10 +65,13 @@ data class StoredNotification(
 // fixed tables, every statement scoped to the organization (purge aside: it is maintenance over all of them).
 // jsonb travels as text: CAST on the way in, ::text on the way out.
 // no transaction here: NotificationWriter opens one (or joins the caller's) around every change.
+// news (a new row, a reopen, a kind change: when receipts start over) is told to [news] in the same
+// transaction, so delivery channels (ADR-060) enqueue with the write or not at all.
 class NotificationRepository(
     private val db: DatabaseClient,
     private val json: JsonMapper,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    private val news: NotificationNews = NotificationNews.NONE
 ) {
     private val m = schemas.metadata
 
@@ -123,6 +126,7 @@ class NotificationRepository(
             requireWindow(prepared, prepared.publishAt ?: now)
             update(organizationId, row.id, prepared, prepared.publishAt ?: now, now, reopen = true)
             deleteReceipts(organizationId, row.id)
+            news.announce(organizationId, row.id, prepared.kind, prepared.targets, prepared.publishAt ?: now, now)
             return UpsertOutcome.REOPENED
         }
         if (row.fingerprint == prepared.fingerprint) return UpsertOutcome.UNCHANGED
@@ -130,7 +134,7 @@ class NotificationRepository(
         requireWindow(prepared, prepared.publishAt ?: row.publishAt)
         update(organizationId, row.id, prepared, prepared.publishAt, now, reopen = false)
         // WARNING -> ACTION is news: everyone sees it again
-        if (row.kind != prepared.kind) deleteReceipts(organizationId, row.id)
+        if (row.kind != prepared.kind) kindChanged(organizationId, row, prepared, now)
         return UpsertOutcome.UPDATED
     }
 
@@ -154,7 +158,7 @@ class NotificationRepository(
         if (row.fingerprint == prepared.fingerprint) return UpsertOutcome.UNCHANGED
         requireWindow(prepared, prepared.publishAt ?: row.publishAt)
         update(organizationId, id, prepared, prepared.publishAt, now, reopen = false)
-        if (row.kind != prepared.kind) deleteReceipts(organizationId, id)
+        if (row.kind != prepared.kind) kindChanged(organizationId, row, prepared, now)
         return UpsertOutcome.UPDATED
     }
 
@@ -408,7 +412,19 @@ class NotificationRepository(
                 .one()
                 .awaitFirstOrNull() ?: return null
         insertTargets(organizationId, id, prepared.targets)
+        news.announce(organizationId, id, prepared.kind, prepared.targets, prepared.publishAt ?: now, now)
         return id
+    }
+
+    // receipts start over, and the news goes out again
+    private suspend fun kindChanged(
+        organizationId: UUID,
+        row: StoredRow,
+        prepared: PreparedNotification,
+        now: Instant
+    ) {
+        deleteReceipts(organizationId, row.id)
+        news.announce(organizationId, row.id, prepared.kind, prepared.targets, prepared.publishAt ?: row.publishAt, now)
     }
 
     // publishAt null keeps the stored one. reopen also clears resolved_at.

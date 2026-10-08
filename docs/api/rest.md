@@ -43,6 +43,7 @@ GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
 GET  /api/auth/me/org-units     the caller's own organizational units (see below)
 GET  /api/auth/me/notifications  the caller's notifications, with wasichai-notifications (see below)
+GET  /api/auth/me/notification-preferences  which kinds reach the caller by email, with wasichai-notifications
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
 PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
@@ -1511,9 +1512,25 @@ Triggers are `RECORD_CREATED`, `RECORD_UPDATED`, `RECORD_DELETED`, `TRANSITION_A
 naming a transition) and `STATE_ENTERED` (naming a state). Operators are `EQUALS`, `NOT_EQUALS`,
 `GREATER_THAN`, `LESS_THAN`, `CONTAINS`, `IS_EMPTY`, `IS_NOT_EMPTY` and `CHANGED`; numbers compare as
 numbers. `field` may be a Custom Field or `state`. Actions are `UPDATE_FIELD`, `CREATE_RECORD`
-(`targetObject` plus `values`), `WEBHOOK` (`url`) and `GENERATE_DOCUMENT` (`documentType`). Every
-text value accepts `{{field}}` out of the record, plus `{{id}}`, `{{state}}`, `{{user}}`,
-`{{today}}` and `{{now}}`.
+(`targetObject` plus `values`), `WEBHOOK` (`url`), `GENERATE_DOCUMENT` (`documentType`) and `NOTIFY`
+(`to`, `title`, `body`, `kind`). Every text value accepts `{{field}}` out of the record, plus `{{id}}`,
+`{{state}}`, `{{user}}`, `{{today}}` and `{{now}}`.
+
+`NOTIFY` tells people, through the notifications module ([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)):
+
+```json
+{ "type": "NOTIFY", "to": "{{responsable}}, role:SUPERVISOR", "kind": "WARNING",
+  "title": "Tramite {{codigo}} aprobado", "body": "Pase a {{state}}" }
+```
+
+`to` is a comma-separated list, rendered per run: a user id (or `user:<id>`), an email, `role:<NAME>` or
+`unit:<CODE>`. `kind` is `INFO` (the default) or `WARNING`; an `ACTION` is refused, since nothing would resolve it.
+`to` and `title` are required. Without the notifications module the action is `400 NOTIFY needs the notifications
+module` when saved. A run creates one notification per record and action, of source `automation:<name>`, keyed
+`<recordId>.<n>` and linking to the record: entering the state again reopens or updates that one, never a second.
+An entry that names nobody (an empty field, an unknown person) is dropped; with nobody left the step says
+`notified nobody` and the run still succeeds. Its `{{field}}` placeholders are not field usages: deleting such a
+field is allowed and prints empty.
 
 `GENERATE_DOCUMENT` is how a workflow state issues a document: pair it with a `STATE_ENTERED`
 trigger and the record issues that type on arriving. The type must belong to the automation's
@@ -1629,6 +1646,8 @@ POST /api/auth/me/notifications/{id}/read              →  204
 POST /api/auth/me/notifications/{id}/dismiss           →  204
 POST /api/auth/me/notifications/{id}/snooze            { "until": "2026-10-07T08:00:00Z" }  →  204
 POST /api/auth/me/notifications/read-all               { "kind"?: "INFO" }  →  204
+GET  /api/auth/me/notification-preferences             { "email": ["INFO", "WARNING", "ACTION"] }
+PUT  /api/auth/me/notification-preferences             { "email"?: ["ACTION"] }  →  the stored preferences
 ```
 
 A person sees a notification of their tenant that is not resolved, inside its window (`publishAt` passed, `expiresAt`
@@ -1675,6 +1694,20 @@ The summary counts the caller's active items per kind, and names the newest acti
   }
 }
 ```
+
+### Preferences
+
+`/api/auth/me/notification-preferences` says which kinds reach the caller on each delivery channel of the app
+([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)), the way `/api/auth/me/preferences` does
+(ADR-034): `GET` answers every channel the app has, with its kinds in enum order (every kind until the person chooses);
+`PUT` takes a map, a channel left out keeps what it had, `[]` stops the channel, kind names are case-insensitive, and
+the answer is the whole map. A key that is not a channel of the app (`in-app` included: the inbox is always on) or a
+value that is not a list of `INFO`, `WARNING`, `ACTION` is `400` naming that key. An app without channels answers `{}`
+and refuses every key. A service account gets `403`.
+
+A delivery leaves news only (a notification created, reopened, or whose kind changed), never an edit of the text, so
+an email is not resent for a new count in a title. Who gets it is decided when the news is written; the email goes out
+within `delivery-interval`, or when a scheduled notification is published.
 
 ### The stream
 

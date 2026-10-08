@@ -27,6 +27,8 @@ spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-webflux-test = { module = "org.springframework.boot:spring-boot-starter-webflux-test" }
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+# optional: the notifications email channel. an app that wants email adds spring-boot-starter-mail itself
+spring-boot-mail = { module = "org.springframework.boot:spring-boot-mail" }
 
 jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson2" }

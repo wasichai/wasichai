@@ -33,6 +33,8 @@ class AutomationFieldUsage(
                 ActionType.WEBHOOK -> false
                 // names a document type, not a field
                 ActionType.GENERATE_DOCUMENT -> false
+                // {{field}} in a template is read when it runs, like a webhook url: a missing one prints empty
+                ActionType.NOTIFY -> false
             }
         }
     }

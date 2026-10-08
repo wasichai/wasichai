@@ -37,6 +37,8 @@ class NotificationsOnlyApiTest : SliceSmokeTest() {
             "notification_receipts",
             "notification_rules",
             "notification_source_runs",
+            "notification_deliveries",
+            "notification_preferences",
             "org_units",
             "user_org_units"
         )
@@ -137,6 +139,13 @@ class NotificationsOnlyApiTest : SliceSmokeTest() {
                 .expectBodyList(Any::class.java)
                 .hasSize(0)
         }
+    }
+
+    // no delivery channel in this app (no mail): nothing to choose, and email is not a channel here (ADR-060)
+    @Test
+    fun `preferences answer no channel, and refuse email`() {
+        assertThat(json("GET", "/api/auth/me/notification-preferences", admin, null, 200)).isEmpty()
+        json("PUT", "/api/auth/me/notification-preferences", admin, mapOf("email" to listOf("ACTION")), 400)
     }
 
     private fun contentIds(page: Map<String, Any?>): List<Any?> = (page["content"] as List<*>).map { (it as Map<*, *>)["id"] }
