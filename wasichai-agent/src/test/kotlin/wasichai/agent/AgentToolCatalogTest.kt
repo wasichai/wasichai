@@ -4,6 +4,7 @@ import com.embabel.agent.api.tool.Tool
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import wasichai.core.identity.AuthenticatedUser
 import kotlin.coroutines.EmptyCoroutineContext
 
 // What the model is actually handed. Embabel derives the tool definitions by reflecting over the
@@ -16,7 +17,7 @@ class AgentToolCatalogTest {
             .fromInstance(
                 AgentToolbox(
                     tools = mock(AgentTools::class.java),
-                    run = AgentRun("does not matter", EmptyCoroutineContext)
+                    run = AgentRun("does not matter", EmptyCoroutineContext, mock(AuthenticatedUser::class.java))
                 )
             ).map { it.definition }
 

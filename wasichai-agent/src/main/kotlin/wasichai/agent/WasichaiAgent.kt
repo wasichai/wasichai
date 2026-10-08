@@ -42,13 +42,22 @@ class WasichaiAgent(
         run: AgentRun,
         context: OperationContext
     ): AgentReply {
+        // the token counts live on the process; AgentService reads them, whatever the outcome
+        run.attach(context.agentProcess)
+        // a replanned action after a filter failure must not ask again
+        run.requireOpen()
         val text =
-            context
-                .ai()
-                .withLlm(LlmOptions.withModel(properties.model).withMaxTokens(properties.tokenCap.toInt()))
-                .withSystemPrompt(SYSTEM_PROMPT)
-                .withToolObject(AgentToolbox(tools, run))
-                .generateText(run.question)
+            try {
+                context
+                    .ai()
+                    .withLlm(LlmOptions.withModel(properties.model).withMaxTokens(properties.tokenCap.toInt()))
+                    .withSystemPrompt(SYSTEM_PROMPT)
+                    .withToolObject(AgentToolbox(tools, run))
+                    .generateText(run.question)
+            } finally {
+                // a filter broke inside the tool loop: whatever came back or was thrown, the run ends here
+                run.requireOpen()
+            }
         return AgentReply(text.trim().ifEmpty { "I could not put an answer together for that." })
     }
 

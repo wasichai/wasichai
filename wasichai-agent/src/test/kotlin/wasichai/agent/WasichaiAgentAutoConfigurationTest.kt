@@ -1,12 +1,15 @@
 package wasichai.agent
 
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.annotation.ImportCandidates
+import org.springframework.core.annotation.Order
 import org.springframework.test.util.ReflectionTestUtils
 import wasichai.agent.autoconfigure.WasichaiAgentAutoConfiguration
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.test.WasichaiContextRunner
 import java.util.UUID
 
@@ -20,15 +23,49 @@ class WasichaiAgentAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(AgentController::class.java)
             assertThat(context).hasSingleBean(WasichaiAgent::class.java)
-            assertThat(context.getBean(AgentService::class.java).status().enabled).isFalse()
+            assertThat(runBlocking(TestCallers.context()) { context.getBean(AgentService::class.java).status() }.enabled).isFalse()
         }
     }
 
     @Test
     fun `a key makes it available`() {
         runner.withPropertyValues("wasichai.agent.api-key=k").run { context ->
-            assertThat(context.getBean(AgentService::class.java).status().enabled).isTrue()
+            assertThat(runBlocking(TestCallers.context()) { context.getBean(AgentService::class.java).status() }.enabled).isTrue()
         }
+    }
+
+    @Test
+    fun `with no extension declared, everyone may ask and nothing filters or listens`() {
+        runner.run { context ->
+            assertThat(context.getBean(AgentAccessPolicy::class.java)).isSameAs(AgentAccessPolicy.ALLOW_ALL)
+            val service = context.getBean(AgentService::class.java)
+            listOf("resultFilters", "answerFilters", "listeners").forEach { field ->
+                assertThat(ReflectionTestUtils.getField(service, field) as List<*>).describedAs(field).isEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun `the app's policy replaces the default and its filters and listeners are all used, in order`() {
+        val policy = AgentAccessPolicy { AgentAccess.Denied("off") }
+        val first = FirstFilter()
+        val second = SecondFilter()
+        val restore = AgentAnswerFilter { _, text -> text }
+        val listener = AgentRunListener { _, _, _, _, _ -> }
+        runner
+            .withBean(AgentAccessPolicy::class.java, { policy })
+            .withBean("second", SecondFilter::class.java, { second })
+            .withBean("first", FirstFilter::class.java, { first })
+            .withBean(AgentAnswerFilter::class.java, { restore })
+            .withBean(AgentRunListener::class.java, { listener })
+            .run { context ->
+                assertThat(context).hasSingleBean(AgentAccessPolicy::class.java)
+                val service = context.getBean(AgentService::class.java)
+                assertThat(ReflectionTestUtils.getField(service, "policy")).isSameAs(policy)
+                assertThat(ReflectionTestUtils.getField(service, "resultFilters") as List<*>).containsExactly(first, second)
+                assertThat(ReflectionTestUtils.getField(service, "answerFilters") as List<*>).containsExactly(restore)
+                assertThat(ReflectionTestUtils.getField(service, "listeners") as List<*>).containsExactly(listener)
+            }
     }
 
     @Test
@@ -69,5 +106,26 @@ class WasichaiAgentAutoConfigurationTest {
         assertThat(registered).anyMatch {
             it.contains("org.springframework.boot.EnvironmentPostProcessor") && it.contains("wasichai.agent.autoconfigure.EmbabelGate")
         }
+    }
+
+    // declared second, ordered first: @Order decides, not registration
+    @Order(1)
+    class FirstFilter : AgentResultFilter {
+        override suspend fun filter(
+            caller: AuthenticatedUser,
+            tool: String,
+            input: Map<String, Any?>,
+            resultJson: String
+        ): String = resultJson
+    }
+
+    @Order(2)
+    class SecondFilter : AgentResultFilter {
+        override suspend fun filter(
+            caller: AuthenticatedUser,
+            tool: String,
+            input: Map<String, Any?>,
+            resultJson: String
+        ): String = resultJson
     }
 }
