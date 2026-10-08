@@ -484,6 +484,55 @@ class PermissionEnforcementTest : WasichaiIntegrationTest() {
             .isEqualTo(listOf("READ", "CREATE", "UPDATE", "DELETE"))
     }
 
+    // issue 53 (ADR-053): tenant-wide rights are reported too, and agree with what the services enforce
+    @Test
+    fun `an org-wide MANAGE_METADATA grant is reported as a capability and lets the caller create an object`() {
+        val role = newRole("Modeler")
+        grant(role, listOf("MANAGE_METADATA"))
+        val token = newUserToken(role)
+
+        // no READ anywhere, so no object: the whole answer is known
+        assertThat(myPermissions(token)).isEqualTo("""{"admin":false,"capabilities":["MANAGE_METADATA"],"objects":{}}""")
+
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("name" to uniqueName("modeled"), "label" to "Modeled"))
+            .exchange()
+            .expectStatus()
+            .isCreated
+    }
+
+    @Test
+    fun `object-level grants give no capability, and the object's actions are the record ones they always were`() {
+        val role = newRole("ObjectModeler")
+        grantOn(role, objectName, listOf("READ", "UPDATE", "MANAGE_METADATA"))
+        val token = newUserToken(role)
+
+        assertThat(myPermissions(token)).isEqualTo(
+            """{"admin":false,"capabilities":[],"objects":{"$objectName":["READ","UPDATE"]}}"""
+        )
+    }
+
+    @Test
+    fun `the administrator holds both capabilities, admin and objects unchanged`() {
+        client
+            .get()
+            .uri("/api/auth/me/permissions")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.admin")
+            .isEqualTo(true)
+            .jsonPath("$.capabilities")
+            .isEqualTo(listOf("MANAGE_METADATA", "MANAGE_ORGANIZATION"))
+            .jsonPath("$.objects.$objectName")
+            .isEqualTo(listOf("READ", "CREATE", "UPDATE", "DELETE"))
+    }
+
     @Test
     fun `the caller's permissions need a token`() {
         client
@@ -528,6 +577,19 @@ class PermissionEnforcementTest : WasichaiIntegrationTest() {
             .expectStatus()
             .isOk
     }
+
+    // the raw body: what is asserted is the bytes a client gets
+    private fun myPermissions(token: String): String =
+        client
+            .get()
+            .uri("/api/auth/me/permissions")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody(String::class.java)
+            .returnResult()
+            .responseBody!!
 
     private fun newRole(label: String): String {
         val name = "R" + uniqueName("").uppercase()
