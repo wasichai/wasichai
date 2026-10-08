@@ -1121,9 +1121,12 @@ geometry, so a request serves one, named by `geometry` or the object's first. Fe
 ## Audit and history
 
 ```http
-GET /api/audit?objectName=&recordId=&operation=&correlationId=&source=&limit=   every recorded change in the tenant
-GET /api/objects/{object}/records/{id}/history?limit=        one record's trail, newest first
+GET /api/audit?objectName=&recordId=&operation=&correlationId=&source=&from=&to=&userId=&serviceAccount=&limit=&after=
+GET /api/objects/{object}/records/{id}/history?from=&to=&userId=&limit=&after=
 ```
+
+The first is every recorded change in the tenant, the second one record's trail; both newest first, by `occurredAt`
+then `id`.
 
 ```json
 {
@@ -1174,7 +1177,36 @@ be a way around the field permissions.
 When the app declares a read scope (see "Read scope" under Records), the history of a record outside the caller's
 scope is a `404`, and `/api/audit` leaves out the entries of records outside it. An entry whose record no longer
 exists is shown only to a caller with no scope on that object. The filter runs after `limit`, so a scoped caller may
-get fewer entries than asked for.
+get fewer entries than asked for, but the next page's cursor still starts where the read stopped.
+
+### Period, user and pages
+
+`from` and `to` are ISO-8601 instants, `Z` or an offset (`2026-10-01T00:00:00Z`, `2026-10-01T00:00:00-05:00`; encode
+the `+` of a positive offset as `%2B`, though a bare `+` is accepted): an entry is kept when
+`occurredAt >= from` and `occurredAt < to`, so consecutive periods never share one. `userId` keeps the entries of one
+user or service account by id, `serviceAccount` those of one service account by name. There is no email filter: an
+email is not a stable key. All four are blank meaning none, compose with every other filter, and only narrow, like
+`correlationId` and `source` ([ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)). The history takes
+`from`, `to` and `userId`.
+
+`limit` is a page: 100 by default, 500 at most. The body stays a JSON array; when another entry follows the page, the
+response carries the next page's cursor in `X-Next-Cursor`, and `after=<cursor>` reads that page. Keep every filter as it was, and
+follow the header until a response comes without it:
+
+```http
+GET /api/audit?userId=…&from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z&limit=500
+→ 200, [ …500 entries… ], X-Next-Cursor: MQpWdkZ0…
+GET /api/audit?userId=…&from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z&limit=500&after=MQpWdkZ0…
+→ 200, [ …the rest… ], no X-Next-Cursor
+```
+
+Every entry comes back once, tied `occurredAt`s included. The cursor is opaque and bound to its filters: a cursor of
+another filter set (another object, operation, period, user…) or of the other route is a `400` naming `after`, as is a
+value that is not a cursor; `limit` may change between pages. A malformed `from`, `to` or `userId` is a `400` naming
+it. Core's CORS default exposes `X-Next-Cursor` to browsers on another origin.
+
+With a read scope, the entries outside it are dropped after the page is read, so a page may come short, even empty,
+with `X-Next-Cursor` still there: stop on a missing header, never on a short page.
 
 ### Administration entries
 

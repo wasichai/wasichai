@@ -53,6 +53,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
   write them through the `AdminAudit` port in `identity`, which `audit` implements. Every entry stores the request's
   correlation id and its `source` (`api`, `platform`, an app's label, `automation:<rule>`, `app`), filtered by
   `/api/audit?correlationId=&source=` ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
+  Both routes narrow by `from`, `to` and `userId` (the list also by `serviceAccount`) and page with `after=` and the
+  `X-Next-Cursor` header, the body still a JSON array (`AuditQueryService.page`, `historyPage`;
+  [ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
 - Correlation id: `CorrelationIdWebFilter` keeps a well-formed `X-Correlation-Id` or generates one, echoes it on
   every response (a `401` included) and puts it in the Reactor context with the source `api`, and from there in the
   MDC as `correlationId`. `ChangeOrigin` reads both (`correlationId()`, `source()`); a module labels work no request
@@ -238,6 +241,8 @@ table, built by `ObjectSchemaManager`. A declared index is named `<physical tabl
 `V10__audit_origin.sql` adds `audit_log.correlation_id` and `audit_log.source`, nullable, with `CHECK`s on their
 character classes and the index `audit_log_correlation_idx (organization_id, correlation_id)`
 ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
+`V12__audit_user_index.sql` adds the index `audit_log_user_time_idx (organization_id, user_id, occurred_at DESC)` for
+the audit list by user and period ([ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
 
 `V9__org_units.sql` keys `org_units` by `id`, unique per `(organization_id, code)`, with the `code` and `label` rules as
 `CHECK`s (label 1 to 120 characters) and a unit never its own parent. The parent is a composite foreign key
@@ -356,6 +361,8 @@ Core is always installed.
   `/api/audit?correlationId=&source=`; two nullable `audit_log` columns (ADR-050).
 - D36: `ETag` on record answers and transitions, `If-Match` on `PUT`, `PATCH`, `DELETE` and transitions (`412` when
   stale), `PATCH` for a partial update, and `updated_at` from the statement's clock (ADR-051).
+- D37: `/api/audit` and the record history take `from`, `to`, `userId` (and the list `serviceAccount`) and page with
+  `after=` and `X-Next-Cursor`, exposed by the CORS default; the index `audit_log_user_time_idx` (ADR-052).
 
 ## Known limitations
 
