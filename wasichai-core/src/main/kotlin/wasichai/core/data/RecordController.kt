@@ -2,6 +2,8 @@ package wasichai.core.data
 
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -46,6 +48,26 @@ class RecordController(
         @RequestHeader(ChangeReason.HEADER, required = false) reason: String?,
         response: ServerHttpResponse
     ): RecordResponse = records.create(objectName, request, ChangeReason.fromHeader(reason), viaApi = true).withETag(response)
+
+    /**
+     * The same create, at most once per `Idempotency-Key` of the caller (ADR-058). The answer is the stored
+     * one, the first time too, so a replay is the same bytes; a replay says `Idempotent-Replayed: true`.
+     */
+    @PostMapping(headers = [IdempotencyKeys.HEADER])
+    suspend fun createOnce(
+        @PathVariable("object") objectName: String,
+        @RequestBody request: RecordRequest,
+        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?,
+        // not required: an empty header is a 400 on it, not a missing one
+        @RequestHeader(IdempotencyKeys.HEADER, required = false) idempotencyKey: String?
+    ): ResponseEntity<ByteArray> {
+        val reasonText = ChangeReason.fromHeader(reason)
+        val created = records.createOnce(objectName, request, reasonText, viaApi = true, idempotencyKey = idempotencyKey.orEmpty())
+        val answer = ResponseEntity.status(created.status).contentType(MediaType.APPLICATION_JSON)
+        created.record.updatedAt?.let { answer.header(HttpHeaders.ETAG, RecordETag.of(it)) }
+        if (created.replayed) answer.header(IdempotencyKeys.REPLAYED, "true")
+        return answer.body(created.body.toByteArray(Charsets.UTF_8))
+    }
 
     @PutMapping("/{id}")
     suspend fun update(

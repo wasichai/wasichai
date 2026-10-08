@@ -29,6 +29,8 @@ import wasichai.core.audit.AuditLogAdminAudit
 import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditPage
 import wasichai.core.common.Actions
+import wasichai.core.data.IdempotencyKeyPurge
+import wasichai.core.data.IdempotencyKeys
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
@@ -107,6 +109,9 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(RecordService::class.java)
             assertThat(context).hasSingleBean(ClusterLock::class.java)
+            // issue 63 (ADR-058): keyed creates and the purge of expired keys
+            assertThat(context).hasSingleBean(IdempotencyKeys::class.java)
+            assertThat(context).hasSingleBean(IdempotencyKeyPurge::class.java)
             assertThat(context).hasSingleBean(RecordReadScopes::class.java)
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountService::class.java)
@@ -154,14 +159,19 @@ class WasichaiAutoConfigurationTest {
         }
     }
 
-    // issue 52 (ADR-052): a browser on another origin can read the audit list's next-page cursor, and a
-    // record's ETag (ADR-051)
+    // issue 52 (ADR-052): a browser on another origin can read the audit list's next-page cursor, a
+    // record's ETag (ADR-051), and whether a create was replayed and when to retry one in flight (ADR-058)
     @Test
     fun `cors exposes the audit list's next cursor`() {
         runner.run { context ->
             val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/audit"))
             val config = context.getBean(CorsConfigurationSource::class.java).getCorsConfiguration(exchange)
-            assertThat(config!!.exposedHeaders).containsExactly(HttpHeaders.ETAG, AuditPage.NEXT_CURSOR_HEADER)
+            assertThat(config!!.exposedHeaders).containsExactly(
+                HttpHeaders.ETAG,
+                AuditPage.NEXT_CURSOR_HEADER,
+                IdempotencyKeys.REPLAYED,
+                HttpHeaders.RETRY_AFTER
+            )
         }
     }
 
@@ -253,6 +263,20 @@ class WasichaiAutoConfigurationTest {
         runner.withBean(AuditLogOwnershipCheck::class.java, { mine }).run { context ->
             assertThat(context).hasNotFailed()
             assertThat(context.getBean(AuditLogOwnershipCheck::class.java)).isSameAs(mine)
+        }
+    }
+
+    // issue 63 (ADR-058): a key that never lives is no key; a zero purge interval keeps the purge off
+    @Test
+    fun `a wasichai idempotency ttl that is not positive fails at boot and names the property`() {
+        runner.withPropertyValues("wasichai.idempotency.ttl=0s").run { context ->
+            assertThat(context).hasFailed()
+            assertThat(generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }.joinToString(" | "))
+                .contains("wasichai.idempotency.ttl")
+        }
+        runner.withPropertyValues("wasichai.idempotency.ttl=10m", "wasichai.idempotency.purge-interval=0s").run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(IdempotencyKeyPurge::class.java).isRunning).isFalse()
         }
     }
 

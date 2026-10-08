@@ -90,7 +90,9 @@ class AllModulesWiringTest {
             assertThat(context).hasNotFailed()
             val routes =
                 context.getBean(RequestMappingHandlerMapping::class.java).handlerMethods.keys.flatMap { info ->
-                    info.methodsCondition.methods.flatMap { verb -> info.patternsCondition.patterns.map { "${verb.name} ${it.patternString}" } }
+                    // a header condition tells two mappings apart: the keyed create (ADR-058) is no collision
+                    val headers = info.headersCondition.expressions.joinToString("") { " [$it]" }
+                    info.methodsCondition.methods.flatMap { verb -> info.patternsCondition.patterns.map { "${verb.name} ${it.patternString}$headers" } }
                 }
             assertThat(routes).doesNotHaveDuplicates().containsAll(LEGACY_MODULE_ROUTES + ADDED_MODULE_ROUTES)
         }

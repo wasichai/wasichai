@@ -212,7 +212,8 @@ class RecordServicePreconditionTest {
             RecordWriteGuards(listOf(guard), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
             RecordReadScopes(scopes, mock(RecordStore::class.java)),
-            TenantDirectoryFixtures.none()
+            TenantDirectoryFixtures.none(),
+            IdempotencyKeysFixtures.none()
         )
     }
 

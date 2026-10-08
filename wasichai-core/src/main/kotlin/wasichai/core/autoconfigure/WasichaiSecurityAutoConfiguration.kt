@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
 import wasichai.core.audit.AuditPage
+import wasichai.core.data.IdempotencyKeys
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthController
 import wasichai.core.identity.AuthService
@@ -113,8 +114,8 @@ class WasichaiSecurityAutoConfiguration {
                 allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 allowedHeaders = listOf("*")
                 // a browser on another origin reads only what is exposed: a record's version to send back as
-                // If-Match (ADR-051), the audit list's next page (ADR-052)
-                exposedHeaders = listOf(HttpHeaders.ETAG, AuditPage.NEXT_CURSOR_HEADER)
+                // If-Match (ADR-051), the audit list's next page (ADR-052), a replayed create and when to retry (ADR-058)
+                exposedHeaders = listOf(HttpHeaders.ETAG, AuditPage.NEXT_CURSOR_HEADER, IdempotencyKeys.REPLAYED, HttpHeaders.RETRY_AFTER)
                 allowCredentials = true
             }
         return UrlBasedCorsConfigurationSource().apply { registerCorsConfiguration("/**", config) }

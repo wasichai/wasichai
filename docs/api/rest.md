@@ -1019,7 +1019,7 @@ DELETE /api/objects/{object}/records/{id}
 ```
 
 `GET`, `POST`, `PUT` and `PATCH` of one record answer its `ETag`; `PUT`, `PATCH` and `DELETE` take `If-Match` (see
-"Concurrent edits" below).
+"Concurrent edits" below). `POST` takes `Idempotency-Key` (see "Retrying a create" below).
 
 A record:
 
@@ -1194,6 +1194,50 @@ If-Match: "2026-10-07T10:15:30.123456Z"
 - In-process: `RecordService.update(…, reason, expectedUpdatedAt)`, `delete(…, reason, expectedUpdatedAt)` and
   `patch(…, expectedUpdatedAt = …)` take the `updatedAt` you read and throw `PreconditionFailedException` (412) when
   stale, inside your transaction too.
+
+### Retrying a create: Idempotency-Key
+
+A client that timed out or got a `5xx` cannot tell whether its create landed. Sending a key makes the retry safe
+([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)):
+
+```http
+POST /api/objects/caso/records
+Idempotency-Key: 0b8e6a1c-5f3e-4c1e-9d1a-2f4e8c7b6a50
+
+{ "attributes": { "codigo": "C-1" } }
+→ 201, ETag: "2026-10-07T10:15:30.123456Z"                 the record, as without the key
+
+(the same request again, same key)
+→ 201, Idempotent-Replayed: true, ETag: "2026-10-07T10:15:30.123456Z"   the same body, nothing created
+```
+
+- Only on `POST /api/objects/{object}/records`. The key is 1 to 128 printable ASCII characters (a UUID is a good
+  one); anything else is a `400` on `Idempotency-Key`. Without the header nothing changes.
+- A key belongs to the caller (a person or a service account) in their organization: another caller's same key is
+  another key, and nobody learns that someone else used it.
+- First request: processed as usual, and its status and body are stored with the key in the record's own transaction.
+  The answer is those stored bytes.
+- Same key, same method, path and body (key order and spacing do not count): the stored `201` and body, byte for byte,
+  with `Idempotent-Replayed: true` and the `ETag` the record had then. Nothing is written, audited or told to
+  automations, and no permission is checked again. `X-Correlation-Id` is the retry's own.
+- Same key, another body or another object: `422`, nothing written:
+
+```json
+{ "type": "https://wasichai.dev/problems/422", "title": "Unprocessable Content", "status": 422,
+  "detail": "This Idempotency-Key was already used for another request",
+  "errors": [{ "field": "Idempotency-Key", "message": "was sent before with another method, path or body; use a new key" }] }
+```
+
+- Same key while the first request is still running: `409` with `Retry-After: 1` and `errors[]` naming
+  `Idempotency-Key`. Send it again; it then gets the replay, or creates when the first one failed.
+- A request that fails (`4xx` or `5xx`) stores nothing: fix the body and retry with the same key. With a key the create
+  is one transaction: an automation or listener that fails after the write leaves no record either.
+- A key lives `wasichai.idempotency.ttl` (24 hours by default). After that it is gone and the same key creates again.
+- `X-Change-Reason` is not part of what makes two requests the same.
+- CORS exposes `Idempotent-Replayed` and `Retry-After` to browser clients.
+- In-process: `RecordService.create(objectName, request, reason, idempotencyKey)` joins your transaction (or opens
+  one), returns the stored record on a replay (values as its JSON holds them), and throws
+  `UnprocessableContentException` (422) or `RetryLaterException` (409).
 
 ### Partial update (PATCH)
 
@@ -1759,4 +1803,6 @@ RFC 7807 `application/problem+json`:
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
 | 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile |
+| 409 | an `Idempotency-Key` whose first request is still running, with `Retry-After` (`errors[]` names `Idempotency-Key`) |
 | 412 | `If-Match` no longer matches the record: someone wrote it since it was read (`errors[]` names `If-Match`) |
+| 422 | an `Idempotency-Key` sent before with another body or object (`errors[]` names `Idempotency-Key`) |

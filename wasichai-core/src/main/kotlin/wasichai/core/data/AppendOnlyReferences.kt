@@ -3,8 +3,6 @@ package wasichai.core.data
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
-import org.springframework.transaction.NoTransactionException
-import org.springframework.transaction.reactive.TransactionSynchronizationManager
 import org.springframework.transaction.reactive.TransactionalOperator
 import org.springframework.transaction.reactive.executeAndAwait
 import wasichai.core.common.ConflictException
@@ -84,17 +82,6 @@ class AppendOnlyReferences(
             if (exists(referrer.table, referrer.column, organizationId, recordId)) throw ConflictException(referrer.refusal(recordId))
         }
     }
-
-    // no reactive transaction context at all counts as none
-    private suspend fun inTransaction(): Boolean =
-        try {
-            TransactionSynchronizationManager
-                .forCurrentTransaction()
-                .map { it.isActualTransactionActive }
-                .awaitFirstOrNull() == true
-        } catch (_: NoTransactionException) {
-            false
-        }
 
     // a column or join table of an append-only object that can hold this object's ids
     private class Referrer(
