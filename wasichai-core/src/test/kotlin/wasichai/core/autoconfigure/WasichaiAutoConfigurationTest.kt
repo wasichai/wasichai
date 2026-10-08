@@ -14,14 +14,19 @@ import org.springframework.boot.security.oauth2.server.resource.autoconfigure.we
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpHeaders
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.web.server.SecurityWebFilterChain
+import org.springframework.web.cors.reactive.CorsConfigurationSource
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.admin.ServiceAccountService
 import wasichai.core.audit.AuditLogAdminAudit
+import wasichai.core.audit.AuditPage
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
@@ -138,6 +143,17 @@ class WasichaiAutoConfigurationTest {
             // here directly rather than by bean count, which would be 2 either way.
             assertThat(context.getBeansOfType(SecurityWebFilterChain::class.java)).containsKey("securityFilterChain")
             assertThat(context.beanFactory.findAnnotationOnBean("securityFilterChain", Order::class.java)?.value).isEqualTo(0)
+        }
+    }
+
+    // issue 52 (ADR-052): a browser on another origin can read the audit list's next-page cursor, and a
+    // record's ETag (ADR-051)
+    @Test
+    fun `cors exposes the audit list's next cursor`() {
+        runner.run { context ->
+            val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/audit"))
+            val config = context.getBean(CorsConfigurationSource::class.java).getCorsConfiguration(exchange)
+            assertThat(config!!.exposedHeaders).containsExactly(HttpHeaders.ETAG, AuditPage.NEXT_CURSOR_HEADER)
         }
     }
 

@@ -61,6 +61,17 @@ class CoreMigrationSqlTest {
             .doesNotContain("NOT NULL")
     }
 
+    // ADR-052: one index for a user's rows of a period, in list order. nothing else changes
+    @Test
+    fun `the audit log gains a per-tenant user and time index, and only that`() {
+        val index = sql("/db/wasichai/core/V12__audit_user_index.sql")
+
+        assertThat(index).contains(
+            "CREATE INDEX audit_log_user_time_idx ON \${metadataSchema}.audit_log (organization_id, user_id, occurred_at DESC);"
+        )
+        assertThat(index.lines().filterNot { it.startsWith("--") || it.isBlank() }).hasSize(1)
+    }
+
     @Test
     fun `the dev seed names the wasichai admin and every admin action`() {
         assertThat(seed).contains("admin@wasichai.local").contains("MANAGE_ORGANIZATION").doesNotContainIgnoringCase("sapgis")

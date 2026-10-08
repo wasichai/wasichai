@@ -40,12 +40,30 @@ data class AuditEntry(
 )
 
 // what GET /api/audit narrows by besides the object, the record and the operation. blank is no filter.
+// from/to: occurred_at >= from AND occurred_at < to. userId, serviceAccount: who made the change (ADR-052).
 data class AuditFilter(
     val correlationId: String? = null,
-    val source: String? = null
+    val source: String? = null,
+    val from: Instant? = null,
+    val to: Instant? = null,
+    val userId: UUID? = null,
+    val serviceAccount: String? = null
 ) {
     internal val correlation: String? get() = correlationId?.trim()?.takeIf { it.isNotEmpty() }
     internal val origin: String? get() = source?.trim()?.takeIf { it.isNotEmpty() }
+    internal val account: String? get() = serviceAccount?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+// one page of the log. the list itself is what the api answers; the cursor travels in a header,
+// so a client that knows nothing of paging reads what it always read (ADR-052).
+data class AuditPage(
+    val entries: List<AuditEntry>,
+    // null when no row follows
+    val nextCursor: String?
+) {
+    companion object {
+        const val NEXT_CURSOR_HEADER = "X-Next-Cursor"
+    }
 }
 
 // raw row. states stay as maps until we know what the caller may read. internal for tests.
@@ -78,23 +96,36 @@ class AuditQueryService(
     // tenant-wide read: needs an organization-wide READ grant, not one on some object.
     // the admin trail (admin:*) is MANAGE_ORGANIZATION's instead (ADR-049): asked for by name, anyone else gets
     // nothing, not a 403 that says it is there; unasked, it is left out for them, before the limit.
-    // filter: the rows of one request or one source (ADR-050). it only narrows: who reads what stays as above.
+    // filter: the rows of one request or one source (ADR-050), a period, a user (ADR-052). it only narrows: who
+    // reads what stays as above.
     suspend fun list(
         objectName: String?,
         recordId: UUID?,
         operation: String?,
         limit: Int?,
         filter: AuditFilter = AuditFilter()
-    ): List<AuditEntry> {
+    ): List<AuditEntry> = page(objectName, recordId, operation, limit, filter).entries
+
+    // list, one page at a time: [after] is the nextCursor of the page before, read under the same filters (ADR-052)
+    suspend fun page(
+        objectName: String?,
+        recordId: UUID?,
+        operation: String?,
+        limit: Int?,
+        filter: AuditFilter = AuditFilter(),
+        after: String? = null
+    ): AuditPage {
         val user = currentUser.require()
+        val query = AuditQuery(LIST, objectName, recordId, operation, limit, filter, after)
         if (AdminEntity.isAdmin(objectName)) {
-            if (!currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)) return emptyList()
-            return toEntries(user, fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin = true, filter))
+            if (!currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)) return AuditPage(emptyList(), null)
+            val (rows, next) = read(user.organizationId, query, withAdmin = true)
+            return AuditPage(toEntries(user, rows), next)
         }
         currentUser.requirePermission(user, Actions.READ)
         val withAdmin = currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)
-        val rows = fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin, filter)
-        return toEntries(user, inScope(user, rows))
+        val (rows, next) = read(user.organizationId, query, withAdmin)
+        return AuditPage(toEntries(user, inScope(user, rows)), next)
     }
 
     // history of one record is a read of that object, so it is checked against that object
@@ -102,21 +133,32 @@ class AuditQueryService(
         objectName: String,
         recordId: UUID,
         limit: Int?
-    ): List<AuditEntry> {
+    ): List<AuditEntry> = historyPage(objectName, recordId, limit).entries
+
+    // history, one page at a time, narrowed like list (ADR-052)
+    suspend fun historyPage(
+        objectName: String,
+        recordId: UUID,
+        limit: Int?,
+        filter: AuditFilter = AuditFilter(),
+        after: String? = null
+    ): AuditPage {
         val user = currentUser.require()
         val definition = metadata.loadDefinition(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.READ, definition.obj.id)
         // a record outside the app's read scope has no history for this caller: 404, as GET on it (ADR-048)
         val readable = scope.readable(user, definition, listOf(recordId))
         if (readable != null && recordId !in readable) throw NotFoundException("Record $recordId does not exist")
-        val rows = fetch(user.organizationId, definition.obj.name, recordId, null, limit, withAdmin = false)
-        return toEntries(user, rows)
+        val query = AuditQuery(HISTORY, definition.obj.name, recordId, null, limit, filter, after)
+        val (rows, next) = read(user.organizationId, query, withAdmin = false)
+        return AuditPage(toEntries(user, rows), next)
     }
 
     // only the entries of records the caller reads (ADR-048). with a scope on the object, a record that is
     // gone cannot be shown to be in it, so its entries go too, as do those of an object that is gone.
-    // after the limit: a scoped caller may get fewer entries than asked for. admin entries name no record of an
-    // object, so no scope reaches them (ADR-049). internal for tests.
+    // after the limit, and after the cursor is taken: a scoped caller may get fewer entries than asked for, even
+    // none with a cursor still there, but no row is skipped or repeated across pages (ADR-052). admin entries name
+    // no record of an object, so no scope reaches them (ADR-049). internal for tests.
     internal suspend fun inScope(
         user: AuthenticatedUser,
         rows: List<AuditRow>
@@ -146,66 +188,127 @@ class AuditQueryService(
             null
         }
 
-    private suspend fun fetch(
+    // one row past the page says whether another follows. the cursor is the page's last row as read, before the
+    // read scope drops any, so the next page starts where this read stopped (ADR-052)
+    private suspend fun read(
         organizationId: UUID,
-        objectName: String?,
-        recordId: UUID?,
-        operation: String?,
-        limit: Int?,
+        query: AuditQuery,
+        withAdmin: Boolean
+    ): Pair<List<AuditRow>, String?> {
+        val filters = query.filters()
+        val cursor =
+            query.after
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { AuditCursor.decode(it, filters) }
+        val (sql, bindings) = select(organizationId, query, withAdmin, cursor)
+        var spec = db.sql(sql)
+        bindings.forEach { (name, value) -> spec = spec.bind(name, value) }
+        val rows =
+            spec
+                .map { row, _ ->
+                    AuditRow(
+                        id = Rows.uuid(row, "id"),
+                        userEmail = Rows.stringOrNull(row, "email"),
+                        objectName = Rows.string(row, "object_name"),
+                        recordId = Rows.uuidOrNull(row, "record_id"),
+                        operation = Rows.string(row, "operation"),
+                        occurredAt = Rows.instantOrNull(row, "occurred_at"),
+                        before = parse(Rows.stringOrNull(row, "before_state")),
+                        after = parse(Rows.stringOrNull(row, "after_state")),
+                        documentId = Rows.uuidOrNull(row, "document_id"),
+                        reason = Rows.stringOrNull(row, "reason"),
+                        serviceAccount = Rows.stringOrNull(row, "service_account"),
+                        correlationId = Rows.stringOrNull(row, "correlation_id"),
+                        source = Rows.stringOrNull(row, "source")
+                    )
+                }.all()
+                .asFlow()
+                .toList()
+        val page = rows.take(query.size)
+        val next =
+            if (rows.size > query.size) {
+                // occurred_at is NOT NULL in the table
+                page.last().let { AuditCursor(filters, it.occurredAt!!, it.id).encode() }
+            } else {
+                null
+            }
+        return page to next
+    }
+
+    // the sql and its values, apart so a test can EXPLAIN exactly what runs. internal for tests.
+    internal fun select(
+        organizationId: UUID,
+        query: AuditQuery,
         withAdmin: Boolean,
-        filter: AuditFilter = AuditFilter()
-    ): List<AuditRow> {
+        cursor: AuditCursor? = null
+    ): Pair<String, Map<String, Any>> {
+        val filter = query.filter
+        val bindings =
+            mutableMapOf<String, Any>(
+                "organizationId" to organizationId,
+                "objectName" to (query.objectName ?: ""),
+                "operation" to query.normalizedOperation,
+                // one past the page: is there another?
+                "limit" to query.size + 1
+            )
         val filters = StringBuilder()
-        if (recordId != null) filters.append(" AND a.record_id = :recordId")
-        if (!withAdmin) filters.append(" AND a.object_name NOT LIKE :adminNames")
+        query.recordId?.let {
+            filters.append(" AND a.record_id = :recordId")
+            bindings["recordId"] = it
+        }
+        if (!withAdmin) {
+            filters.append(" AND a.object_name NOT LIKE :adminNames")
+            bindings["adminNames"] = AdminEntity.PREFIX + "%"
+        }
         // next to organization_id: (organization_id, correlation_id) is indexed
-        if (filter.correlation != null) filters.append(" AND a.correlation_id = :correlationId")
-        if (filter.origin != null) filters.append(" AND a.source = :source")
-        var spec =
-            db
-                .sql(
-                    """
-                    SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id, a.reason,
-                           a.correlation_id, a.source,
-                           a.before_state::text AS before_state, a.after_state::text AS after_state,
-                           sa.name AS service_account
-                    FROM ${schemas.metadata}.audit_log a
-                    LEFT JOIN ${schemas.metadata}.users u ON u.id = a.user_id
-                    LEFT JOIN ${schemas.metadata}.service_accounts sa ON sa.id = a.user_id
-                    WHERE a.organization_id = :organizationId
-                      AND (:objectName = '' OR a.object_name = :objectName)
-                      AND (:operation = '' OR a.operation = :operation)$filters
-                    ORDER BY a.occurred_at DESC, a.id DESC
-                    LIMIT :limit
-                    """.trimIndent()
-                ).bind("organizationId", organizationId)
-                .bind("objectName", objectName ?: "")
-                .bind("operation", operation?.trim()?.uppercase() ?: "")
-                .bind("limit", (limit ?: 100).coerceIn(1, 500))
-        if (recordId != null) spec = spec.bind("recordId", recordId)
-        if (!withAdmin) spec = spec.bind("adminNames", AdminEntity.PREFIX + "%")
-        filter.correlation?.let { spec = spec.bind("correlationId", it) }
-        filter.origin?.let { spec = spec.bind("source", it) }
-        return spec
-            .map { row, _ ->
-                AuditRow(
-                    id = Rows.uuid(row, "id"),
-                    userEmail = Rows.stringOrNull(row, "email"),
-                    objectName = Rows.string(row, "object_name"),
-                    recordId = Rows.uuidOrNull(row, "record_id"),
-                    operation = Rows.string(row, "operation"),
-                    occurredAt = Rows.instantOrNull(row, "occurred_at"),
-                    before = parse(Rows.stringOrNull(row, "before_state")),
-                    after = parse(Rows.stringOrNull(row, "after_state")),
-                    documentId = Rows.uuidOrNull(row, "document_id"),
-                    reason = Rows.stringOrNull(row, "reason"),
-                    serviceAccount = Rows.stringOrNull(row, "service_account"),
-                    correlationId = Rows.stringOrNull(row, "correlation_id"),
-                    source = Rows.stringOrNull(row, "source")
-                )
-            }.all()
-            .asFlow()
-            .toList()
+        filter.correlation?.let {
+            filters.append(" AND a.correlation_id = :correlationId")
+            bindings["correlationId"] = it
+        }
+        filter.origin?.let {
+            filters.append(" AND a.source = :source")
+            bindings["source"] = it
+        }
+        // (organization_id, user_id, occurred_at DESC) serves a user and a period together (V12)
+        filter.userId?.let {
+            filters.append(" AND a.user_id = :userId")
+            bindings["userId"] = it
+        }
+        filter.account?.let {
+            filters.append(" AND sa.name = :serviceAccount")
+            bindings["serviceAccount"] = it
+        }
+        filter.from?.let {
+            filters.append(" AND a.occurred_at >= :from")
+            bindings["from"] = it
+        }
+        filter.to?.let {
+            filters.append(" AND a.occurred_at < :to")
+            bindings["to"] = it
+        }
+        // strictly after the cursor's row in (occurred_at DESC, id DESC) order. the <= alone bounds the index scan
+        cursor?.let {
+            filters.append(" AND a.occurred_at <= :afterAt AND (a.occurred_at < :afterAt OR a.id < :afterId)")
+            bindings["afterAt"] = it.occurredAt
+            bindings["afterId"] = it.id
+        }
+        val sql =
+            """
+            SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id, a.reason,
+                   a.correlation_id, a.source,
+                   a.before_state::text AS before_state, a.after_state::text AS after_state,
+                   sa.name AS service_account
+            FROM ${schemas.metadata}.audit_log a
+            LEFT JOIN ${schemas.metadata}.users u ON u.id = a.user_id
+            LEFT JOIN ${schemas.metadata}.service_accounts sa ON sa.id = a.user_id
+            WHERE a.organization_id = :organizationId
+              AND (:objectName = '' OR a.object_name = :objectName)
+              AND (:operation = '' OR a.operation = :operation)$filters
+            ORDER BY a.occurred_at DESC, a.id DESC
+            LIMIT :limit
+            """.trimIndent()
+        return sql to bindings
     }
 
     // the log would otherwise hand out field values the field permissions hide. internal for tests.
@@ -272,3 +375,39 @@ class AuditQueryService(
 
     private fun parse(json: String?): Map<String, Any?>? = json?.let { objectMapper.readValue(it, object : TypeReference<Map<String, Any?>>() {}) }
 }
+
+// one read of the log: what it asks for and where it resumes. internal for tests.
+internal data class AuditQuery(
+    // LIST or HISTORY: a history cursor never continues the tenant list, nor the other way round
+    val kind: String,
+    val objectName: String?,
+    val recordId: UUID?,
+    val operation: String?,
+    val limit: Int?,
+    val filter: AuditFilter,
+    val after: String? = null
+) {
+    val size: Int get() = (limit ?: 100).coerceIn(1, 500)
+
+    val normalizedOperation: String get() = operation?.trim()?.uppercase() ?: ""
+
+    // every filter that shapes the list, as it is applied; not the limit, a page may change size
+    fun filters(): String =
+        AuditCursor.filtersOf(
+            listOf(
+                kind,
+                objectName ?: "",
+                recordId,
+                normalizedOperation,
+                filter.correlation,
+                filter.origin,
+                filter.from,
+                filter.to,
+                filter.userId,
+                filter.account
+            )
+        )
+}
+
+private const val LIST = "list"
+private const val HISTORY = "history"

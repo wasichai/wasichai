@@ -286,7 +286,12 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "index audit_log.audit_log_correlation_idx CREATE INDEX audit_log_correlation_idx ON META.audit_log USING " +
                     "btree (organization_id, correlation_id)",
                 "column automation_runs.correlation_id #17 text"
-            ).associateWith { "ADR-031 D35: correlation id and change source" }
+            ).associateWith { "ADR-031 D35: correlation id and change source" } +
+            // the audit list by user and period (ADR-031 D37, ADR-052)
+            mapOf(
+                "index audit_log.audit_log_user_time_idx CREATE INDEX audit_log_user_time_idx ON META.audit_log USING btree " +
+                    "(organization_id, user_id, occurred_at DESC)" to "ADR-031 D37: audit pages, period and user filters"
+            )
 
     @Test
     fun `the fixture is the original's whole schema`() {
