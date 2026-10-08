@@ -88,3 +88,4 @@ supersedes it and says so in its status line.
   record](0058-idempotency-key-on-record-creation.md)
 - [ADR-059: Token revocation by a per-user marker, sign-in attempt limits and a password
   policy](0059-token-revocation-login-limits-and-password-policy.md)
+- [ADR-060: RecordService.createAll, a batch create that looks things up once](0060-batch-record-creation.md)

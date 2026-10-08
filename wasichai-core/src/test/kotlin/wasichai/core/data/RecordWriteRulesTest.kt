@@ -167,7 +167,7 @@ class RecordWriteRulesTest {
             RecordReadScopesFixtures.none(),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     private fun stored(codigo: String): UUID = UUID.randomUUID().also { rows[it] = mapOf("codigo" to codigo) }

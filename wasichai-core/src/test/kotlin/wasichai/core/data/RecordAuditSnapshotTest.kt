@@ -174,7 +174,7 @@ class RecordAuditSnapshotTest {
             RecordReadScopesFixtures.none(),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     @Test

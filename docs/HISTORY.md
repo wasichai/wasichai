@@ -2,6 +2,45 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — RecordService.createAll: a batch create that looks things up once
+
+`RecordService.create` pays a fixed set of round trips per record (definition, permission and field access, workflow
+state) and, since D29 and D30, an `objects.findById` plus an `id = ANY` lookup per `RELATION` value, so a caller writing
+many records of one object paid it all again for each: srtm-backend's arbitrios determination, 48 `cuota_arbitrio` per
+predio with four `RELATION` fields, measured 17.7 statements per record on 0.3.2 against 11.7 on 0.2.0, 8 of them the
+relation checks ([#77](https://github.com/wasichai/wasichai/issues/77)). New in process:
+`RecordService.createAll(objectName, requests: List<RecordRequest>, reason = null): List<RecordResponse>`. It resolves
+the caller, loads the definition, checks the permission and the disabled flag, reads the field access and the workflow
+state **once per batch**, and looks the `RELATION` targets up once per target object over the distinct ids of the whole
+batch (after defaults, in the caller's read scope as D30 has it). Per record, exactly as `create`: the unwritable and
+required checks, defaults, the write guards (`appendOnly`, `requiresReason`, the `RELATION` check answered from the
+batch's lookups, the app's guards), insert, audit row, listeners and the readable projection. Answers come in request
+order, each what `create` would answer. Errors are `create`'s, record by record in request order: the checks that need
+no database run up front but a failure is thrown only when the loop reaches its record, so the batch throws the first
+error the `create` loop would, a missing or unreadable target D29's "Invalid value for '<field>'" on the field. One
+transaction: the caller's when there is one (ADR-038), else its own, the same "join or open" as `IdempotencyKeys.once`;
+the first failure, a guard's or a listener's included, stores, audits and announces nothing of the batch. No REST route,
+so an `apiOnly` object takes it, and no `Idempotency-Key` variant. A per-transaction cache (the issue's option 2) is not
+done: it needs invalidation rules on every write path and has no user the batch does not serve (rule 10). `create` and
+`createAll` share their steps as private helpers. `RecordService` takes `transactions: () -> TransactionalOperator` as
+its new last constructor argument (the auto-configuration passes the `ReactiveTransactionManager` lazily, as for
+`IdempotencyKeys`). New internal pieces: `RelationTargets.Checked` (a batch's lookups, refused by `rejectMissing` for
+any other reader) and `RelationTargets.check`, and a `RecordWriteGuards` overload that takes it; the public
+`beforeWrite(definition, change, reader)` is unchanged. No route, property or migration. Nothing changes for `create` or
+over REST, so no ADR-031 entry ([ADR-060](adr/0060-batch-record-creation.md), refines ADR-038). Measured on the issue's
+case by `RecordBatchCreateApiTest`: 2.21 statements per record for `ADMIN` against 12.00 for a `create` loop, 2.25
+against 14.00 for a scoped reader, the `id = ANY` lookups 4 per batch instead of 192. New tests:
+`RecordServiceBatchTest` (definition, permission and field access once for N records; one `existing` per target object
+with the distinct ids for 48 records and four fields; a missing target fails with `create`'s error and nothing after it
+is inserted; the first failing record in order wins; request order; the empty list asks nothing; the reader mismatch; an
+id the batch did not look up is still looked up; a target it found missing is read again, so one an earlier record's
+listener wrote passes) and the integration test `RecordBatchCreateApiTest`, which counts SQL statements through a
+wrapped `ConnectionFactory` (at most 10 per record for `ADMIN`, fewer than the `create` loop; one relation lookup per
+target object per batch for a scoped reader), refuses a missing and an unreadable target with `create`'s error and
+nothing stored or audited, and rolls the batch back with the caller's transaction. Docs:
+[core.md](modules/core.md#many-records-of-one-object), [build-your-app.md](guides/build-your-app.md) "Write several
+records atomically".
+
 ## 2026-10-08 — Token revocation, sign-in attempt limits and a password policy
 
 Tokens lived until `exp` whatever an administrator did, nothing counted failed sign-ins, and the one password rule was

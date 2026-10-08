@@ -171,7 +171,7 @@ class RecordServicePlatformTest {
             RecordReadScopesFixtures.none(),
             tenants,
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     @Test

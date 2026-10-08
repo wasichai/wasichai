@@ -163,7 +163,7 @@ class RecordServiceDefaultsTest {
             RecordReadScopesFixtures.none(),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     @Test

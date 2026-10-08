@@ -142,7 +142,7 @@ class RecordServiceReadScopeTest {
             RecordReadScopes(scopes.toList(), mock(RecordStore::class.java)),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     private val query = RecordQuery(page = PageRequest.of(0, 25), criteria = listOf(bbox))

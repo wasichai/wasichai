@@ -149,6 +149,7 @@ class WasichaiDataAutoConfiguration {
         readScopes: RecordReadScopes
     ): RelationTargets = RelationTargets(db, schemas, objects, fields, readScopes)
 
+    // the transaction manager is looked up on first createAll, as for IdempotencyKeys
     @Bean
     @ConditionalOnMissingBean
     fun recordService(
@@ -164,7 +165,8 @@ class WasichaiDataAutoConfiguration {
         references: AppendOnlyReferences,
         readScopes: RecordReadScopes,
         tenants: TenantDirectory,
-        idempotency: IdempotencyKeys
+        idempotency: IdempotencyKeys,
+        transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): RecordService =
         RecordService(
             metadata,
@@ -180,7 +182,7 @@ class WasichaiDataAutoConfiguration {
             readScopes,
             tenants,
             idempotency
-        )
+        ) { TransactionalOperator.create(transactionManager.getObject()) }
 
     // Idempotency-Key on record creation (ADR-058). the transaction manager is looked up on first use, as for ClusterLock
     @Bean

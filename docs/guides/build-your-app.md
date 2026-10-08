@@ -391,6 +391,12 @@ One exception to "opens no transaction": deleting a record that an append-only o
 checks and deletes in a short transaction of its own when you have none
 ([ADR-044](../adr/0044-append-only-delete-check-under-a-row-lock.md)).
 
+Many records of one object, such as a year of cuotas for a predio, go in one call:
+`records.createAll("cuota_arbitrio", requests)`. It looks up the definition, your access and each distinct `RELATION`
+target once per batch instead of once per record, answers in request order, and fails with the error the first failing
+record would get from `create`. It is all or nothing on its own: it joins your transaction, or opens one when you have
+none ([ADR-060](../adr/0060-batch-record-creation.md)).
+
 ## Background work
 
 A job with no user behind it, an outbox publisher say, calls `RecordService` as the platform and takes a
