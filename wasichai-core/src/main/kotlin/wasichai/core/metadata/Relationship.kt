@@ -50,6 +50,10 @@ enum class RelationshipDirection {
     // how the api spells it
     val wire: String get() = name.lowercase()
 
+    // on a self-relationship: does this direction stand on the source end? forward is the end the
+    // read always walked (#61 keeps it): the source, but the target for ONE_TO_MANY (its key sits there)
+    fun fromSource(type: RelationshipType): Boolean = (this == FORWARD) == (type != RelationshipType.ONE_TO_MANY)
+
     companion object {
         const val PARAMETER = "direction"
 

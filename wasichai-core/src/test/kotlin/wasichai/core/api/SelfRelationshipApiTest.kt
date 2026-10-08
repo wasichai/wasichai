@@ -51,21 +51,26 @@ class SelfRelationshipApiTest : WasichaiIntegrationTest() {
     }
 
     @Test
-    fun `one-to-many self - forward lists the children, inverse reads the parent`() {
-        // the key sits on the target: each child names its parent
+    fun `one-to-many self - the default follows the record's own key to the parent, inverse lists the children`() {
+        // the key sits on the target: each child names its parent. forward stays the walk the read always made
         val rel = createRelationship("ONE_TO_MANY", unit, unit, "parent", inverseLabel = "Parent")
         val root = createRecord(unit, mapOf("nombre" to "Root"))
         val east = createRecord(unit, mapOf("nombre" to "East", "parent" to root))
         createRecord(unit, mapOf("nombre" to "West", "parent" to root))
 
-        related(unit, root, rel, "?sort=nombre").let {
+        assertThat(related(unit, east, rel).names).containsExactly("Root")
+        assertThat(related(unit, east, rel, "?direction=forward").names).containsExactly("Root")
+        assertThat(related(unit, root, rel).total).isEqualTo(0)
+
+        related(unit, root, rel, "?direction=inverse&sort=nombre").let {
             assertThat(it.total).isEqualTo(2)
             assertThat(it.names).containsExactly("East", "West")
         }
-        assertThat(related(unit, east, rel).total).isEqualTo(0)
+        assertThat(related(unit, east, rel, "?direction=inverse").total).isEqualTo(0)
 
-        assertThat(related(unit, east, rel, "?direction=inverse").names).containsExactly("Root")
-        assertThat(related(unit, root, rel, "?direction=inverse").total).isEqualTo(0)
+        // the listing says what each direction reads: forward one parent, inverse many children
+        val sides = relationshipsOf(unit).filter { it.get("relationship").asString() == rel }.map { side(it) }
+        assertThat(sides).containsExactly(listOf("Parent", "false", unit, "forward"), listOf("Label $rel", "true", unit, "inverse"))
     }
 
     @Test

@@ -71,9 +71,9 @@ Foreign keys are real (`ON DELETE SET NULL` for fields, `ON DELETE CASCADE` insi
 the database keeps the graph honest.
 
 A relationship may have the same object as source and target (a parent unit, a previous version). Its object then
-stands on both ends: the related read takes `direction=forward` (the "Read from source" column, the default) or
-`direction=inverse` (the "Read from target" column), and the object's relationship list shows it once per direction
-(ADR-031 D42, [rest.md](../api/rest.md) "Related records").
+stands on both ends: the related read takes `direction=forward` (the default, the walk it always made: the "Read from
+source" column, but "Read from target" for `ONE_TO_MANY`) or `direction=inverse` (the other column), and the
+object's relationship list shows it once per direction (ADR-031 D42, [rest.md](../api/rest.md) "Related records").
 
 ## Pages
 

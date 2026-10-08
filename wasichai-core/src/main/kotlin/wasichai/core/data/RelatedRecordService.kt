@@ -48,7 +48,7 @@ class RelatedRecordService(
     private val readScopes: RecordReadScopes
 ) {
     // records on the other side of a relationship, from one record. direction: INVERSE walks a
-    // self-relationship from its target end (who points at me); 400 on any other relationship.
+    // self-relationship from the end FORWARD does not; 400 on any other relationship.
     suspend fun relatedRecords(
         objectName: String,
         recordId: UUID,

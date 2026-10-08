@@ -392,8 +392,8 @@ Core is always installed.
 - D40: a field's `defaultValue` fills what a create leaves out, even a field the caller may not write; it is checked
   when set (`400` on `defaultValue`) and `PUT …/fields/{field}` takes it; updates never apply it.
 - D42: a self-relationship is read from either end with `direction=forward|inverse` on the related read, and listed
-  once per direction by `GET /api/objects/{object}/relationships`; a `ONE_TO_MANY` one now reads forward as its
-  documented "many targets".
+  once per direction by `GET /api/objects/{object}/relationships`, each entry labelled for what its direction reads;
+  forward is the walk the read always made.
 
 ## Known limitations
 

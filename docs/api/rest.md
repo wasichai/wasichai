@@ -544,8 +544,9 @@ them again.
 ```
 
 A relationship whose `source` and `target` are the same object (a parent unit, a previous version, a duplicate-of) is
-listed **twice**, forward first: `direction: "forward"` reads it from its source end (`label`), `direction: "inverse"`
-from its target end (`inverseLabel`, or the object's plural label when there is none), each with its own `many`. Any
+listed **twice**, forward first, each entry describing what that direction reads (see the table under Related records):
+`label` when the read stands on the source end, `inverseLabel` (or the object's plural label when there is none) when
+it stands on the target end, and `many` accordingly. Any
 other relationship is listed once, and its entry has no `direction` key at all. Pass `direction` to the related read
 below to walk the side an entry describes. A client that keys entries by `relationship` alone should key them by
 `relationship` and `direction`, or keep the first (forward) entry of each name, which is the one it saw before
@@ -571,18 +572,21 @@ GET /api/objects/unidad/records/{child}/related/unidad_padre                    
 GET /api/objects/unidad/records/{parent}/related/unidad_padre?direction=inverse   its children
 ```
 
-| Type | `forward` (from the source end) | `inverse` (from the target end) |
+| Type | `forward` (the default) | `inverse` |
 |---|---|---|
-| `MANY_TO_ONE`, `ONE_TO_ONE` | the record its field points at | the records whose field points at it |
-| `ONE_TO_MANY` | the records whose field points at it | the record its field points at |
-| `MANY_TO_MANY` | the targets it was linked to | the sources linked to it |
+| `MANY_TO_ONE`, `ONE_TO_ONE` | the record its field points at (from the source end) | the records whose field points at it |
+| `ONE_TO_MANY` | the record its field points at (from the target end) | the records whose field points at it |
+| `MANY_TO_MANY` | the targets it was linked to (from the source end) | the sources linked to it |
 
-`forward` or no `direction` reads from the object's own end, as always. `inverse` on a relationship between two
+`forward` is the walk this read always made, so no default read changes: for a `ONE_TO_MANY` self-relationship it is
+the target end, which holds the key, and its forward entry in the listing says `inverseLabel` and `many: false`. On a
+relationship between two objects, `forward` or no `direction` reads from the object's own end, as always. `inverse` on a relationship between two
 different objects is a `400` naming `direction` (read it from the other object instead), and so is any value other than
 `forward` or `inverse` (case and surrounding spaces do not matter). On this route `direction` is that parameter, never
 a filter on a field of that name. Permissions, field permissions, own-records-only and the app's read scope apply to
 an inverse read exactly as to a forward one. Link and unlink take no `direction`: the record in the path is the
 source of a `MANY_TO_MANY` self-relationship and `otherId` its target.
+
 A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`, `400`
 on `reason` when either end is `requiresReason` and no `X-Change-Reason` came. A reason sent is stored on both
 records' history.

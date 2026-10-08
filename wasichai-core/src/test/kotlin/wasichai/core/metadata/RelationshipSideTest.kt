@@ -57,27 +57,27 @@ class RelationshipSideTest {
     }
 
     @Test
-    fun `a self-relationship reads forward from its source end and inverse from its target end`() =
+    fun `a self-relationship reads forward the way the read always walked, inverse the other end`() =
         runTest {
             val service = service()
+            // type to (forward label, many, stands on source) and the same for inverse. forward is the
+            // source end, but for ONE_TO_MANY the target end: its key sits there, and that walk stays
             val expected =
                 mapOf(
-                    // type to (forward many, inverse many)
-                    RelationshipType.MANY_TO_ONE to (false to true),
-                    RelationshipType.ONE_TO_MANY to (true to false),
-                    RelationshipType.ONE_TO_ONE to (false to false),
-                    RelationshipType.MANY_TO_MANY to (true to true)
+                    RelationshipType.MANY_TO_ONE to (Triple("Forward", false, true) to Triple("Inverse", true, false)),
+                    RelationshipType.ONE_TO_ONE to (Triple("Forward", false, true) to Triple("Inverse", false, false)),
+                    RelationshipType.MANY_TO_MANY to (Triple("Forward", true, true) to Triple("Inverse", true, false)),
+                    RelationshipType.ONE_TO_MANY to (Triple("Inverse", false, false) to Triple("Forward", true, true))
                 )
-            expected.forEach { (type, many) ->
+            expected.forEach { (type, sides) ->
                 val rel = relationship(type, unit, unit)
                 val forward = service.side(rel, unit)
-                assertThat(listOf(forward.label, forward.many, forward.direction, forward.fromSource))
-                    .describedAs("$type forward")
-                    .containsExactly("Forward", many.first, RelationshipDirection.FORWARD, true)
+                assertThat(Triple(forward.label, forward.many, forward.fromSource)).describedAs("$type forward").isEqualTo(sides.first)
+                assertThat(forward.direction).isEqualTo(RelationshipDirection.FORWARD)
+                assertThat(RelationshipDirection.FORWARD.fromSource(type)).isEqualTo(sides.first.third)
                 val inverse = service.side(rel, unit, RelationshipDirection.INVERSE)
-                assertThat(listOf(inverse.label, inverse.many, inverse.direction, inverse.fromSource))
-                    .describedAs("$type inverse")
-                    .containsExactly("Inverse", many.second, RelationshipDirection.INVERSE, false)
+                assertThat(Triple(inverse.label, inverse.many, inverse.fromSource)).describedAs("$type inverse").isEqualTo(sides.second)
+                assertThat(inverse.direction).isEqualTo(RelationshipDirection.INVERSE)
                 assertThat(inverse.otherObject).isEqualTo(unit)
             }
             // no inverse label: the plural

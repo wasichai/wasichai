@@ -45,7 +45,7 @@ data class RelatedSide(
     // the end this side stands on is the source. on a self-relationship the object is both ends,
     // so the direction decides.
     val fromSource: Boolean
-        get() = direction?.let { it == RelationshipDirection.FORWARD } ?: (otherObject.id == relationship.targetObjectId)
+        get() = direction?.fromSource(relationship.type) ?: (otherObject.id == relationship.targetObjectId)
 }
 
 // every change leaves one admin:relationship entry; the column or join table behind it is part of it (ADR-049)
@@ -239,8 +239,8 @@ class RelationshipService(
             "joinTable" to relationship.joinTable
         )
 
-    // one relationship seen from one object. data walks records with it. inverse walks a
-    // self-relationship from its target end; any other relationship has no inverse to walk.
+    // one relationship seen from one object. data walks records with it. on a self-relationship
+    // inverse walks the end forward does not; any other relationship has no inverse to walk.
     suspend fun side(
         relationship: Relationship,
         obj: CustomObject,
@@ -260,7 +260,7 @@ class RelationshipService(
                 "inverse only applies to a relationship from an object to itself; read it from the other object"
             )
         }
-        val fromSource = if (relationship.selfReferencing) direction == RelationshipDirection.FORWARD else obj.id == relationship.sourceObjectId
+        val fromSource = if (relationship.selfReferencing) direction.fromSource(relationship.type) else obj.id == relationship.sourceObjectId
         val otherId = if (fromSource) relationship.targetObjectId else relationship.sourceObjectId
         val other =
             objects.findById(relationship.organizationId, otherId)
