@@ -63,6 +63,15 @@ callers, concurrent senders, in flight `409`, a failed request retried, a failin
 expiry with and without the purge, in process and in the caller's transaction). Docs: [rest.md](api/rest.md) "Retrying
 a create", [core.md](modules/core.md).
 
+## 2026-10-08 — The security floors reach apps that import only the BOM
+
+The floors over the Spring Boot BOM (below) sit in `wasichai.spring-module`, so a Gradle app gets them through the
+modules' published metadata, but a Maven app that imports `wasichai-bom` did not: Maven never inherits a dependency's
+`dependencyManagement`, only an imported BOM's. `wasichai-bom` now imports the Jackson 2 (`2.21.7`) and Jackson 3
+(`3.1.7`) BOMs ahead of Boot's, since in Maven the first import that manages an artifact wins, and constrains
+`com.ongres.scram` to `3.3`, from the same catalog entries, so each floor still goes in one place once Boot catches
+up. No behaviour change, no new artifact.
+
 ## 2026-10-08 — Security floors over the Spring Boot BOM
 
 Clears the open Dependabot alerts. Spring Boot 4.1.1, the newest release, still manages vulnerable patch versions, so
