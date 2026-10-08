@@ -26,6 +26,10 @@ import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.TenantDirectory
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.AudienceResolver
+import wasichai.notifications.Deliveries
+import wasichai.notifications.DeliveryChannel
+import wasichai.notifications.DeliveryRepository
+import wasichai.notifications.DeliveryWork
 import wasichai.notifications.InboxController
 import wasichai.notifications.InboxRepository
 import wasichai.notifications.InboxService
@@ -34,6 +38,8 @@ import wasichai.notifications.NotificationAdminService
 import wasichai.notifications.NotificationChannel
 import wasichai.notifications.NotificationListener
 import wasichai.notifications.NotificationLoop
+import wasichai.notifications.NotificationPreferencesController
+import wasichai.notifications.NotificationPreferencesService
 import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
 import wasichai.notifications.NotificationRuleCleanup
@@ -79,14 +85,50 @@ class WasichaiNotificationsAutoConfiguration {
     ): NotificationPreparer = NotificationPreparer(metadata, audience)
 
     // JsonMapper, not the wider ObjectMapper: see core's WasichaiMetadataAutoConfiguration.customFieldRepository.
-    // both repositories check the channel's length when built: an over-long metadata schema fails the start
+    // both repositories check the channel's length when built: an over-long metadata schema fails the start.
+    // news goes to the delivery channels in the writer's transaction (ADR-060)
     @Bean
     @ConditionalOnMissingBean
     fun notificationRepository(
         db: DatabaseClient,
         json: JsonMapper,
+        schemas: WasichaiSchemas,
+        deliveries: Deliveries
+    ): NotificationRepository = NotificationRepository(db, json, schemas, deliveries)
+
+    // delivery channels (ADR-060). no DeliveryChannel bean: nothing is fanned out, sent or scheduled
+    @Bean
+    @ConditionalOnMissingBean
+    fun deliveryRepository(
+        db: DatabaseClient,
+        json: JsonMapper,
         schemas: WasichaiSchemas
-    ): NotificationRepository = NotificationRepository(db, json, schemas)
+    ): DeliveryRepository = DeliveryRepository(db, json, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun deliveries(
+        channels: ObjectProvider<DeliveryChannel>,
+        repository: DeliveryRepository,
+        users: UserDirectory,
+        roles: RoleDirectory,
+        units: OrgUnitDirectory,
+        properties: NotificationsProperties
+    ): Deliveries = Deliveries(channels.orderedStream().toList(), repository, users, roles, units, properties)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationPreferencesService(
+        repository: DeliveryRepository,
+        deliveries: Deliveries
+    ): NotificationPreferencesService = NotificationPreferencesService(repository, deliveries.channels)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationPreferencesController(
+        service: NotificationPreferencesService,
+        currentUser: CurrentUser
+    ): NotificationPreferencesController = NotificationPreferencesController(service, currentUser)
 
     @Bean
     @ConditionalOnMissingBean
@@ -171,11 +213,14 @@ class WasichaiNotificationsAutoConfiguration {
         clock: ObjectProvider<Clock>,
         rules: NotificationRuleRepository,
         metadata: MetadataService,
-        ruleNotifications: RuleNotifications
+        ruleNotifications: RuleNotifications,
+        deliveries: Deliveries
     ): NotificationLoop =
         NotificationLoop(
             sources.orderedStream().toList(),
-            listOf(RulesWork(rules, metadata, ruleNotifications, properties.ruleInterval)),
+            listOf(RulesWork(rules, metadata, ruleNotifications, properties.ruleInterval)) +
+                // no channel, no delivery work: the loop runs as it did before channels existed
+                listOfNotNull(DeliveryWork(deliveries, properties.deliveryInterval).takeIf { deliveries.channels.isNotEmpty() }),
             clusterLock,
             records,
             tenants,

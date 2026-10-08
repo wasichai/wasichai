@@ -1,1 +1,3 @@
 wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
+wasichai.notifications.autoconfigure.WasichaiNotificationsEmailAutoConfiguration
+wasichai.notifications.autoconfigure.WasichaiNotificationsAutomationAutoConfiguration

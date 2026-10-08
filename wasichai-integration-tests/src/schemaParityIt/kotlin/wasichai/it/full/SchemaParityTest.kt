@@ -334,7 +334,65 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "table idempotency_keys"
             ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" } +
             // token revocation marker (ADR-031 D44, ADR-059)
-            mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation")
+            mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation") +
+            // delivery channels (ADR-031 D46, ADR-060): two more tables of the notifications module
+            listOf(
+                "column notification_deliveries.attempts #7 integer NOT NULL DEFAULT 0",
+                "column notification_deliveries.channel #5 text NOT NULL",
+                "column notification_deliveries.created_at #11 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_deliveries.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column notification_deliveries.last_error #8 text",
+                "column notification_deliveries.next_attempt_at #9 timestamp with time zone NOT NULL",
+                "column notification_deliveries.notification_id #2 uuid NOT NULL",
+                "column notification_deliveries.organization_id #3 uuid NOT NULL",
+                "column notification_deliveries.sent_at #10 timestamp with time zone",
+                "column notification_deliveries.status #6 text NOT NULL DEFAULT 'PENDING'::text",
+                "column notification_deliveries.updated_at #12 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_deliveries.user_id #4 uuid NOT NULL",
+                "column notification_preferences.channel #2 text NOT NULL",
+                "column notification_preferences.kinds #3 text[] NOT NULL",
+                "column notification_preferences.updated_at #4 timestamp with time zone NOT NULL DEFAULT now()",
+                "column notification_preferences.user_id #1 uuid NOT NULL",
+                "constraint notification_deliveries.notification_deliveries_attempts_not_null NOT NULL attempts",
+                "constraint notification_deliveries.notification_deliveries_channel_not_null NOT NULL channel",
+                "constraint notification_deliveries.notification_deliveries_created_at_not_null NOT NULL created_at",
+                "constraint notification_deliveries.notification_deliveries_id_not_null NOT NULL id",
+                "constraint notification_deliveries.notification_deliveries_next_attempt_at_not_null NOT NULL next_attempt_at",
+                "constraint notification_deliveries.notification_deliveries_notification_id_fkey FOREIGN KEY (notification_id) " +
+                    "REFERENCES META.notifications(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_notification_id_not_null NOT NULL notification_id",
+                "constraint notification_deliveries.notification_deliveries_organization_id_fkey FOREIGN KEY (organization_id) " +
+                    "REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_organization_id_not_null NOT NULL organization_id",
+                "constraint notification_deliveries.notification_deliveries_pkey PRIMARY KEY (id)",
+                "constraint notification_deliveries.notification_deliveries_status_not_null NOT NULL status",
+                "constraint notification_deliveries.notification_deliveries_status_valid CHECK ((status = ANY " +
+                    "(ARRAY['PENDING'::text, 'SENT'::text, 'FAILED'::text, 'SKIPPED'::text])))",
+                "constraint notification_deliveries.notification_deliveries_unique UNIQUE (notification_id, user_id, channel)",
+                "constraint notification_deliveries.notification_deliveries_updated_at_not_null NOT NULL updated_at",
+                "constraint notification_deliveries.notification_deliveries_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notification_deliveries.notification_deliveries_user_id_not_null NOT NULL user_id",
+                "constraint notification_preferences.notification_preferences_channel_not_null NOT NULL channel",
+                "constraint notification_preferences.notification_preferences_kinds_not_null NOT NULL kinds",
+                "constraint notification_preferences.notification_preferences_kinds_valid CHECK ((kinds <@ ARRAY['INFO'::text, " +
+                    "'WARNING'::text, 'ACTION'::text]))",
+                "constraint notification_preferences.notification_preferences_pkey PRIMARY KEY (user_id, channel)",
+                "constraint notification_preferences.notification_preferences_updated_at_not_null NOT NULL updated_at",
+                "constraint notification_preferences.notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint notification_preferences.notification_preferences_user_id_not_null NOT NULL user_id",
+                "index notification_deliveries.notification_deliveries_due_idx CREATE INDEX notification_deliveries_due_idx ON " +
+                    "META.notification_deliveries USING btree (organization_id, next_attempt_at) WHERE (status = 'PENDING'::text)",
+                "index notification_deliveries.notification_deliveries_pkey CREATE UNIQUE INDEX notification_deliveries_pkey " +
+                    "ON META.notification_deliveries USING btree (id)",
+                "index notification_deliveries.notification_deliveries_unique CREATE UNIQUE INDEX " +
+                    "notification_deliveries_unique ON META.notification_deliveries USING btree (notification_id, user_id, channel)",
+                "index notification_deliveries.notification_deliveries_user_idx CREATE INDEX notification_deliveries_user_idx " +
+                    "ON META.notification_deliveries USING btree (user_id)",
+                "index notification_preferences.notification_preferences_pkey CREATE UNIQUE INDEX " +
+                    "notification_preferences_pkey ON META.notification_preferences USING btree (user_id, channel)",
+                "table notification_deliveries",
+                "table notification_preferences"
+            ).associateWith { "ADR-031 D46: notification delivery channels and preferences" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

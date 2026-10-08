@@ -317,6 +317,73 @@ class AutomationApiTest : FullAppIntegrationTest() {
             .isEqualTo("STATE_ENTERED")
     }
 
+    // ADR-060: NOTIFY on the same STATE_ENTERED machinery, served by the notifications module of the full app.
+    // {{user}} is whoever moved the record: here the admin, who then finds it in their inbox
+    @Test
+    fun `a record reaching a workflow state notifies the user it names`() {
+        val workflow = uniqueName("wf").take(30)
+        client
+            .put()
+            .uri("/api/objects/$objectName/workflow")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to workflow,
+                    "definition" to
+                        mapOf(
+                            "states" to
+                                listOf(
+                                    mapOf("name" to "borrador", "label" to "Borrador", "type" to "INITIAL"),
+                                    mapOf("name" to "aprobado", "label" to "Aprobado", "type" to "FINAL")
+                                ),
+                            "transitions" to listOf(mapOf("name" to "approve", "label" to "Aprobar", "from" to "borrador", "to" to "aprobado"))
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isOk
+
+        val name = uniqueName("auto")
+        save(
+            name,
+            mapOf(
+                "trigger" to mapOf("type" to "STATE_ENTERED", "state" to "aprobado"),
+                "actions" to listOf(mapOf("type" to "NOTIFY", "to" to "{{user}}", "title" to "Predio {{codigo}} aprobado", "body" to "Uso {{uso}}"))
+            )
+        ).expectStatus().isCreated
+
+        val id = createRecord("A-9", "comercial", 900)
+        assertThat(drain()).isZero()
+        client
+            .post()
+            .uri("/api/objects/$objectName/records/$id/transitions/approve")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+        assertThat(drain()).isEqualTo(1)
+
+        runsOf(name)
+            .jsonPath("$[0].status")
+            .isEqualTo("SUCCEEDED")
+            .jsonPath("$[0].steps[0].action")
+            .isEqualTo("NOTIFY")
+        client
+            .get()
+            .uri("/api/auth/me/notifications?size=100")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.content[?(@.source == 'automation:$name')].title")
+            .isEqualTo("Predio A-9 aprobado")
+            .jsonPath("$.content[?(@.source == 'automation:$name')].body")
+            .isEqualTo("Uso comercial")
+            .jsonPath("$.content[?(@.source == 'automation:$name')].link.recordId")
+            .isEqualTo(id)
+    }
+
     // GENERATE_DOCUMENT is one more action on the same STATE_ENTERED machinery above -- not a new
     // mechanism, so this mirrors that test almost line for line.
     @Test

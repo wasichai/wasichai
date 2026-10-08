@@ -73,7 +73,12 @@ class WasichaiNotificationsAutoConfigurationTest {
                     streamHeartbeat = Duration.ofSeconds(25),
                     streamDebounce = Duration.ofMillis(500),
                     zone = null,
-                    datePattern = "dd/MM/yyyy"
+                    datePattern = "dd/MM/yyyy",
+                    deliveryInterval = Duration.ofMinutes(1),
+                    deliveryMaxAttempts = 5,
+                    deliveryBackoff = Duration.ofMinutes(1),
+                    deliveryBatch = 100,
+                    email = NotificationsProperties.Email(enabled = false, from = null, subjectPrefix = "")
                 )
             )
         }
@@ -163,7 +168,11 @@ class WasichaiNotificationsAutoConfigurationTest {
     @Test
     fun `the imports file registers the auto-config`() {
         assertThat(ImportCandidates.load(AutoConfiguration::class.java, javaClass.classLoader).candidates)
-            .contains("wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration")
+            .contains(
+                "wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration",
+                "wasichai.notifications.autoconfigure.WasichaiNotificationsEmailAutoConfiguration",
+                "wasichai.notifications.autoconfigure.WasichaiNotificationsAutomationAutoConfiguration"
+            )
     }
 
     // publish and admin (task 8)

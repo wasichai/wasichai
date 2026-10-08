@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.test.context.TestPropertySource
+import wasichai.automation.AutomationNotifier
 import wasichai.automation.AutomationRunner
 import wasichai.automation.DocumentIssuer
 import wasichai.core.data.RecordRequest
@@ -35,6 +36,9 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
     // only wasichai-documents declares one; without it automation falls back to NoDocumentIssuer
     @Autowired
     private lateinit var documentIssuers: ObjectProvider<DocumentIssuer>
+
+    @Autowired
+    private lateinit var notifiers: ObjectProvider<AutomationNotifier>
 
     @Test
     fun `a rule runs on record creation without documents installed`() {
@@ -308,5 +312,31 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
             .expectBody()
             .jsonPath("$.detail")
             .value<String> { assertThat(it).contains("Unknown document type 'fantasma'") }
+    }
+
+    // ADR-060: NOTIFY is the notifications module's to serve. absent, it is refused when saved, not at run time
+    @Test
+    fun `no notifications module, so NOTIFY is refused when saved`() {
+        assertThat(notifiers.getIfAvailable()).isNull()
+        client
+            .post()
+            .uri("/api/objects/$objectName/automations")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to uniqueName("auto"),
+                    "label" to "Automatizacion",
+                    "definition" to
+                        mapOf(
+                            "trigger" to mapOf("type" to "STATE_ENTERED", "state" to "aprobado"),
+                            "actions" to listOf(mapOf("type" to "NOTIFY", "to" to "role:SUPERVISOR", "title" to "Aprobado"))
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.detail")
+            .value<String> { assertThat(it).contains("NOTIFY needs the notifications module") }
     }
 }

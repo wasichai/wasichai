@@ -269,8 +269,8 @@ class NotificationLoopTest {
     }
 
     @Test
-    fun `a source keyed purge or rules is told they are the loop's own`() {
-        listOf("purge", "rules").forEach { key ->
+    fun `a source keyed purge, rules or deliveries is told they are the loop's own`() {
+        listOf("purge", "rules", "deliveries").forEach { key ->
             val source =
                 object : NotificationSource {
                     override val key = key
@@ -283,7 +283,7 @@ class NotificationLoopTest {
             assertThatThrownBy {
                 SourceWork(source, mock(RecordService::class.java), mock(NotificationPreparer::class.java), mock(NotificationWriter::class.java))
             }.isInstanceOf(IllegalArgumentException::class.java)
-                .hasMessageContaining("'purge' and 'rules' are the notifications loop's own keys")
+                .hasMessageContaining("'purge', 'rules' and 'deliveries' are the notifications loop's own keys")
         }
     }
 
