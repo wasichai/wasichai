@@ -33,6 +33,16 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// ktlint's tool classpath pins logback 1.3.15 (vulnerable). lift it; ktlint only logs through it
+configurations.matching { it.name.startsWith("ktlint") }.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "ch.qos.logback") {
+            useVersion(libs.findVersion("logback").get().requiredVersion)
+            because("logback below 1.5.34 is vulnerable")
+        }
+    }
+}
+
 // unit tests always run; container-backed ones go through integrationTest
 tasks.named<Test>("test") {
     useJUnitPlatform {

@@ -9,6 +9,14 @@ fun lib(alias: String) = libs.findLibrary(alias).get()
 
 dependencies {
     api(platform(lib("spring-boot-bom")))
+    // security floors over the boot bom (see libs.versions.toml). api: apps on these modules get them too
+    api(platform(lib("jackson2-bom")))
+    api(platform(lib("jackson3-bom")))
+    constraints {
+        // via r2dbc-postgresql / pgjdbc: channel-binding downgrade below 3.3
+        api(lib("scram-client"))
+        api(lib("scram-common"))
+    }
     api(lib("spring-boot-autoconfigure"))
     // Spring needs this for Kotlin constructor binding / @ConfigurationProperties classes
     implementation(lib("kotlin-reflect"))
