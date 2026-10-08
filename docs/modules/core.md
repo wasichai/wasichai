@@ -57,6 +57,11 @@ An app overrides any core bean by declaring its own bean of the same type — se
   Both routes narrow by `from`, `to` and `userId` (the list also by `serviceAccount`) and page with `after=` and the
   `X-Next-Cursor` header, the body still a JSON array (`AuditQueryService.page`, `historyPage`;
   [ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
+  The table is append-only in the database: triggers refuse every `UPDATE`, `DELETE` and `TRUNCATE`, for every role,
+  except a foreign-key action that only nulls `document_id` and a purge by the login `wasichai.audit.purge-role` names
+  ([ADR-054](../adr/0054-audit-log-is-append-only-in-the-database.md)). Deleting a tenant leaves its entries in place:
+  `audit_log` has no foreign key to `organizations`. `AuditLogOwnershipCheck` logs a `WARN` at startup when the role
+  wasichai runs as could drop those triggers.
 - Correlation id: `CorrelationIdWebFilter` keeps a well-formed `X-Correlation-Id` or generates one, echoes it on
   every response (a `401` included) and puts it in the Reactor context with the source `api`, and from there in the
   MDC as `correlationId`. `ChangeOrigin` reads both (`correlationId()`, `source()`); a module labels work no request
@@ -127,6 +132,7 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.web.problem-base-uri` | `https://wasichai.dev/problems` | RFC 7807 `type` base; the full type is this plus `/<status>` |
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
+| `wasichai.audit.purge-role` | *(none)* | the database role whose own login may purge `audit_log` (ADR-054); read by the migration |
 
 The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
 first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
@@ -215,9 +221,9 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
-- Data (`WasichaiDataAutoConfiguration`): `auditService`, `adminAudit`, `auditQueryService`, `auditController`,
-  `workflowStates`, `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`, `relatedRecordService`,
-  `recordController`, `relatedRecordController`.
+- Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditLogOwnershipCheck`, `adminAudit`, `auditQueryService`,
+  `auditController`, `workflowStates`, `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`,
+  `relatedRecordService`, `recordController`, `relatedRecordController`.
 - Admin (`WasichaiAdminAutoConfiguration`): `adminService`, `userAdminController`, `roleAdminController`,
   `organizationRepository`, `organizationService`, `organizationController`, `orgUnitService`, `orgUnitController`,
   `userOrgUnitsController`.
@@ -244,6 +250,13 @@ character classes and the index `audit_log_correlation_idx (organization_id, cor
 ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 `V12__audit_user_index.sql` adds the index `audit_log_user_time_idx (organization_id, user_id, occurred_at DESC)` for
 the audit list by user and period ([ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
+
+`V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
+DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes
+`audit_log_purge_role()` from the placeholder `auditPurgeRole` (`wasichai.audit.purge-role`, empty for none), and
+runs again whenever it changes ([ADR-054](../adr/0054-audit-log-is-append-only-in-the-database.md)). Run the
+migrations as a role apart from the one the app connects as: see the guide's "Two database roles"
+([build-your-app.md](../guides/build-your-app.md#two-database-roles-and-a-trail-nobody-rewrites)).
 
 `V9__org_units.sql` keys `org_units` by `id`, unique per `(organization_id, code)`, with the `code` and `label` rules as
 `CHECK`s (label 1 to 120 characters) and a unit never its own parent. The parent is a composite foreign key
@@ -364,6 +377,8 @@ Core is always installed.
   stale), `PATCH` for a partial update, and `updated_at` from the statement's clock (ADR-051).
 - D37: `/api/audit` and the record history take `from`, `to`, `userId` (and the list `serviceAccount`) and page with
   `after=` and `X-Next-Cursor`, exposed by the CORS default; the index `audit_log_user_time_idx` (ADR-052).
+- D39: `audit_log` refuses `UPDATE`, `DELETE` and `TRUNCATE` through triggers, but for the document `SET NULL` and a
+  purge by the configured role; two functions and two triggers on the table (ADR-054).
 
 ## Known limitations
 

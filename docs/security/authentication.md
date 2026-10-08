@@ -79,6 +79,13 @@ way: no header, parameter, body property or claim reaches it. A client's `X-Corr
 value matching `^[A-Za-z0-9._-]{1,64}$`, and replaced otherwise, so it cannot carry arbitrary text into logs, responses
 or the audit table ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 
+Once written, an audit entry stays as it was: `audit_log` refuses `UPDATE`, `DELETE` and `TRUNCATE` in the database,
+the credential wasichai connects with included, except a foreign-key action that only nulls `document_id` and a purge
+by the login `wasichai.audit.purge-role` names
+([ADR-054](../adr/0054-audit-log-is-append-only-in-the-database.md)). The owner of the table can drop the triggers, so
+connect as a role that does not own it ([build-your-app.md](../guides/build-your-app.md#two-database-roles-and-a-trail-nobody-rewrites));
+wasichai logs a `WARN` at startup while it does.
+
 ## Authorization
 
 Permissions are `(role, object, action)` with actions `READ`, `CREATE`, `UPDATE`, `DELETE` and

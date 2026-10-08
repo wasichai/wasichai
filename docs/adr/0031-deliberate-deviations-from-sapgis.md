@@ -271,6 +271,20 @@ These are the only intended differences. Anything else that behaves differently 
   `MANAGE_ORGANIZATION` ([ADR-053](0053-the-caller-is-told-their-tenant-wide-capabilities.md)). `admin` and `objects`
   are unchanged. Tested by `CallerPermissionsServiceTest`, `PermissionEnforcementTest` and `ServiceAccountApiTest`.
 
+**Because the audit trail is evidence**
+
+- **D39. `audit_log` is append-only in the database.** The original's `audit_log` was an ordinary table its own
+  credential could rewrite. Now two triggers refuse every `UPDATE`, `DELETE` and `TRUNCATE` on it, for every role,
+  with `42501` and `audit_log is append-only: <operation> is not allowed`
+  ([ADR-054](0054-audit-log-is-append-only-in-the-database.md)). Two exceptions keep behaviour: a foreign-key action
+  that only nulls `document_id` (deleting a document or a tenant still works), and a purge (`DELETE`, `TRUNCATE`) in a
+  transaction that set `wasichai.audit.purge = 'on'`, from a login as the role the new property
+  `wasichai.audit.purge-role` names (none by default). At startup a `WARN` says when the role wasichai runs as could
+  drop the triggers. No API answer changes. The functions `audit_log_guard()` and `audit_log_purge_role()` and the
+  triggers `audit_log_append_only` and `audit_log_no_truncate` are known schema-parity deviations. Tested by
+  `CoreMigrationSqlTest`, `WasichaiMigrationsTest`, `AuditLogOwnershipCheckTest`, `AuditLogAppendOnlyApiTest`,
+  `AdminAuditApiTest` and `DocumentsOnlyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

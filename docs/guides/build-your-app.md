@@ -262,6 +262,7 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Metadata/data schemas | `wasichai.database.metadata-schema`, `wasichai.database.data-schema` | [core.md](../modules/core.md) |
 | CORS origins | `wasichai.web.cors-allowed-origin-patterns` | [core.md](../modules/core.md) |
 | Dev seed data | `wasichai.seed.dev` | [core.md](../modules/core.md) |
+| Audit purge role | `wasichai.audit.purge-role` (default none: no purge) | [core.md](../modules/core.md) |
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
@@ -415,6 +416,90 @@ and a job running as the platform must pass one too. It lands on the write's aud
 records.update("recibo", id, RecordRequest(mapOf("monto" to 120)), reason = "corrección por error de digitación")
 records.asPlatform(organizationId) { records.create("cierre", RecordRequest(values), reason = "cierre nocturno") }
 ```
+
+## Two database roles, and a trail nobody rewrites
+
+`audit_log` refuses `UPDATE`, `DELETE` and `TRUNCATE` in the database itself, for every role
+([ADR-054](../adr/0054-audit-log-is-append-only-in-the-database.md)). Inserts and reads are unaffected; deleting a
+document or a tenant still works, and a deleted tenant's entries stay (there is no foreign key to `organizations`).
+The owner of the table can still drop or disable the triggers, and by default wasichai connects with the credential
+Flyway migrates with, which owns everything. While that is so, wasichai logs a `WARN` at startup. In production, split
+them: a migration role owns the schemas and runs the migrations, a runtime role reads and writes.
+
+Once, as a superuser (the names are examples):
+
+```sql
+CREATE ROLE wasichai_owner LOGIN PASSWORD '…';
+CREATE ROLE wasichai_app LOGIN PASSWORD '…';
+CREATE DATABASE wasichai OWNER wasichai_owner;
+```
+
+In that database, as `wasichai_owner`, before the first start (default schema names):
+
+```sql
+CREATE SCHEMA wasichai;
+CREATE SCHEMA app_data;
+GRANT USAGE ON SCHEMA wasichai TO wasichai_app;
+-- the app builds one table per object at runtime (ADR-004) and owns those
+GRANT USAGE, CREATE ON SCHEMA app_data TO wasichai_app;
+-- every table the migrations create, now and in later versions
+ALTER DEFAULT PRIVILEGES IN SCHEMA wasichai GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO wasichai_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA wasichai GRANT USAGE, SELECT ON SEQUENCES TO wasichai_app;
+```
+
+After the first migration, take back what the trail does not need. The triggers refuse it anyway; this is a second
+layer:
+
+```sql
+REVOKE UPDATE, DELETE, TRUNCATE ON wasichai.audit_log FROM wasichai_app;
+```
+
+The app connects as `wasichai_app` (`wasichai.database.username`, `password`). Run the migrations as `wasichai_owner`
+in a deploy step of your own and set `wasichai.database.migrate=false` on the service, so the service never holds the
+owner's password. Or let the service migrate at start with its own Flyway credentials, by replacing the
+`wasichaiMigrations` bean (keep that name: modules depend on it):
+
+```kotlin
+@Configuration
+class Migrations {
+    // flyway as the owner; the r2dbc pool keeps wasichai.database.username
+    @Bean
+    fun wasichaiMigrations(
+        database: WasichaiDatabaseProperties,
+        schemas: WasichaiSchemas,
+        migrations: ObjectProvider<ModuleMigration>,
+        audit: WasichaiAuditProperties,
+        @Value("\${app.migration.username}") username: String,
+        @Value("\${app.migration.password}") password: String
+    ) = WasichaiMigrations(database.copy(username = username, password = password), schemas, migrations.orderedStream().toList(), audit)
+}
+```
+
+**Purging, when a retention rule says so.** Nobody can by default. Name a role in `wasichai.audit.purge-role`, in the
+configuration the migrations run with: the migration writes it into the database, where the runtime role cannot change
+it. Then, as `wasichai_owner`:
+
+```sql
+CREATE ROLE wasichai_purge LOGIN PASSWORD '…';
+GRANT USAGE ON SCHEMA wasichai TO wasichai_purge;
+GRANT SELECT, DELETE ON wasichai.audit_log TO wasichai_purge;
+```
+
+Purge logged in as that role, stating the intent in the transaction:
+
+```sql
+BEGIN;
+SET LOCAL wasichai.audit.purge = 'on';
+DELETE FROM wasichai.audit_log WHERE occurred_at < now() - interval '10 years';
+COMMIT;
+```
+
+- Only a login as the purge role counts (`session_user`): `SET ROLE wasichai_purge` from another login is refused, so
+  never name the runtime role.
+- The flag lifts `DELETE` and `TRUNCATE` (with the `TRUNCATE` privilege), never `UPDATE`: entries are removed, not
+  rewritten.
+- A deleted tenant's entries are purged the same way, by `organization_id`.
+- A new name takes effect on the next migration; an empty one takes the right away again.
 
 ## Two people edit the same record
 
