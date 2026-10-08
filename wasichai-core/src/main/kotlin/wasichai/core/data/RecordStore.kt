@@ -75,6 +75,43 @@ interface RecordStore {
         id: UUID
     ): Boolean
 
+    /**
+     * [update], only while the row's updated_at is one of [expectedUpdatedAt] (ADR-051). The compare sits
+     * in the write's own WHERE, so of two writers holding the same version exactly one wins. null: no row
+     * matched, stale or gone; the caller tells which. Empty: nothing matches. A store that cannot compare
+     * inside its write refuses: a check and a write apart would race (the default, so an app's own store
+     * keeps compiling and refuses an If-Match instead of ignoring it).
+     */
+    suspend fun updateIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID?,
+        id: UUID,
+        attributes: Map<String, Any?>,
+        sections: Map<String, Map<String, Any?>>,
+        withState: Boolean,
+        expectedUpdatedAt: List<Instant>
+    ): RecordRow? = throw UnsupportedOperationException("${javaClass.name} cannot compare and write (ADR-051)")
+
+    // [delete], only while updated_at is one of [expectedUpdatedAt] (ADR-051). false: stale or gone.
+    suspend fun deleteIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        id: UUID,
+        expectedUpdatedAt: List<Instant>
+    ): Boolean = throw UnsupportedOperationException("${javaClass.name} cannot compare and delete (ADR-051)")
+
+    // [transitionState], only while updated_at is one of [expectedUpdatedAt] too (ADR-051). null: moved, stale or gone.
+    suspend fun transitionStateIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID,
+        id: UUID,
+        from: String?,
+        to: String,
+        expectedUpdatedAt: List<Instant>
+    ): RecordRow? = throw UnsupportedOperationException("${javaClass.name} cannot compare and transition (ADR-051)")
+
     // createdBy and criteria narrow it like a list (ADR-048): a row they leave out is null, as a missing one
     suspend fun findById(
         definition: ObjectDefinition,

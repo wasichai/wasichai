@@ -4,6 +4,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
@@ -109,6 +110,8 @@ class WasichaiSecurityAutoConfiguration {
                 allowedOriginPatterns = web.corsAllowedOriginPatterns
                 allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 allowedHeaders = listOf("*")
+                // a cross-origin client reads a record's version to send it back as If-Match (ADR-051)
+                exposedHeaders = listOf(HttpHeaders.ETAG)
                 allowCredentials = true
             }
         return UrlBasedCorsConfigurationSource().apply { registerCorsConfiguration("/**", config) }

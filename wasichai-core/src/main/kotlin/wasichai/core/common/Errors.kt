@@ -24,6 +24,12 @@ class ConflictException(
     violations: List<FieldViolation> = emptyList()
 ) : WasichaiException(HttpStatus.CONFLICT, message, violations)
 
+// a precondition the caller sent (If-Match) no longer holds: RFC 9110's 412, not a 409 conflict (ADR-051)
+class PreconditionFailedException(
+    message: String,
+    violations: List<FieldViolation> = emptyList()
+) : WasichaiException(HttpStatus.PRECONDITION_FAILED, message, violations)
+
 class ForbiddenException(
     message: String
 ) : WasichaiException(HttpStatus.FORBIDDEN, message)

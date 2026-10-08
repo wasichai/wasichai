@@ -201,36 +201,90 @@ class RecordService(
         reason: String?
     ): RecordResponse = update(objectName, id, request, reason, viaApi = false)
 
+    /**
+     * [update], only while the record still carries [expectedUpdatedAt], the `updatedAt` the caller read
+     * (ADR-051). The compare is part of the UPDATE itself, so it holds inside the caller's transaction
+     * (ADR-038) and against any concurrent writer: a record that moved on throws
+     * [wasichai.core.common.PreconditionFailedException] (412) and nothing is stored, audited or told.
+     * null: no check, as the overloads above. An overload, not a default: code compiled against them keeps working.
+     */
+    suspend fun update(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String?,
+        expectedUpdatedAt: Instant?
+    ): RecordResponse = update(objectName, id, request, reason, viaApi = false, expectedUpdatedAt = expectedUpdatedAt?.let(::listOf))
+
+    // expectedUpdatedAt: what If-Match accepts, null when it sent none or * (ADR-051)
     internal suspend fun update(
         objectName: String,
         id: UUID,
         request: RecordRequest,
         reason: String?,
-        viaApi: Boolean
+        viaApi: Boolean,
+        expectedUpdatedAt: List<Instant>? = null
+    ): RecordResponse = write(objectName, id, request, reason, viaApi, expectedUpdatedAt, partial = false)
+
+    /**
+     * A partial update (ADR-051): JSON merge on `attributes`. Only the keys sent are written, `null` clears
+     * one, every other field keeps its stored value, also against a concurrent write of another field. A
+     * key that is no attribute of the object is a 400 and a read-only field (`editable: false`) a 403;
+     * everything else is [update]'s: permissions, field rules, write rules, guards, audit and listeners.
+     * Sections merge as they always do. [expectedUpdatedAt] as for [update].
+     */
+    suspend fun patch(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String? = null,
+        expectedUpdatedAt: Instant? = null
+    ): RecordResponse = patch(objectName, id, request, reason, viaApi = false, expectedUpdatedAt = expectedUpdatedAt?.let(::listOf))
+
+    internal suspend fun patch(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String?,
+        viaApi: Boolean,
+        expectedUpdatedAt: List<Instant>?
+    ): RecordResponse = write(objectName, id, request, reason, viaApi, expectedUpdatedAt, partial = true)
+
+    // PUT and PATCH: one path, so the two can never drift apart on a rule
+    private suspend fun write(
+        objectName: String,
+        id: UUID,
+        request: RecordRequest,
+        reason: String?,
+        viaApi: Boolean,
+        expectedUpdatedAt: List<Instant>?,
+        partial: Boolean
     ): RecordResponse {
         val write = open(objectName, Actions.UPDATE, reason, viaApi)
         val caller = write.caller
         val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
+        // a PUT ignores what it cannot write by metadata; a PATCH names only what it means to change, so it says
+        if (partial) rejectUnknownOrReadOnly(definition, request.attributes)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val before =
             store.findById(definition, caller.organizationId, id, caller.ownerFilter(), workflow.attached, caller.scope(definition))
                 ?: throw NotFoundException("Record $id does not exist")
-        write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = request.attributes, reader = caller.user)
-        // locked fields keep their stored value: a full-replace PUT must not blank them.
-        // the state is untouched here: it only moves through a transition.
+        // a guard judges what the record will hold: a PATCH shows it as the PUT of the same change would
+        val sent = if (partial) before.attributes + request.attributes else request.attributes
+        write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = sent, reader = caller.user)
+        // locked fields keep their stored value: a full-replace PUT must not blank them. a PATCH locks every
+        // field it did not send. the state is untouched here: it only moves through a transition.
+        val target = definition.writableBy(fieldAccess).let { if (partial) it.lockedBut(request.attributes.keys) else it }
         val updated =
-            store.update(
-                definition.writableBy(fieldAccess),
-                caller.organizationId,
-                caller.userId,
-                id,
-                request.attributes,
-                sections,
-                workflow.attached
-            )
+            if (expectedUpdatedAt == null) {
+                store.update(target, caller.organizationId, caller.userId, id, request.attributes, sections, workflow.attached)
+            } else {
+                store.updateIfUnchanged(target, caller.organizationId, caller.userId, id, request.attributes, sections, workflow.attached, expectedUpdatedAt)
+                    ?: throw caller.staleOrMissing(definition, id)
+            }
         // before is a full read; after must be one too, or every locked field reads as cleared (ADR-0025)
         val stored = storedRow(definition, caller.organizationId, updated, workflow.attached)
         write.recorded(RecordChangeKind.UPDATED, id, before = before.attributes, after = stored.attributes, state = stored.state)
@@ -249,11 +303,20 @@ class RecordService(
         reason: String?
     ) = delete(objectName, id, reason, viaApi = false)
 
+    // [expectedUpdatedAt]: as for update (ADR-051). a record that moved on stays, 412
+    suspend fun delete(
+        objectName: String,
+        id: UUID,
+        reason: String?,
+        expectedUpdatedAt: Instant?
+    ) = delete(objectName, id, reason, viaApi = false, expectedUpdatedAt = expectedUpdatedAt?.let(::listOf))
+
     internal suspend fun delete(
         objectName: String,
         id: UUID,
         reason: String?,
-        viaApi: Boolean
+        viaApi: Boolean,
+        expectedUpdatedAt: List<Instant>? = null
     ) {
         val write = open(objectName, Actions.DELETE, reason, viaApi)
         val caller = write.caller
@@ -262,9 +325,17 @@ class RecordService(
             store.findById(definition, caller.organizationId, id, caller.ownerFilter(), criteria = caller.scope(definition))
                 ?: throw NotFoundException("Record $id does not exist")
         // postgres would null or drop what append-only records hold of this one (ADR-040). checked
-        // again under a row lock, with the delete, when anything append-only can point here (ADR-044)
+        // again under a row lock, with the delete, when anything append-only can point here (ADR-044).
+        // the version compare rides in the DELETE itself, under that lock too (ADR-051)
         references.deleting(caller.organizationId, definition, id, guard = { write.guard(RecordChangeKind.DELETED, id, before = before.attributes) }) {
-            store.delete(definition, caller.organizationId, id)
+            val deleted =
+                if (expectedUpdatedAt == null) {
+                    store.delete(definition, caller.organizationId, id)
+                } else {
+                    store.deleteIfUnchanged(definition, caller.organizationId, id, expectedUpdatedAt)
+                }
+            // without a precondition a row gone meanwhile is the old answer: deleted all the same
+            if (!deleted && expectedUpdatedAt != null) throw caller.staleOrMissing(definition, id)
         }
         write.recorded(RecordChangeKind.DELETED, id, before = before.attributes, state = before.state)
     }
@@ -312,6 +383,18 @@ class RecordService(
 
     // the app's read scope, next to the owner filter (ADR-048). the full definition, not the caller's projection
     private suspend fun Caller.scope(definition: ObjectDefinition): List<RecordCriterion> = readScopes.criteria(user, definition)
+
+    // a compare-and-write matched no row (ADR-051): stale when the caller still reads the record, else it is
+    // gone or out of reach meanwhile, and answers as a missing one (ADR-048)
+    private suspend fun Caller.staleOrMissing(
+        definition: ObjectDefinition,
+        id: UUID
+    ): Exception =
+        if (store.findById(definition, organizationId, id, ownerFilter(), criteria = scope(definition)) != null) {
+            RecordETag.stale(id)
+        } else {
+            NotFoundException("Record $id does not exist")
+        }
 
     /**
      * The row as stored, every field, for audit and listeners (ADR-0025). Listeners get this, not the
@@ -460,6 +543,19 @@ class RecordService(
         }
     }
 
+    // a PATCH key must be an attribute of the object, and one its metadata lets anyone write (ADR-051)
+    private fun rejectUnknownOrReadOnly(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>
+    ) {
+        attributes.keys.forEach { name ->
+            val field =
+                definition.fields.firstOrNull { it.name == name && types.handler(it.type).section == null }
+                    ?: throw ValidationException("Unknown field '$name'", name, "is not an attribute of '${definition.obj.name}'")
+            if (!field.editable) throw ForbiddenException("Field '$name' is read-only")
+        }
+    }
+
     // a required field nobody may write would fail on NOT NULL: say so instead of a 500
     private fun rejectUnwritableRequired(
         definition: ObjectDefinition,
@@ -485,6 +581,12 @@ class RecordService(
             sections = sections.mapValues { (_, entries) -> entries.filterKeys { it in allowed } }
         )
     }
+}
+
+// every attribute field not [sent] locked, so the store leaves it as stored. sections keep their own rule.
+private fun ObjectDefinition.lockedBut(sent: Set<String>): ObjectDefinition {
+    val locked = fields.map { field -> if (field.name in sent) field else field.copy(editable = false) }
+    return copy(fields = locked)
 }
 
 // a disabled object is retired, not gone: its data stays readable, nothing new lands on it.
