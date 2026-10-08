@@ -47,7 +47,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
-- Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
+- Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`. A
+  relationship from an object to itself is read from either end with `direction=forward|inverse`, and listed once per
+  direction (`RelatedSide.direction`, ADR-031 D42).
 - Dynamic records and related records: `/api/objects/{object}/records`. A record answer carries its `ETag`
   (`"<updatedAt>"`); `PUT`, the partial `PATCH` and `DELETE` take `If-Match` and compare it in the write's own
   statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)).
@@ -389,6 +391,9 @@ Core is always installed.
   purge by the configured role; two functions and two triggers on the table (ADR-054).
 - D40: a field's `defaultValue` fills what a create leaves out, even a field the caller may not write; it is checked
   when set (`400` on `defaultValue`) and `PUT …/fields/{field}` takes it; updates never apply it.
+- D42: a self-relationship is read from either end with `direction=forward|inverse` on the related read, and listed
+  once per direction by `GET /api/objects/{object}/relationships`; a `ONE_TO_MANY` one now reads forward as its
+  documented "many targets".
 
 ## Known limitations
 
