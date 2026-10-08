@@ -27,7 +27,7 @@ the module migrates after the others (`MODULE_ORDER + 1`). The module joins the 
 test app (with its schema-parity deviations), the module route matrix and a `filesOnly` slice. New tests:
 `ContentSnifferTest`, `FileFieldTypeTest`, `LocalFileStoreTest`, `StoredFileGuardTest`, `FilesMigrationSqlTest`,
 `WasichaiFilesAutoConfigurationTest`, and the integration tests `FilesApiTest` (every acceptance item on the local
-store), `S3FilesApiTest` (MinIO container) and `FilesOnlyApiTest`. Docs: [files.md](modules/files.md),
+store), `S3FilesApiTest` (s3mock container) and `FilesOnlyApiTest`. Docs: [files.md](modules/files.md),
 [rest.md](api/rest.md#files), [metadata-model.md](domain/metadata-model.md),
 [build-your-app.md](guides/build-your-app.md).
 

@@ -16,7 +16,6 @@ dependencies {
     testRuntimeOnly(libs.r2dbc.postgresql)
     testRuntimeOnly(libs.postgresql.jdbc)
     testRuntimeOnly(libs.flyway.postgresql)
-    // S3FileStoreTest: the real sdk against a MinIO container (integration, CI)
+    // S3FilesApiTest: the real sdk against an s3mock container (integration, CI)
     testImplementation(libs.aws.sdk.s3)
-    testImplementation(libs.testcontainers.minio)
 }

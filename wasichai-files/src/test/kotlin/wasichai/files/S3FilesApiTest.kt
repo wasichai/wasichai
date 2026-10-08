@@ -17,7 +17,8 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
 import org.springframework.web.reactive.function.BodyInserters
-import org.testcontainers.containers.MinIOContainer
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.wait.strategy.Wait
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
@@ -31,7 +32,7 @@ import java.net.URI
 import java.util.UUID
 import java.util.concurrent.CompletionException
 
-// the S3-compatible store against a real MinIO (testcontainers: CI, or any machine with docker). the same
+// the S3-compatible store against a real S3 API, adobe/s3mock (testcontainers: CI, or any machine with docker). the same
 // upload, download and cleanup the local store's FilesApiTest proves, through wasichai.files.store=s3.
 @TestPropertySource(properties = ["wasichai.files.store=s3", "wasichai.files.cleanup.interval=0s"])
 class S3FilesApiTest : WasichaiIntegrationTest() {
@@ -181,17 +182,26 @@ class S3FilesApiTest : WasichaiIntegrationTest() {
     companion object {
         private const val BUCKET = "wasichai-it"
 
-        private val minio: MinIOContainer by lazy {
-            MinIOContainer("minio/minio:RELEASE.2023-09-04T19-57-37Z").also { it.start() }
+        // s3mock, not minio: minio/minio left Docker Hub. any credentials pass
+        private const val ACCESS_KEY = "wasichai"
+        private const val SECRET_KEY = "wasichai-secret"
+
+        private val s3mock: GenericContainer<*> by lazy {
+            GenericContainer("adobe/s3mock:5.2.3")
+                .withExposedPorts(9090)
+                .waitingFor(Wait.forHttp("/").forPort(9090))
+                .also { it.start() }
         }
+
+        private val endpoint: String by lazy { "http://${s3mock.host}:${s3mock.getMappedPort(9090)}" }
 
         private val s3: S3AsyncClient by lazy {
             S3AsyncClient
                 .builder()
-                .endpointOverride(URI.create(minio.s3URL))
+                .endpointOverride(URI.create(endpoint))
                 .region(Region.US_EAST_1)
                 .forcePathStyle(true)
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(minio.userName, minio.password)))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ACCESS_KEY, SECRET_KEY)))
                 .build()
                 .also { it.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build()).join() }
         }
@@ -199,10 +209,10 @@ class S3FilesApiTest : WasichaiIntegrationTest() {
         @JvmStatic
         @DynamicPropertySource
         fun s3Properties(registry: DynamicPropertyRegistry) {
-            registry.add("wasichai.files.s3.endpoint") { s3.let { minio.s3URL } } // s3 first: the bucket exists before the app starts
+            registry.add("wasichai.files.s3.endpoint") { s3.let { endpoint } } // s3 first: the bucket exists before the app starts
             registry.add("wasichai.files.s3.bucket") { BUCKET }
-            registry.add("wasichai.files.s3.access-key") { minio.userName }
-            registry.add("wasichai.files.s3.secret-key") { minio.password }
+            registry.add("wasichai.files.s3.access-key") { ACCESS_KEY }
+            registry.add("wasichai.files.s3.secret-key") { SECRET_KEY }
             registry.add("wasichai.files.s3.path-style-access") { "true" }
         }
     }
