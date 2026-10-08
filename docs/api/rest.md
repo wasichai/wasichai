@@ -57,10 +57,12 @@ object, plus every action the object declares. Field access is not repeated here
 caller cannot read and mark the ones they cannot write `editable: false`.
 
 `capabilities` lists the built-in actions that are not tied to an object which the caller holds tenant-wide, that is
-granted with no object (`objectName: null`): `MANAGE_METADATA` (objects, fields, relationships, declared actions) and
-`MANAGE_ORGANIZATION` (users, roles, service accounts, units, the organization), always in that order. The key is
-always present, `[]` when the caller holds neither. The administrator holds both; a
-[service account](#service-accounts) never holds `MANAGE_ORGANIZATION`, whatever its roles. A grant on one object does
+granted with no object (`objectName: null`): `MANAGE_METADATA` (objects, fields, relationships, declared actions),
+`MANAGE_ORGANIZATION` (users, roles, service accounts, units, the organization's name) and `MANAGE_TENANTS` (creating
+and deleting tenants, see [Organizations](#organizations)), always in that order. The key is always present, `[]` when
+the caller holds none. The administrator holds the first two, and `MANAGE_TENANTS` unless
+`wasichai.organizations.separate-provisioning` is on; a [service account](#service-accounts) never holds
+`MANAGE_ORGANIZATION` or `MANAGE_TENANTS`, whatever its roles. A grant on one object does
 not count, and does not show in that object's array either: the arrays list record and declared actions only. It is
 the same check the endpoints enforce, so a client may show or hide its admin screens on it
 ([ADR-053](../adr/0053-the-caller-is-told-their-tenant-wide-capabilities.md)). wasichai-ui may read it; older clients
@@ -379,7 +381,8 @@ app can check them ([ADR-042](../adr/0042-app-declared-actions.md)):
 ```
 
 `name` is upper snake, `^[A-Z][A-Z0-9_]{1,48}$`, sent in any case and stored upper; one of the built-in actions
-(`READ`, `CREATE`, `UPDATE`, `DELETE`, `MANAGE_METADATA`, `MANAGE_ORGANIZATION`) or a bad shape is `400`, a name the
+(`READ`, `CREATE`, `UPDATE`, `DELETE`, `MANAGE_METADATA`, `MANAGE_ORGANIZATION`, `MANAGE_TENANTS`) or a bad shape is
+`400`, a name the
 object already declares is `409`. `label` defaults to the name. The response, and each entry of the list, is
 `{ name, label }`. Deleting an action the object does not declare is `404`.
 
@@ -409,12 +412,33 @@ DELETE /api/organizations/current      drop the tenant and every table it owns
 ```
 
 There is deliberately no list-all endpoint: a tenant must not be able to enumerate the others.
-Provisioning needs `MANAGE_ORGANIZATION` and creates the organization, an `ADMIN` role with every
-permission, and the administrator account:
+Provisioning needs `MANAGE_TENANTS` and creates the organization, an `ADMIN` role with every
+permission except `MANAGE_TENANTS`, and the administrator account:
 
 ```json
 { "name": "Municipalidad", "slug": "muni", "adminEmail": "admin@muni.pe", "adminPassword": "…" }
 ```
+
+Renaming needs `MANAGE_ORGANIZATION`; provisioning and deleting need `MANAGE_TENANTS`
+([ADR-056](../adr/0056-tenant-provisioning-apart-from-tenant-administration.md)). Who holds it depends on
+`wasichai.organizations.separate-provisioning`:
+
+| Switch | `MANAGE_TENANTS` is held by |
+|---|---|
+| `false` (default) | whoever holds `MANAGE_ORGANIZATION`, the administrator included, as before |
+| `true` | only a role granted `MANAGE_TENANTS` with no object; `ADMIN` and `MANAGE_ORGANIZATION` alone get `403` |
+
+A service account is refused (`403`) either way. The action is granted like any object-less one:
+
+```json
+{ "permissions": [ { "objectName": null, "action": "MANAGE_TENANTS" } ] }
+```
+
+with two rules of its own in `PUT /api/roles/{name}/permissions`: an entry naming an object is `400` naming
+`objectName`, and a request that adds, removes or changes a role's `MANAGE_TENANTS` entry is
+`403 Missing permission MANAGE_TENANTS` unless the caller's own roles hold the grant (being `ADMIN` is not enough),
+whatever the switch. A request that leaves the entry as it is needs `MANAGE_ORGANIZATION` only. The first holder is
+granted out of band: see [Build your app](../guides/build-your-app.md#operator-and-customer-tenants).
 
 ## Fields
 

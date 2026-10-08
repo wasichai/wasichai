@@ -2,6 +2,37 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Creating and deleting tenants can be kept apart from administering one
+
+`POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always
+passes and the `ADMIN` role of every provisioned tenant holds, so a customer's administrator could create tenants and
+drop its own ([#56](https://github.com/wasichai/wasichai/issues/56)). Now both check a new object-less built-in action,
+`MANAGE_TENANTS` ([ADR-056](adr/0056-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41; amends
+ADR-053). The new property `wasichai.organizations.separate-provisioning` (default `false`) decides who holds it: off,
+whoever passes the `MANAGE_ORGANIZATION` check, exactly as before; on, only a role granted it with no object, the one
+built-in action `ADMIN` does not short-circuit. A service account never holds it (ADR-043). `PUT
+/api/organizations/current` stays `MANAGE_ORGANIZATION`, and the `ADMIN` role created by provisioning keeps its six
+actions, so it never holds `MANAGE_TENANTS`. In `PUT /api/roles/{name}/permissions` the action is accepted with no
+object only (`400` naming `objectName` otherwise), and adding, removing or changing a role's `MANAGE_TENANTS` entry takes
+a caller whose own roles hold the grant (`403` otherwise, `ADMIN` included), whatever the switch, so no tenant grants
+it to itself; the first holder is one row written by the operator, as the build-your-app guide shows.
+`GET /api/auth/me/permissions` lists it third in `capabilities`, through the same check, so by default the
+administrator's list gains `MANAGE_TENANTS`; with the switch on, `ADMIN` gets it only with a grant. Declared actions
+(ADR-042) may not use the name. The admin audit of provisioning and deletion is unchanged. `CurrentUser` takes the
+switch (`CurrentUser(roleQueries, separateProvisioning)`, default `false`) and gains `holdsTenantsGrant`; the property
+binds to `WasichaiOrganizationsProperties`. `V15__manage_tenants.sql` extends `permissions_action_valid` and
+`object_actions_not_builtin` and adds `permissions_tenants_no_object`; `SchemaParityTest` lists the three as D41
+deviations. New tests: `CurrentUserTest`, three cases in `CallerPermissionsServiceTest`, `separate provisioning is off by
+default and reaches CurrentUser when on` in `WasichaiAutoConfigurationTest`, one case each in `ObjectActionNameTest`
+and `CoreMigrationSqlTest`, the integration suite
+`SeparateProvisioningApiTest` (switch on: `ADMIN` and `MANAGE_ORGANIZATION` refused, a `MANAGE_TENANTS` role creates
+and deletes, a provisioned tenant's `ADMIN` lacks it, granting through the roles API by a holder only, a service account
+refused) and `by default MANAGE_TENANTS is the administrator's, but only a holder of the grant hands it on` in
+`OrganizationApiTest`; the administrator's expected `capabilities` gain the third entry in `CallerPermissionsServiceTest`
+and `PermissionEnforcementTest`. Docs: [rest.md](api/rest.md) "Organizations" and "Auth",
+[authentication.md](security/authentication.md), [core.md](modules/core.md),
+[build-your-app.md](guides/build-your-app.md) "Operator and customer tenants".
+
 ## 2026-10-08 — A field's default is applied on create
 
 A field took `defaultValue`, stored it and answered it, and nothing used it: a create that left the field out stored

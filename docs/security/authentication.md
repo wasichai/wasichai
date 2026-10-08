@@ -53,7 +53,8 @@ the request a caller could fill with another system's key.
 - **Revocation is not instant for tokens already issued.** Disabling, rotating or deleting stops new tokens at once;
   a token already issued is a stateless JWT and lives until it expires. That is why its TTL is short.
 - **Never the administrator.** `ADMIN` cannot be given to a service account, `isAdmin` is `false` for one whatever its
-  token says, and `CurrentUser` refuses it every `MANAGE_ORGANIZATION` check, whatever its roles grant. A leaked
+  token says, and `CurrentUser` refuses it every `MANAGE_ORGANIZATION` and `MANAGE_TENANTS` check, whatever its roles
+  grant. A leaked
   secret can do what the account's roles allow on data, and cannot create users, roles, tenants or more accounts.
 - **Backed by a user row.** The account's id is also a row of `users`, so every foreign key to `users` (roles, the
   audit log's user, automation runs, issued documents, preferences) takes the token's subject unchanged, and audit
@@ -96,7 +97,31 @@ its own, such as `ANULAR_AJENO` on `recibo`: they are granted on that object onl
 Field- and record-level permissions are enforced: `own_records_only` limits a role to the records it created (a
 caller with several roles is restricted only if every one of them sets it), and field access hides unreadable fields
 from responses and refuses writes to unwritable ones. `GET /api/auth/me/permissions` tells the caller what they may do
-(ADR-020), the tenant-wide `MANAGE_METADATA` and `MANAGE_ORGANIZATION` included, as `capabilities` (ADR-053).
+(ADR-020), the tenant-wide `MANAGE_METADATA`, `MANAGE_ORGANIZATION` and `MANAGE_TENANTS` included, as `capabilities`
+(ADR-053, ADR-056).
+
+### Tenant administration and tenant lifecycle
+
+`MANAGE_ORGANIZATION` administers one tenant: its users, roles, service accounts, units and name. `MANAGE_TENANTS`
+creates tenants (`POST /api/organizations`) and deletes the caller's own (`DELETE /api/organizations/current`)
+([ADR-056](../adr/0056-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41). By default they are one
+right: `MANAGE_TENANTS` is held by whoever holds `MANAGE_ORGANIZATION`, `ADMIN` included, and every tenant's
+administrator can create and delete tenants, as in the original.
+
+With `wasichai.organizations.separate-provisioning=true` they are two:
+
+- Only a role granted `MANAGE_TENANTS` with no object holds it. This is the one built-in action `ADMIN` does not
+  short-circuit, and `MANAGE_ORGANIZATION` does not imply it.
+- A tenant created through the API is a customer tenant: its `ADMIN` role gets every permission except
+  `MANAGE_TENANTS`.
+- A service account never holds it, switch on or off.
+
+Who may hand it on is the same in both modes: only a caller whose own roles hold the grant may add, remove or change a
+`MANAGE_TENANTS` entry in `PUT /api/roles/{name}/permissions` (`403` otherwise, `ADMIN` included). A tenant can
+therefore never grant it to itself, and nothing a customer does while the switch is off arms it for when the switch
+goes on. The first holder is written into the database by the operator, like the first tenant
+([Build your app](../guides/build-your-app.md)). Inside the operator's own tenant, `MANAGE_ORGANIZATION` can still
+assign the role that holds it to a user, so that tenant's administration belongs to the operator's people.
 
 A write may only point at what the caller can read. A `RELATION` value sent by a person or a service account must name
 a record of the target object the caller holds `READ` on, created by them when they are own-records-only; anything
