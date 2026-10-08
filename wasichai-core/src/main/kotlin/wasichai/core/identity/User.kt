@@ -16,7 +16,9 @@ data class User(
     val displayName: String,
     val enabled: Boolean = true,
     val createdAt: Instant? = null,
-    val updatedAt: Instant? = null
+    val updatedAt: Instant? = null,
+    // revocation marker (ADR-059): a token issued before it is refused when revocation is on
+    val tokensValidAfter: Instant? = null
 )
 
 data class Role(
@@ -37,7 +39,7 @@ class UserRepository(
     suspend fun findByEmail(email: String): User? =
         db
             .sql(
-                "SELECT id, organization_id, email, password_hash, display_name, enabled, created_at, updated_at " +
+                "SELECT id, organization_id, email, password_hash, display_name, enabled, created_at, updated_at, tokens_valid_after " +
                     "FROM ${schemas.metadata}.users WHERE email = :email"
             ).bind("email", email)
             .map { row, _ ->
@@ -49,7 +51,8 @@ class UserRepository(
                     displayName = Rows.string(row, "display_name"),
                     enabled = Rows.bool(row, "enabled"),
                     createdAt = Rows.instantOrNull(row, "created_at"),
-                    updatedAt = Rows.instantOrNull(row, "updated_at")
+                    updatedAt = Rows.instantOrNull(row, "updated_at"),
+                    tokensValidAfter = Rows.instantOrNull(row, "tokens_valid_after")
                 )
             }.one()
             .awaitFirstOrNull()

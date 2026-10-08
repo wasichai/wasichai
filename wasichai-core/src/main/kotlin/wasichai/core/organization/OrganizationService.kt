@@ -13,6 +13,8 @@ import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AdminEntity
 import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.WasichaiSchemas
@@ -37,7 +39,8 @@ class OrganizationService(
     private val currentUser: CurrentUser,
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
-    private val audit: AdminAudit
+    private val audit: AdminAudit,
+    private val passwordPolicy: PasswordPolicy
 ) {
     suspend fun current(): Organization {
         val user = currentUser.require()
@@ -83,11 +86,11 @@ class OrganizationService(
         if (organizations.findBySlug(slug) != null) {
             throw ConflictException("Organization '$slug' already exists")
         }
-        if (request.adminPassword.length < MIN_PASSWORD) {
-            throw ValidationException("Password too short", "adminPassword", "must be at least $MIN_PASSWORD characters")
-        }
-
         val organizationId = UUID.randomUUID()
+        val adminEmail = request.adminEmail.trim().lowercase()
+        // the request's own field name, as it always was
+        PasswordPolicy.enforce(passwordPolicy, request.adminPassword, UserInfo(adminEmail, request.adminDisplayName?.trim(), organizationId), "adminPassword")
+
         val roleId = UUID.randomUUID()
         val userId = UUID.randomUUID()
 
@@ -196,7 +199,6 @@ class OrganizationService(
     }
 
     companion object {
-        private const val MIN_PASSWORD = 8
         private val SLUG = Regex("^[a-z][a-z0-9-]{1,48}$")
     }
 }

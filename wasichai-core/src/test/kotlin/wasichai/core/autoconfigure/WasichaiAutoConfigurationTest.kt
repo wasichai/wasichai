@@ -42,8 +42,15 @@ import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.InMemoryLoginAttemptStore
+import wasichai.core.identity.LoginAttemptStore
+import wasichai.core.identity.LoginAttempts
+import wasichai.core.identity.LoginThrottle
+import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.RevocationCheckingJwtDecoder
 import wasichai.core.identity.RoleQueries
 import wasichai.core.identity.ServiceAccountTokenService
+import wasichai.core.identity.UserInfo
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.FieldType
@@ -53,6 +60,7 @@ import wasichai.core.metadata.ObjectActionService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.CorrelationIdWebFilter
+import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
@@ -60,6 +68,8 @@ import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiSchemas
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
@@ -323,6 +333,66 @@ class WasichaiAutoConfigurationTest {
                 assertThat(context.getBean(WasichaiOrganizationsProperties::class.java).separateProvisioning).isTrue()
                 assertThat(runBlocking { context.getBean(CurrentUser::class.java).hasPermission(admin, Actions.MANAGE_TENANTS) }).isFalse()
             }
+    }
+
+    // issue 55 (ADR-059): with nothing set, the plain decoder, no attempt limits, the 8-character rule
+    @Test
+    fun `revocation, attempt limits and the password policy are off or neutral by default`() {
+        runner.run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(ReactiveJwtDecoder::class.java)).isNotInstanceOf(RevocationCheckingJwtDecoder::class.java)
+            assertThat(context.getBean(JwtProperties::class.java).revocation).isFalse()
+            assertThat(context.getBean(LoginThrottle::class.java).enabled).isFalse()
+            assertThat(context.getBean(LoginAttemptStore::class.java)).isInstanceOf(InMemoryLoginAttemptStore::class.java)
+            val policy = context.getBean(PasswordPolicy::class.java)
+            val user = UserInfo("ana@example.com", "Ana", UUID.randomUUID())
+            assertThat(policy.check("1234567", user)).containsExactly("must be at least 8 characters")
+            assertThat(policy.check("12345678", user)).isEmpty()
+        }
+        runner.withPropertyValues("wasichai.security.jwt.revocation=true", "wasichai.security.login.enabled=true").run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(ReactiveJwtDecoder::class.java)).isInstanceOf(RevocationCheckingJwtDecoder::class.java)
+            assertThat(context.getBean(LoginThrottle::class.java).enabled).isTrue()
+        }
+    }
+
+    @Test
+    fun `an app LoginAttemptStore and PasswordPolicy win over the defaults`() {
+        val store =
+            object : LoginAttemptStore {
+                override suspend fun increment(
+                    key: String,
+                    window: Duration
+                ) = LoginAttempts(1, Instant.now().plus(window))
+
+                override suspend fun reset(key: String) = Unit
+            }
+        val policy = PasswordPolicy { _, _ -> emptyList() }
+        runner
+            .withBean(LoginAttemptStore::class.java, { store })
+            .withBean(PasswordPolicy::class.java, { policy })
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                assertThat(context.getBean(LoginAttemptStore::class.java)).isSameAs(store)
+                assertThat(context.getBean(PasswordPolicy::class.java)).isSameAs(policy)
+            }
+    }
+
+    @Test
+    fun `bad security limits fail at boot and name the property`() {
+        listOf(
+            "wasichai.security.login.max-attempts=0",
+            "wasichai.security.login.account-max-attempts=0",
+            "wasichai.security.login.window=0s",
+            "wasichai.security.password.min-length=0",
+            "wasichai.security.jwt.revocation-cache=-1s"
+        ).forEach { property ->
+            runner.withPropertyValues(property).run { context ->
+                assertThat(context).hasFailed()
+                assertThat(generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }.joinToString(" | "))
+                    .contains(property.substringBefore("="))
+            }
+        }
     }
 
     @Test

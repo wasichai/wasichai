@@ -86,3 +86,5 @@ supersedes it and says so in its status line.
   directory](0057-background-work-finds-the-tenants-through-a-tenant-directory.md)
 - [ADR-058: A record create takes an Idempotency-Key, held by an advisory lock and stored with the
   record](0058-idempotency-key-on-record-creation.md)
+- [ADR-059: Token revocation by a per-user marker, sign-in attempt limits and a password
+  policy](0059-token-revocation-login-limits-and-password-policy.md)

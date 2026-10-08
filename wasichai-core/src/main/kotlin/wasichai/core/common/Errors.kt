@@ -31,12 +31,14 @@ class PreconditionFailedException(
     violations: List<FieldViolation> = emptyList()
 ) : WasichaiException(HttpStatus.PRECONDITION_FAILED, message, violations)
 
-// a conflict that passes: the caller may send the same again after [retryAfter] (Retry-After, RFC 9110 10.2.3)
+// a conflict that passes: the caller may send the same again after [retryAfter] (Retry-After, RFC 9110 10.2.3).
+// 409 by default; 429 for too many sign-in attempts (ADR-059)
 class RetryLaterException(
     message: String,
     val retryAfter: Duration,
-    violations: List<FieldViolation> = emptyList()
-) : WasichaiException(HttpStatus.CONFLICT, message, violations)
+    violations: List<FieldViolation> = emptyList(),
+    status: HttpStatus = HttpStatus.CONFLICT
+) : WasichaiException(status, message, violations)
 
 // well-formed, understood, and still refused as sent: RFC 9110's 422 (an Idempotency-Key reused for another body, ADR-058)
 class UnprocessableContentException(

@@ -18,6 +18,9 @@ import wasichai.core.identity.AdminEntity
 import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.TokenRevocation
+import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectDefinition
@@ -28,6 +31,7 @@ import java.util.UUID
 
 // users, roles and the rules attached to them. every entry point is MANAGE_ORGANIZATION,
 // every query is pinned to the caller's tenant. every change leaves one admin audit entry (ADR-049).
+// disabling, a new password, new roles and deleting sign the user out: their revocation marker moves (ADR-059).
 @Service
 class AdminService(
     private val db: DatabaseClient,
@@ -36,7 +40,9 @@ class AdminService(
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas,
-    private val audit: AdminAudit
+    private val audit: AdminAudit,
+    private val passwordPolicy: PasswordPolicy,
+    private val revocation: TokenRevocation
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -57,7 +63,7 @@ class AdminService(
     suspend fun createUser(request: CreateUserRequest): AdminUserResponse {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val email = request.email.trim().lowercase()
-        requirePassword(request.password)
+        requirePassword(request.password, UserInfo(email, request.displayName.trim(), admin.organizationId))
         if (findUserByEmail(admin.organizationId, email) != null) {
             throw ConflictException("User '$email' already exists")
         }
@@ -94,7 +100,7 @@ class AdminService(
         if (request.enabled == false && id == admin.userId) {
             throw ForbiddenException("You cannot disable your own account")
         }
-        request.password?.let { requirePassword(it) }
+        request.password?.let { requirePassword(it, UserInfo(before.email, before.displayName, admin.organizationId)) }
         db
             .sql(
                 """
@@ -113,6 +119,7 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        if (request.enabled == false || request.password != null) revocation.revoke(admin.organizationId, id)
         val updated = userOrFail(admin.organizationId, id)
         audit.record(
             admin,
@@ -133,6 +140,8 @@ class AdminService(
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val before = userOrFail(admin.organizationId, id)
         roles.replace(id, roles.resolve(admin.organizationId, request.roles))
+        // the token carries the roles: the old ones must not outlive the change
+        revocation.revoke(admin.organizationId, id)
         val updated = userOrFail(admin.organizationId, id)
         audit.record(admin, AdminEntity.USER, id, AdminOperation.UPDATE, AdminSnapshots.user(before), AdminSnapshots.user(updated))
         return updated
@@ -152,6 +161,7 @@ class AdminService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        revocation.forget(admin.organizationId, id)
         audit.record(admin, AdminEntity.USER, id, AdminOperation.DELETE, AdminSnapshots.user(before), null)
     }
 
@@ -580,14 +590,12 @@ class AdminService(
         }
     }
 
-    private fun requirePassword(password: String) {
-        if (password.length < MIN_PASSWORD) {
-            throw ValidationException("Password too short", "password", "must be at least $MIN_PASSWORD characters")
-        }
-    }
+    private fun requirePassword(
+        password: String,
+        user: UserInfo
+    ) = PasswordPolicy.enforce(passwordPolicy, password, user, "password")
 
     companion object {
-        private const val MIN_PASSWORD = 8
         private val ROLE_NAME = Regex("^[A-Z][A-Z0-9_]{1,48}$")
     }
 }

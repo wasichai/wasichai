@@ -31,6 +31,7 @@ import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.ServiceAccountSecrets
+import wasichai.core.identity.TokenRevocation
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.bindNullable
@@ -62,13 +63,15 @@ data class ServiceAccountResponse(
 
 // service accounts of the caller's tenant (ADR-043). MANAGE_ORGANIZATION, which a service account never passes.
 // every change leaves one admin audit entry, never the secret (ADR-049).
+// disabling, new roles, a new secret and deleting revoke the tokens it holds, with revocation on (ADR-059).
 @Service
 class ServiceAccountService(
     private val db: DatabaseClient,
     private val passwordEncoder: PasswordEncoder,
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas,
-    private val audit: AdminAudit
+    private val audit: AdminAudit,
+    private val revocation: TokenRevocation
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -140,6 +143,7 @@ class ServiceAccountService(
                 .awaitSingle()
         }
         roleIds?.let { roles.replace(id, it) }
+        if (request.enabled == false || roleIds != null) revocation.revoke(admin.organizationId, id)
         val updated = accountOrFail(admin.organizationId, id)
         audit.record(
             admin,
@@ -152,7 +156,7 @@ class ServiceAccountService(
         return updated
     }
 
-    // the old secret stops working at once. tokens it already got run out their ttl.
+    // the old secret stops working at once. tokens it already got run out their ttl, unless revocation is on.
     @Transactional
     suspend fun rotateSecret(id: UUID): ServiceAccountResponse {
         val admin = requireAdmin()
@@ -170,6 +174,7 @@ class ServiceAccountService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        revocation.revoke(admin.organizationId, id)
         val rotated = accountOrFail(admin.organizationId, id)
         // that it rotated, never what to
         audit.record(
@@ -200,6 +205,7 @@ class ServiceAccountService(
             .fetch()
             .rowsUpdated()
             .awaitSingle()
+        revocation.forget(admin.organizationId, id)
         audit.record(admin, AdminEntity.SERVICE_ACCOUNT, id, AdminOperation.DELETE, AdminSnapshots.serviceAccount(before), null)
     }
 

@@ -81,4 +81,28 @@ class JwtServiceTest {
         assertThat(jwt.hasClaim(JwtService.CLAIM_SERVICE_ACCOUNT)).isFalse()
         assertThat(JwtProperties().serviceAccountTtl).isEqualTo(Duration.ofMinutes(15))
     }
+
+    // issue 55 (ADR-059): every token is named; a login in the second after a change is not taken for an older one
+    @Test
+    fun `every token has its own jti, and iat is never before the user's revocation marker`() {
+        val service = JwtService(properties, WasichaiJwtKey(key))
+        val decoder = NimbusReactiveJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
+        val user = User(UUID.randomUUID(), UUID.randomUUID(), "ana@wasichai.local", "unused", "Ana")
+
+        val first = decoder.decode(service.issue(user, emptyList()).token).block()!!
+        val second = decoder.decode(service.issue(user, emptyList()).token).block()!!
+        assertThat(first.id).isNotBlank()
+        assertThat(first.id).isNotEqualTo(second.id)
+
+        val marker = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).plusSeconds(1)
+        val after = decoder.decode(service.issue(user.copy(tokensValidAfter = marker), emptyList()).token).block()!!
+        assertThat(after.issuedAt).isEqualTo(marker)
+        val account = decoder.decode(service.issueForServiceAccount(user.id, user.organizationId, "x", "rentas", emptyList(), marker).token).block()!!
+        assertThat(account.issuedAt).isEqualTo(marker)
+
+        // a marker in the past changes nothing
+        val past = Instant.now().minusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+        val later = decoder.decode(service.issue(user.copy(tokensValidAfter = past), emptyList()).token).block()!!
+        assertThat(later.issuedAt).isAfter(past)
+    }
 }

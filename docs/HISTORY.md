@@ -2,6 +2,34 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Token revocation, sign-in attempt limits and a password policy
+
+Tokens lived until `exp` whatever an administrator did, nothing counted failed sign-ins, and the one password rule was
+8 characters ([#55](https://github.com/wasichai/wasichai/issues/55)). Three additive parts, all off or neutral by
+default and recommended before production. **Revocation** (`wasichai.security.jwt.revocation`, default `false`;
+`wasichai.security.jwt.revocation-cache`, default `5s`): core `V17__tokens_valid_after.sql` adds
+`users.tokens_valid_after`, moved to the next whole second (app clock) when an administrator disables a user, sets
+their password or roles, or disables, re-roles or rotates a service account, and by the new `POST /api/auth/logout`
+(`204`, always there, the caller's own tokens); deleting removes the row. `RevocationCheckingJwtDecoder` then refuses a
+token whose `iat` is before the marker (`401`), reading it through a per-user cache (the change's own node knows at
+once; others within the cache window). A sign-in in the second of a change gets `iat` = the marker, so it works at
+once. Every token now carries a `jti`. **Attempt limits** (`wasichai.security.login.enabled`, default `false`;
+`max-attempts` 5 per email and client address and per client id, `account-max-attempts` 20 per email, `window` 15m):
+`LoginThrottle` counts before checking and answers `429` with `Retry-After` past a limit, the right password included,
+alike for known and unknown emails; the address is the request's remote address (Spring's forwarded-header handling,
+never a raw `X-Forwarded-For`); counts live in the new `LoginAttemptStore` SPI, in memory by default.
+`RetryLaterException` takes a status. **Password policy**: the `PasswordPolicy` SPI and its default
+`ConfiguredPasswordPolicy` (`wasichai.security.password.min-length`, `require-uppercase`, `require-lowercase`,
+`require-digit`, `require-symbol`, `not-equal-email`) judge user create, password change and provisioning, a `400`
+with one entry per broken rule; unconfigured it answers exactly as before. New constructor arguments on `AuthService`,
+`ServiceAccountTokenService`, `AdminService`, `ServiceAccountService` and `OrganizationService`
+([ADR-059](adr/0059-token-revocation-login-limits-and-password-policy.md), ADR-031 D44; the column is a known
+schema-parity deviation). New tests: `LoginThrottleTest`, `PasswordPolicyTest`, a case in `JwtServiceTest`, three in
+`WasichaiAutoConfigurationTest`, and the integration tests `TokenRevocationApiTest` (disable, password, roles, delete,
+logout, the cache window, service accounts), `LoginThrottleApiTest`, `PasswordPolicyApiTest` and
+`AuthDefaultsApiTest` (nothing set: as before). Docs: [authentication.md](security/authentication.md),
+[rest.md](api/rest.md) "Auth", [core.md](modules/core.md), [build-your-app.md](guides/build-your-app.md).
+
 ## 2026-10-08 — The app shapes what the assistant sends out, per caller, and hears about every run
 
 The assistant read only what its user may read (ADR-014), but handed each tool result to the model as it was, was on

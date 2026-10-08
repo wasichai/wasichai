@@ -351,6 +351,25 @@ These are the only intended differences. Anything else that behaves differently 
   ([ADR-056](0056-what-reaches-the-model-is-the-apps-to-shape.md)). Tested by `AgentExtensionsTest`,
   `WasichaiAgentAutoConfigurationTest`, `AgentAccessPolicyApiTest` and `AgentEmbabelTest`.
 
+**Because a token must die with the access behind it**
+
+- **D44. Revocation, sign-in limits and a password policy.** The original's tokens were stateless until `exp`, it
+  had no logout, counted no sign-in attempts and knew one password rule, 8 characters. Now every token carries a
+  `jti` claim, and `POST /api/auth/logout` answers `204` (authenticated). With `wasichai.security.jwt.revocation=true`
+  a token issued before its user's marker (`users.tokens_valid_after`, core `V17`) is `401`: the marker moves when an
+  administrator disables a user, sets their password or roles, or a service account is disabled, re-roled or rotated,
+  and on logout; a deleted user's or account's token is `401` too; at once on the node of the change, within
+  `wasichai.security.jwt.revocation-cache` elsewhere; a token issued after the change works at once. With
+  `wasichai.security.login.enabled=true`, too many failed attempts on `POST /api/auth/login` (per email and client
+  address, and per email) or `POST /api/auth/token` (per client id) are `429` with `Retry-After`, also for the right
+  password, alike for known and unknown emails. A configured `PasswordPolicy` answers `400` with one `errors` entry per
+  broken rule on `password` (`adminPassword` on provisioning), detail `Password does not meet the password policy`
+  unless the one failure is the length, which keeps `Password too short`
+  ([ADR-059](0059-token-revocation-login-limits-and-password-policy.md)). With none of the properties set, everything
+  else answers as before. The column is a known schema-parity deviation. Tested by `TokenRevocationApiTest`,
+  `LoginThrottleApiTest`, `PasswordPolicyApiTest`, `AuthDefaultsApiTest`, `LoginThrottleTest`, `PasswordPolicyTest`,
+  `JwtServiceTest` and `WasichaiAutoConfigurationTest`.
+
 **Because a client may send a create again**
 
 - **D45. A record create takes an `Idempotency-Key`.** The original had no idempotency: a `POST

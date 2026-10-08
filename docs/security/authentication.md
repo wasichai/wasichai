@@ -9,7 +9,9 @@ sub    user id
 org    organization id  (the tenant)
 email  the user's email
 roles  ["ADMIN", …]
+jti    a random id, one per token
 iss    wasichai.security.jwt.issuer (`wasichai` by default)
+iat    issue time, whole seconds
 exp    now + wasichai.security.jwt.ttl (8h by default)
 ```
 
@@ -24,6 +26,69 @@ app's unrelated `SecretKey` bean (some other encryption key, say) can never beco
 accident. An app that wants a different key declares its own `WasichaiJwtKey` bean.
 
 Moving to OIDC later replaces the decoder and the login endpoint; the permission model does not move.
+
+## Revocation, attempt limits and password policy
+
+Three additive parts, each off or neutral by default for 0.x compatibility and recommended before production
+([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md), ADR-031 D44). With none of their
+properties set, sign-in behaves as it always did: the only differences are the `jti` claim and a logout route that
+changes nothing.
+
+### Token revocation
+
+`wasichai.security.jwt.revocation=true` makes tokens killable. Every user row has a marker,
+`users.tokens_valid_after`; the decoder refuses (`401 invalid_token`) a token whose `iat` is before it, or whose user
+no longer exists in its tenant. The marker moves when:
+
+- an administrator disables a user, sets a new password, replaces their roles, or deletes them;
+- an administrator disables a service account, replaces its roles, rotates its secret, or deletes it (a service
+  account's marker is its backing user's);
+- the caller calls `POST /api/auth/logout`: all of their own tokens, every device.
+
+Other users' tokens are never touched. The marker is written whether revocation is on or not (the switch only decides
+whether it is read), so `POST /api/auth/logout` always answers `204`: a client calls it unconditionally, and a 404
+would read as a missing module (ADR-031 D1).
+
+**Second precision.** `iat` is in whole seconds, so the marker is the next whole second after the change, by the
+application's clock (never the database's, which could be skewed): every token issued until then, including one in
+the same second, is refused. A sign-in in that second gets `iat` equal to the marker (and `exp` that much later), so
+a token issued after the change always works at once. Two changes within one second push the marker one more
+second, so a token issued between them goes too.
+
+**Cost and delay.** The marker is read through a per-user cache that lives `wasichai.security.jwt.revocation-cache`
+(default `5s`, `0s` reads every time): one indexed read per user per window, none per request on a hit. The node that
+made the change knows it at once; another node within the cache window, which is the stated maximum revocation delay.
+A change that rolls back leaves its marker cached on that node until the entry expires: tokens refused a little early,
+never accepted late. An app that declares its own `ReactiveJwtDecoder` takes the check out with the default decoder.
+
+### Sign-in attempt limits
+
+`wasichai.security.login.enabled=true` counts attempts on `POST /api/auth/login` per (normalized email, client
+address), up to `max-attempts` (5), and per email from any address, up to `account-max-attempts` (20), in a fixed
+`window` (15 minutes) opened by the first attempt. The attempt that reaches a limit and fails, and every attempt after
+it until the window closes, is `429` with `Retry-After` for the rest of the window, without the password being checked:
+the right password is refused too, and a known and an unknown email get the same answers. One client's typos lock out
+only that client; guessing spread over many addresses stops at the account limit (and locks the account for everyone
+until the window closes, the accepted price). `POST /api/auth/token` is limited per client id, `max-attempts` too. An
+attempt is counted before the credentials are checked, so concurrent guesses cannot all slip under the limit; a
+success forgets the counts it touched.
+
+The **client address** is the request's remote address. Behind a reverse proxy that is the proxy's, unless Spring is
+told to trust forwarded headers (`server.forward-headers-strategy=native` or `framework`), which then sets the remote
+address from them. Wasichai never reads `X-Forwarded-For` itself: any client can send one.
+
+Counts live in a `LoginAttemptStore` bean. The default keeps them in memory (one node, bounded at 100,000 keys, the
+least recently used dropped first); a cluster declares its own, backed by PostgreSQL or Redis, with two operations:
+`increment(key, window)` and `reset(key)`.
+
+### Password policy
+
+A `PasswordPolicy` bean (`fun check(password: String, user: UserInfo): List<String>`) judges every new password: user
+create, password change, and the administrator of a tenant being provisioned. Each broken rule is one `errors` entry
+on `password` (`adminPassword` when provisioning) of a `400`. The default, `ConfiguredPasswordPolicy`, reads
+`wasichai.security.password.*`: `min-length` (8), `require-uppercase`, `require-lowercase`, `require-digit`,
+`require-symbol` and `not-equal-email` (all `false`). Unconfigured it is the one rule there always was, with the same
+answer. Service account secrets are generated, not chosen, and are not judged. Expiry is out of scope.
 
 ## Service accounts
 
@@ -50,8 +115,10 @@ the request a caller could fill with another system's key.
   credentials`, and every request runs one hash check, against a decoy hash when the id is unknown, so the timing does
   not tell them apart either. The decoy is hashed at startup. The hash comparison is the encoder's (BCrypt's is
   constant time), and it runs off the Netty event loop, as login's password check does.
-- **Revocation is not instant for tokens already issued.** Disabling, rotating or deleting stops new tokens at once;
-  a token already issued is a stateless JWT and lives until it expires. That is why its TTL is short.
+- **Revocation is not instant for tokens already issued, unless it is switched on.** Disabling, rotating or deleting
+  stops new tokens at once; by default a token already issued is a stateless JWT and lives until it expires, which is
+  why its TTL is short. With `wasichai.security.jwt.revocation=true`, it is refused too, and so is one issued before
+  the account got new roles (see [Token revocation](#token-revocation)).
 - **Never the administrator.** `ADMIN` cannot be given to a service account, `isAdmin` is `false` for one whatever its
   token says, and `CurrentUser` refuses it every `MANAGE_ORGANIZATION` and `MANAGE_TENANTS` check, whatever its roles
   grant. A leaked
@@ -60,9 +127,10 @@ the request a caller could fill with another system's key.
   audit log's user, automation runs, issued documents, preferences) takes the token's subject unchanged, and audit
   identifies the account through it. That row is disabled, has a random password nobody is told, is hidden from
   `/api/users` and is `404` to the user routes, so it can never be signed into or re-enabled as a person.
-- **Abuse of the public endpoint is not handled here.** `POST /api/auth/token` needs no token, and each call costs a
-  hash check. Guessing a 256-bit secret is hopeless, but an app exposed to the internet puts rate limiting in front of
-  it (a gateway or proxy), as it would for `/api/auth/login`.
+- **Abuse of the public endpoint.** `POST /api/auth/token` needs no token, and each call costs a hash check. Guessing a
+  256-bit secret is hopeless; with `wasichai.security.login.enabled=true` attempts are limited per client id (see
+  [Sign-in attempt limits](#sign-in-attempt-limits)). Without it, or against floods from many ids, an app exposed to
+  the internet still puts rate limiting in front of it (a gateway or proxy).
 
 ## Tenancy
 
@@ -187,7 +255,7 @@ Core declares one `SecurityWebFilterChain` at `@Order(0)`. Spring Boot's reactiv
 always adds a chain of its own, whatever beans exist, so wasichai's must win on order rather than by being the only
 one. Its public paths are `/api/auth/login`, `/api/auth/token`, `/api/health`, `/actuator/health/**` and every `OPTIONS`
 request.
-Everything else needs a valid token. Core's chain is `@ConditionalOnMissingBean`: an app that declares its own
+Everything else needs a valid token, `POST /api/auth/logout` included. Core's chain is `@ConditionalOnMissingBean`: an app that declares its own
 `SecurityWebFilterChain` bean replaces core's chain entirely, public paths and CORS included. A module that needs
 a chain next to core's declares it in an auto-configuration that runs after core's, with its own
 `securityMatcher` and an `@Order` below `0`. See the [core module](../modules/core.md#security).

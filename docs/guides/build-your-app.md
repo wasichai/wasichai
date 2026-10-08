@@ -264,10 +264,34 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Dev seed data | `wasichai.seed.dev` | [core.md](../modules/core.md) |
 | Audit purge role | `wasichai.audit.purge-role` (default none: no purge) | [core.md](../modules/core.md) |
 | Who creates and deletes tenants | `wasichai.organizations.separate-provisioning` | [core.md](../modules/core.md) |
+| Sign-in hardening | `wasichai.security.jwt.revocation`, `…login.*`, `…password.*` | [authentication.md](../security/authentication.md) |
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
 | Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
+
+### Before production: sign-in hardening
+
+All three are off or neutral by default, for 0.x compatibility; an app that holds personal data turns them on
+([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)):
+
+```yaml
+wasichai:
+  security:
+    jwt:
+      revocation: true        # disabling, new roles or password, deleting and logout kill live tokens
+    login:
+      enabled: true           # 429 after 5 failures per email and client, 20 per email, for 15 minutes
+    password:
+      min-length: 12
+      require-digit: true
+      not-equal-email: true
+```
+
+The UI calls `POST /api/auth/logout` on sign-out. Behind a reverse proxy, set `server.forward-headers-strategy:
+native` (or `framework`) so the attempt limit sees the client's address and not the proxy's. On more than one node,
+declare a `LoginAttemptStore` bean shared by all of them, or each counts on its own; a revocation reaches the other
+nodes within `wasichai.security.jwt.revocation-cache`.
 
 ## The AI assistant and what it sends out
 

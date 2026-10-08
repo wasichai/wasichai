@@ -18,8 +18,10 @@ import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
 import wasichai.core.platform.WasichaiIdempotencyProperties
+import wasichai.core.platform.WasichaiLoginProperties
 import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiOrganizationsProperties
+import wasichai.core.platform.WasichaiPasswordProperties
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.WasichaiWebProperties
 
@@ -31,7 +33,9 @@ import wasichai.core.platform.WasichaiWebProperties
     WasichaiWebProperties::class,
     WasichaiAuditProperties::class,
     WasichaiIdempotencyProperties::class,
-    WasichaiOrganizationsProperties::class
+    WasichaiOrganizationsProperties::class,
+    WasichaiLoginProperties::class,
+    WasichaiPasswordProperties::class
 )
 class WasichaiPlatformAutoConfiguration {
     @Bean

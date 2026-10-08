@@ -16,6 +16,8 @@ import wasichai.core.admin.UserOrgUnitsController
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
+import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.TokenRevocation
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectActionRepository
@@ -38,8 +40,10 @@ class WasichaiAdminAutoConfiguration {
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
         schemas: WasichaiSchemas,
-        audit: AdminAudit
-    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit)
+        audit: AdminAudit,
+        passwordPolicy: PasswordPolicy,
+        revocation: TokenRevocation
+    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit, passwordPolicy, revocation)
 
     @Bean
     @ConditionalOnMissingBean
@@ -66,8 +70,9 @@ class WasichaiAdminAutoConfiguration {
         currentUser: CurrentUser,
         db: DatabaseClient,
         schemas: WasichaiSchemas,
-        audit: AdminAudit
-    ): OrganizationService = OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit)
+        audit: AdminAudit,
+        passwordPolicy: PasswordPolicy
+    ): OrganizationService = OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit, passwordPolicy)
 
     @Bean
     @ConditionalOnMissingBean
@@ -80,8 +85,9 @@ class WasichaiAdminAutoConfiguration {
         passwordEncoder: PasswordEncoder,
         currentUser: CurrentUser,
         schemas: WasichaiSchemas,
-        audit: AdminAudit
-    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas, audit)
+        audit: AdminAudit,
+        revocation: TokenRevocation
+    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas, audit, revocation)
 
     @Bean
     @ConditionalOnMissingBean
