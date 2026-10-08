@@ -4,13 +4,15 @@ An app that installs this module tells people what they must know or do, by pers
 within a time window: information with a link to a law or a manual (`INFO`), a warning that something expires soon
 (`WARNING`) and a call to action that opens the screen, and the tab, where the work is done (`ACTION`). People publish
 by hand, app code publishes from inside its own transactions, scheduled sources report computed states, and date
-rules watch `DATE` and `DATETIME` fields. What a source or a rule stops reporting is resolved, so the inbox only shows
-what is still true. A live summary reaches the browser over Server-Sent Events.
+rules watch `DATE` and `DATETIME` fields, and automations notify with `NOTIFY`. What a source or a rule stops reporting
+is resolved, so the inbox only shows what is still true. A live summary reaches the browser over Server-Sent Events,
+and news can also leave the app by email, or by any delivery channel the app adds.
 
 The UI says **"Alertas"**, with three groups: Comunicados (`INFO`), Advertencias (`WARNING`) and Pendientes (`ACTION`).
 The code says notifications, because wasichai-ui already has an `Alert` primitive (an inline message). Decisions:
 [ADR-046](../adr/0046-notifications-module.md) (the module) and
-[ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md) (live delivery); design:
+[ADR-047](../adr/0047-server-push-over-sse-and-listen-notify.md) (live delivery),
+[ADR-060](../adr/0060-delivery-channels-and-automation-notify.md) (email, delivery channels, `NOTIFY`); design:
 [the spec](../superpowers/specs/2026-10-06-notifications-design.md).
 
 ## Install
@@ -61,6 +63,8 @@ REST routes ([../api/rest.md#notifications](../api/rest.md#notifications)):
 | POST | `/api/auth/me/notifications/{id}/dismiss` | any person |
 | POST | `/api/auth/me/notifications/{id}/snooze` | any person |
 | POST | `/api/auth/me/notifications/read-all` | any person |
+| GET | `/api/auth/me/notification-preferences` | any person |
+| PUT | `/api/auth/me/notification-preferences` | any person |
 | GET | `/api/notification-rules` | `MANAGE_METADATA` |
 | GET | `/api/objects/{object}/notification-rules` | `MANAGE_METADATA` on the object |
 | POST | `/api/objects/{object}/notification-rules` | `MANAGE_METADATA` on the object |
@@ -69,7 +73,7 @@ REST routes ([../api/rest.md#notifications](../api/rest.md#notifications)):
 | DELETE | `/api/objects/{object}/notification-rules/{name}` | `MANAGE_METADATA` on the object |
 | POST | `/api/objects/{object}/notification-rules/{name}/run` | `MANAGE_METADATA` on the object |
 
-A service account gets `403` on `/api/auth/me/notifications/**` (it is not a person) and on the admin routes (as on
+A service account gets `403` on `/api/auth/me/notifications/**` and on the preferences (it is not a person) and on the admin routes (as on
 every `MANAGE_ORGANIZATION` route, ADR-043).
 
 **The loop.** `NotificationLoop`, a `SmartLifecycle` built like automation's drain, looks every `tick` for due work:
@@ -129,6 +133,13 @@ undone by that run; the next write or run puts it right.
 | `wasichai.notifications.stream-debounce` | `500ms` | signals closer than this cost one recompute |
 | `wasichai.notifications.zone` | unset | the zone date rules count days in; unset: the app's unique `Clock` bean's zone, else the system's (WARN) |
 | `wasichai.notifications.date-pattern` | `dd/MM/yyyy` | how `{{date}}` and `DATE` values print in rule templates |
+| `wasichai.notifications.delivery-interval` | `1m` | how often the worker sends due deliveries; must be positive |
+| `wasichai.notifications.delivery-max-attempts` | `5` | tries per delivery before it is `FAILED`, 1–20 |
+| `wasichai.notifications.delivery-backoff` | `1m` | wait after the first failed try, doubled after each one; must be positive |
+| `wasichai.notifications.delivery-batch` | `100` | deliveries one run sends per organization, 1–1000 |
+| `wasichai.notifications.email.enabled` | `false` | `true` adds the email channel, given a `MailSender` bean (`spring.mail.*`) |
+| `wasichai.notifications.email.from` | unset | the sender address; required when email is enabled, or the start fails |
+| `wasichai.notifications.email.subject-prefix` | empty | put before every subject, e.g. `[Caja] ` |
 
 Env form: `WASICHAI_NOTIFICATIONS_ENABLED`. The module reads "now" from the app's `Clock` bean when it has exactly one
 (tests fix time with it), else from the system's.
@@ -163,7 +174,8 @@ notifications.resolve(organizationId, "caja.pagos", "pago-$pagoId")
 - **Transactions.** Every call joins the caller's transaction ([ADR-038](../adr/0038-record-service-joins-the-callers-transaction.md)),
   or runs in its own. A rollback takes the notification with it; the live signal goes out only with the commit.
 - **`source`** names the producer: `^[a-z][a-z0-9_.:-]{1,80}$`. `manual` and `rule:…` are the module's own and refused;
-  so are `purge` and `rules`, the loop's own keys, by `publish`, `resolve` and `resolveAll` alike.
+  so are `automation:…` (`NOTIFY`'s), and `purge`, `rules` and `deliveries`, the loop's own keys, by `publish`,
+  `resolve` and `resolveAll` alike.
 - **`key`** (`^[A-Za-z0-9_.:/-]{1,200}$`) makes `publish` an upsert on (organization, source, key); without one every
   call inserts a new notification. `resolve` answers `false` when no open notification has that key.
 - **Lenient about people.** An unknown user, email, role or unit is dropped with a WARN, so a person who left never
@@ -221,9 +233,9 @@ class TurnosAbiertos(
 - It runs **outside any transaction**, so it may call remote systems, and **as the platform**: `RecordService` reads
   and writes are scoped to the organization with no permission check; services that ask `CurrentUser` still refuse.
   Only the reconcile that follows is a transaction, one per organization.
-- `key` is the notifications' `source`: the same format as above, not `manual`, not `rule:…`, not `purge` or `rules`
-  (the loop's own keys, refused with that reason), unique among the app's sources, and the interval must be positive;
-  otherwise the app does not start.
+- `key` is the notifications' `source`: the same format as above, not `manual`, `rule:…` or `automation:…`, not
+  `purge`, `rules` or `deliveries` (the loop's own keys, refused with that reason), unique among the app's sources,
+  and the interval must be positive; otherwise the app does not start.
 - The reconcile is refused for the organization (logged), like a malformed draft, when a draft without `publishAt`
   would expire before the publication its stored notification keeps.
 - Do not also `Notifications.publish` under a source's key: the source would resolve what `publish` wrote.
@@ -237,11 +249,14 @@ class TurnosAbiertos(
 **Implements:** `wasichai.core.data.RecordChangeListener`, for date rules (`NotificationRuleListener`, last in order:
 a changed record is evaluated against its rules at once, inside the writer's transaction, and its open notification
 updated or resolved; a deleted one resolves; creating and reopening wait for the next run);
+`wasichai.automation.AutomationNotifier`, for `NOTIFY` (`AutomationNotifierAdapter`, only when automation is on the
+classpath; `WasichaiNotificationsAutomationAutoConfiguration`);
 `wasichai.core.metadata.ObjectRemovalListener`, for date rules (`NotificationRuleCleanup`: deleting an object resolves
 what its rules published, in the delete's transaction, before the rules go with the object);
 `wasichai.core.metadata.FieldUsage`, for date rules (`NotificationRuleFieldUsage`: a rule, disabled ones included,
 names itself, "notification rule '<name>'", as a user of a field it reads, so deleting that field is a `409`). It uses
-core's ports, never core's tables: `OrgUnitDirectory`, `UserDirectory`, `RoleDirectory`, `RecordStore`,
+core's ports, never core's tables: `OrgUnitDirectory` (`memberIdsWithin` for deliveries), `UserDirectory`
+(`enabledIds`), `RoleDirectory` (`holderIds`), `RecordStore`,
 `TenantDirectory`, `ClusterLock` and `Connections.unpooled`.
 
 **Overridable beans:** `audienceResolver`, `notificationPreparer`, `notificationRepository`, `inboxRepository`,
@@ -249,8 +264,83 @@ core's ports, never core's tables: `OrgUnitDirectory`, `UserDirectory`, `RoleDir
 `notificationAdminController`, `notificationLoop`, `notificationSignals`, `notificationListener`,
 `notificationStreamController`, and for date rules `notificationRuleRepository`, `ruleNotifications`,
 `notificationRuleService`, `notificationRuleController`, `notificationRuleListener`, `notificationRuleCleanup` and
-`notificationRuleFieldUsage` — all `@ConditionalOnMissingBean`, so an app can replace any of them. The migration bean
-(`wasichaiNotificationsMigration`) is not: core's own `ModuleMigration` would always back off first.
+`notificationRuleFieldUsage`, and for delivery `deliveryRepository`, `deliveries`, `notificationPreferencesService`,
+`notificationPreferencesController`, `emailChannel` (by name) and `automationNotifierAdapter` (by type) — all
+`@ConditionalOnMissingBean`, so an app can replace any of them. The migration bean (`wasichaiNotificationsMigration`)
+is not: core's own `ModuleMigration` would always back off first.
+
+## Email and delivery channels
+
+The inbox is always on. Anything else that carries news out of the app is a **delivery channel**
+([ADR-060](../adr/0060-delivery-channels-and-automation-notify.md)); the module ships one, email.
+
+```kotlin
+// the app's build: spring mail is optional for the module, the app brings it
+implementation("org.springframework.boot:spring-boot-starter-mail")
+```
+
+```yaml
+spring.mail.host: smtp.example.org
+wasichai.notifications.email:
+  enabled: true
+  from: alertas@example.org
+```
+
+- **What goes out is news**: a notification created, reopened, or whose kind changed (the moments its receipts start
+  over). An edit of the text, a new count in a title, sends nothing.
+- **Who gets it** is decided when the news is written, in the writer's transaction: the enabled people of the tenant
+  the audience reaches then (everyone; the users; the holders of the role, from stored roles; the members of the unit
+  and every unit below it), minus those whose preference leaves the kind out. One `notification_deliveries` row per
+  person and channel, `PENDING`; a rollback takes it with the notification. Someone who joins a role afterwards sees
+  the notification in the inbox, but gets no email for it.
+- **When**: the loop's `deliveries` item, once per cluster under `ClusterLock`, every `delivery-interval`, for every
+  organization, at most `delivery-batch` rows each, oldest first; a scheduled notification waits for its `publishAt`.
+  A notification resolved or expired before its turn is `SKIPPED`, and so is a person disabled meanwhile.
+- **Failures**: a channel that throws is retried after `delivery-backoff`, doubled each time; after
+  `delivery-max-attempts` the row is `FAILED` with `last_error`. The write that published it never waits on a channel
+  and never fails because of one. Delivery is at least once: a replica that dies mid-send sends again.
+- **Email** is plain text: subject `subject-prefix` + title, text the body (or the title), to the person's email.
+  Want HTML or a link to your screens? Declare your own bean named `emailChannel`.
+- **Preferences**: `GET/PUT /api/auth/me/notification-preferences`, `{"email": ["WARNING", "ACTION"]}`. Every kind
+  until the person chooses; `[]` stops the channel; a key left out keeps what it had
+  ([../api/rest.md#preferences](../api/rest.md#preferences)).
+
+**Defines: `DeliveryChannel`**, the SPI for another way out (a push service, a chat):
+
+```kotlin
+@Component
+class PushChannel(private val push: PushClient) : DeliveryChannel {
+    override val name = "push"
+
+    // throwing is a failed attempt: retried with backoff, then FAILED
+    override suspend fun deliver(message: DeliveryMessage, recipient: DeliveryRecipient) {
+        push.send(recipient.userId, message.title, message.body)
+    }
+}
+```
+
+`name` matches `^[a-z][a-z0-9-]{1,30}$`, is unique and never `in-app`, or the app does not start; it is the key in the
+preferences. `DeliveryMessage` carries the notification's id, organization, kind, title, body, publication, due date
+and its `ROUTE` or `URL` link; a `RECORD` link is left out, since only the inbox checks `READ` per reader.
+`DeliveryRecipient` is the person's id and email. With no channel in the app nothing is fanned out, written or sent.
+
+## Automation `NOTIFY`
+
+With wasichai-automation installed too, the module serves automation's `AutomationNotifier` port
+(`AutomationNotifierAdapter`), so a rule can notify:
+
+```json
+{ "trigger": { "type": "STATE_ENTERED", "state": "aprobado" },
+  "actions": [{ "type": "NOTIFY", "to": "{{responsable}}, role:SUPERVISOR", "kind": "WARNING",
+                "title": "Tramite {{codigo}} aprobado", "body": "Pase a {{state}}" }] }
+```
+
+`to` is rendered per run and split on commas: a user id (or `user:<id>`), an email, `role:<NAME>` or `unit:<CODE>`;
+an entry that names nobody is dropped with a WARN, as an unknown person is. The notification's source is
+`automation:<name>` (reserved: an app cannot publish under it), its key `<recordId>.<n>` (the action's place), and it
+links to the record: entering the state again reopens or updates the same notification, and is news again. `kind` is
+`INFO` or `WARNING`; an `ACTION` would wait for a resolve nothing sends, so it is refused when saved. See
+[automation.md](automation.md).
 
 ## Live delivery
 
@@ -303,7 +393,12 @@ Migration location `classpath:db/wasichai/notifications`, history table `flyway_
 - `notification_receipts`: one row per person who read, dismissed or snoozed a notification.
 - `notification_rules`: date rules, one per name and organization (`^[a-z][a-z0-9_]{1,48}$`), the whole rule as
   `definition` jsonb; deleted with their object.
-- `notification_source_runs`: when each source (and the rules, and the purge) last ran, shared by every replica.
+- `notification_source_runs`: when each source (and the rules, the purge and the deliveries) last ran, shared by
+  every replica.
+- `notification_deliveries` (`V2__deliveries.sql`): one row per notification, person and channel: `status`
+  (`PENDING`, `SENT`, `FAILED`, `SKIPPED`), `attempts`, `last_error`, `next_attempt_at`, `sent_at`. Deleted with its
+  notification, so the daily purge clears it too.
+- `notification_preferences` (`V2`): the kinds a person wants on a channel; no row is every kind.
 
 The tables reference core's `organizations`, `users`, `custom_objects` and `org_units`, and are deleted with their
 organization.
@@ -329,7 +424,7 @@ allowed". Organizational units are core's and stay. The routes and tables are de
 - **Rule conditions are ANDed equalities and emptiness**: no "one of" (`IN`), no "equal or empty" (two rules do it),
   no comparison. A value replaced by a new row rather than edited (a fee renewal) needs a source, not a rule.
 - **Rule audiences are fixed**: no audience taken from the record (`created_by`, an email field), no rule on a workflow
-  state's age, no automation `NOTIFY` action. They wait for a second user.
+  state's age. They wait for a second user. An automation's `NOTIFY` takes its audience from the record.
 - **Who publishes is coarse**: manual notifications need `MANAGE_ORGANIZATION`, rules `MANAGE_METADATA` on the object.
   A unit head publishing to their own unit waits for units with a head.
 - **Templates print values without field permissions**: a rule's author is a metadata administrator.
@@ -339,4 +434,6 @@ allowed". Organizational units are core's and stay. The routes and tables are de
   unit.
 - **One extra database connection per replica** for `LISTEN`. Every browser tab opens a stream; over HTTP/1.1 (six
   connections per origin) the UI shares one between tabs, or the app serves HTTP/2.
-- **In the app only**: no email, digest, required acknowledgement, banner or escalation in v1.
+- **Email is plain text and immediate**: no digest, template, required acknowledgement, banner or escalation. An email
+  is decided when the news is written, so a later member of a role gets none; a fan-out to everyone writes a row per
+  person and channel. Delivery is at least once.

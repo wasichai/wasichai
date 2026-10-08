@@ -653,6 +653,13 @@ ways, depending on where the truth lives:
 | an event in your code | a turno closed with a cash difference, a mass job finished | `Notifications.publish`, inside the business transaction |
 | a state you compute | turnos of an earlier day still open, a reconciliation that does not balance | a `NotificationSource` |
 | a date field of a record | a licence's `vigencia_hasta` | a date rule, applied with your model |
+| a record reaching a workflow state | a trámite approved, a task assigned | an automation with a `NOTIFY` action (`STATE_ENTERED`) |
+
+To reach people outside the app too, add `org.springframework.boot:spring-boot-starter-mail`, set `spring.mail.host`
+and `wasichai.notifications.email.enabled=true` with `wasichai.notifications.email.from`: every new notification is
+then also emailed to the people it reaches, sent in the background and retried, and each person picks the kinds they
+want by email (`/api/auth/me/notification-preferences`). Another way out (a push service) is a `DeliveryChannel` bean
+([notifications.md](../modules/notifications.md#email-and-delivery-channels)).
 
 The frontend package, `@wasichai/notifications`, is planned
 ([plan](../superpowers/plans/2026-10-06-notifications-wasichai-ui.md)); until it ships, a client reads
