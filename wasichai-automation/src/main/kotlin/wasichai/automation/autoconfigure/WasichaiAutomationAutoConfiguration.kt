@@ -12,12 +12,14 @@ import wasichai.automation.AutomationController
 import wasichai.automation.AutomationDispatcher
 import wasichai.automation.AutomationDrain
 import wasichai.automation.AutomationFieldUsage
+import wasichai.automation.AutomationNotifier
 import wasichai.automation.AutomationProperties
 import wasichai.automation.AutomationRepository
 import wasichai.automation.AutomationRunRepository
 import wasichai.automation.AutomationRunner
 import wasichai.automation.AutomationService
 import wasichai.automation.DocumentIssuer
+import wasichai.automation.NoAutomationNotifier
 import wasichai.automation.NoDocumentIssuer
 import wasichai.automation.WebhookSender
 import wasichai.core.audit.AuditService
@@ -31,8 +33,8 @@ import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 
-// automations. the document port is looked up, not required: with no documents module the null
-// issuer answers, and no auto-config order has to be right for that (M2).
+// automations. the document and notify ports are looked up, not required: with no documents or notifications
+// module the null one answers, and no auto-config order has to be right for that (M2).
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.automation", name = ["enabled"], havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(AutomationProperties::class)
@@ -86,7 +88,8 @@ class WasichaiAutomationAutoConfiguration {
         webhooks: WebhookSender,
         documents: ObjectProvider<DocumentIssuer>,
         guards: RecordWriteGuards,
-        types: FieldTypeRegistry
+        types: FieldTypeRegistry,
+        notifier: ObjectProvider<AutomationNotifier>
     ): AutomationRunner =
         AutomationRunner(
             automations,
@@ -99,7 +102,8 @@ class WasichaiAutomationAutoConfiguration {
             webhooks,
             documents.getIfAvailable { NoDocumentIssuer() },
             guards,
-            types
+            types,
+            notifier.getIfAvailable { NoAutomationNotifier() }
         )
 
     @Bean
@@ -110,8 +114,18 @@ class WasichaiAutomationAutoConfiguration {
         metadata: MetadataService,
         webhooks: WebhookSender,
         documents: ObjectProvider<DocumentIssuer>,
-        currentUser: CurrentUser
-    ): AutomationService = AutomationService(automations, runs, metadata, webhooks, documents.getIfAvailable { NoDocumentIssuer() }, currentUser)
+        currentUser: CurrentUser,
+        notifier: ObjectProvider<AutomationNotifier>
+    ): AutomationService =
+        AutomationService(
+            automations,
+            runs,
+            metadata,
+            webhooks,
+            documents.getIfAvailable { NoDocumentIssuer() },
+            currentUser,
+            notifier.getIfAvailable { NoAutomationNotifier() }
+        )
 
     // polls from SmartLifecycle.start(), after every singleton (migrations included): no @DependsOn (M9)
     @Bean

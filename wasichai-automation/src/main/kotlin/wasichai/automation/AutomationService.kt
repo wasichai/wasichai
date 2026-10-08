@@ -32,7 +32,11 @@ data class AutomationActionRequest(
     val targetObject: String? = null,
     val values: Map<String, String> = emptyMap(),
     val url: String? = null,
-    val documentType: String? = null
+    val documentType: String? = null,
+    val to: String? = null,
+    val kind: String? = null,
+    val title: String? = null,
+    val body: String? = null
 )
 
 data class AutomationDefinitionRequest(
@@ -55,7 +59,8 @@ class AutomationService(
     private val metadata: MetadataService,
     private val webhooks: WebhookSender,
     private val documents: DocumentIssuer,
-    private val currentUser: CurrentUser
+    private val currentUser: CurrentUser,
+    private val notifier: AutomationNotifier = NoAutomationNotifier()
 ) {
     suspend fun list(objectName: String): Pair<List<Automation>, String> {
         val user = currentUser.require()
@@ -228,7 +233,24 @@ class AutomationService(
                 AutomationAction(type = type, url = url)
             }
             ActionType.GENERATE_DOCUMENT -> generateDocument(definition, request)
+            ActionType.NOTIFY -> notify(request)
         }
+    }
+
+    // who and what are templates: checked for presence here, resolved per run (an unknown person is dropped)
+    private fun notify(request: AutomationActionRequest): AutomationAction {
+        if (!notifier.available) throw ValidationException(NoAutomationNotifier.NOT_INSTALLED, "actions", "the notifications module is not installed")
+        val to = request.to?.trim()?.ifBlank { null } ?: throw ValidationException("Action has no recipient", "actions", "to is required for NOTIFY")
+        val title = request.title?.trim()?.ifBlank { null } ?: throw ValidationException("Action has no title", "actions", "title is required for NOTIFY")
+        val kind =
+            request.kind
+                ?.trim()
+                ?.uppercase()
+                ?.ifBlank { null } ?: NOTIFY_KINDS.first()
+        // an ACTION waits for its work to be done, and nothing here would ever say it is
+        val known = NOTIFY_KINDS.joinToString(", ")
+        if (kind !in NOTIFY_KINDS) throw ValidationException("Unknown notification kind '$kind'", "actions", "kind must be one of $known")
+        return AutomationAction(type = ActionType.NOTIFY, to = to, kind = kind, title = title, body = request.body?.ifBlank { null })
     }
 
     private suspend fun generateDocument(
@@ -307,5 +329,6 @@ class AutomationService(
         const val STATE_FIELD = "state"
         val VALID_NAME = Regex("^[a-z][a-z0-9_-]{0,48}$")
         val VALUELESS = setOf(ConditionOperator.IS_EMPTY, ConditionOperator.IS_NOT_EMPTY, ConditionOperator.CHANGED)
+        val NOTIFY_KINDS = listOf("INFO", "WARNING")
     }
 }
