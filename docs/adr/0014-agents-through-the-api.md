@@ -1,6 +1,6 @@
 # ADR-014: The agent reaches data only through Wasichai's own services
 
-**Status**: accepted · 2026-09-18
+**Status**: accepted · 2026-09-18 · amended by [ADR-056](0056-what-reaches-the-model-is-the-apps-to-shape.md)
 
 > Imported from sapgis on 2026-09-25. Identifiers renamed sapgis → chawpi; the decision is unchanged. See [sapgis origin](../sapgis-origin.md).
 >

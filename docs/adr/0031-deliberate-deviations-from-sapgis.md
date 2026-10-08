@@ -337,6 +337,20 @@ These are the only intended differences. Anything else that behaves differently 
   `SelfRelationshipApiTest`, `RelationshipSideTest`, `RecordReadScopeApiTest`, `PageServiceTest` and
   `AgentToolCatalogTest`.
 
+**Because an organization decides what reaches a model provider**
+
+- **D43. The assistant reports its token usage, and an app can switch it off per caller.** The original's answer to
+  `POST /api/agent/ask` was `answer`, `steps` and `truncated`. It gains `usage` (`model`, `inputTokens`,
+  `outputTokens`), summed over the run's model calls, whenever the provider reported them, which a real one does; the
+  key is left out when none were reported, so with the scripted test models the JSON is unchanged. With an app's
+  `AgentAccessPolicy` that denies a caller, `GET /api/agent/status` answers `enabled: false` for them although a key is
+  configured, and `ask` answers `403` with the policy's reason before the model is called (the original had no such
+  answer). With an app's `AgentResultFilter` the tool results and `steps[].summary` are what the filter returned, and a
+  filter that throws makes `ask` answer `500` "could not prepare the data for the model; nothing was sent" (or the
+  filter's own error status). With no such bean, status and every error are as before
+  ([ADR-056](0056-what-reaches-the-model-is-the-apps-to-shape.md)). Tested by `AgentExtensionsTest`,
+  `WasichaiAgentAutoConfigurationTest`, `AgentAccessPolicyApiTest` and `AgentEmbabelTest`.
+
 **Because a client may send a create again**
 
 - **D45. A record create takes an `Idempotency-Key`.** The original had no idempotency: a `POST

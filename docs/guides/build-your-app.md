@@ -269,6 +269,22 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
 | Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
 
+## The AI assistant and what it sends out
+
+The assistant answers as the person asking and never sees more than they may (ADR-014), but what it reads goes to a
+third-party model provider. Four beans let your app decide what leaves and keep a record of it
+([agent.md](../modules/agent.md#extension-points),
+[ADR-056](../adr/0056-what-reaches-the-model-is-the-apps-to-shape.md)):
+
+- `AgentAccessPolicy` — switch the assistant on only for the organizations (or roles) that opted in. Denied callers
+  see it off in `GET /api/agent/status` and get `403` from `POST /api/agent/ask`; nothing is sent.
+- `AgentResultFilter` — replace personal data in every tool result with a pseudonym before the model sees it (the
+  steps shown in the UI get the same text). If it throws, the question fails and nothing more is sent.
+- `AgentAnswerFilter` — put the real values back in the final answer.
+- `AgentRunListener` — record every question with its answer or error and its token usage (`AgentUsage`).
+
+Declare none and the assistant behaves as before.
+
 ## Operator and customer tenants
 
 By default every tenant's administrator can create tenants (`POST /api/organizations`) and delete their own

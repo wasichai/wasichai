@@ -2,6 +2,37 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — The app shapes what the assistant sends out, per caller, and hears about every run
+
+The assistant read only what its user may read (ADR-014), but handed each tool result to the model as it was, was on
+or off for the whole deployment, and said nothing about what a question cost, so an app could not pseudonymize what
+leaves, enable it per organization or log every interaction with its tokens
+([#59](https://github.com/wasichai/wasichai/issues/59)). `wasichai-agent` now defines four beans, each with a no-op
+default ([ADR-056](adr/0056-what-reaches-the-model-is-the-apps-to-shape.md), amends ADR-014; ADR-031 D43):
+`AgentResultFilter` (every bean, in `@Order`, on each tool's JSON for the model and on the step's `summary`, run as
+the caller inside the run's bridge), `AgentAnswerFilter` (on the final text, to restore a reversible pseudonym),
+`AgentAccessPolicy` (`Allowed` or `Denied(reason)`, default `ALLOW_ALL`: a denied caller's `GET /api/agent/status`
+says `enabled: false` and `POST /api/agent/ask` is a `403` with the reason, before the run) and `AgentRunListener`
+(once per question that reached the run: answer, truncated run or failure, with `AgentUsage(model, inputTokens,
+outputTokens)` summed over the `LlmInvocation`s Embabel recorded on the run's process, `null` when none). A filter
+that throws fails the run closed: the result is not sent, Embabel's tool loop is asked to stop before its next model
+call (`terminateAction`), every later tool call and retried action stops (`AgentRun.requireOpen`), and `ask` answers
+with the filter's own `WasichaiException` or `AgentFilterException` (`500`, "nothing was sent"). A listener that
+throws fails the request. `AgentAnswer` and the `ask` response gain `usage`, left out when null, so with no beans
+and a model that reports no tokens the JSON is unchanged; a real provider's answers now carry it. In code:
+`AgentExtensions.kt`, `AgentRun` takes the caller's `AuthenticatedUser` and the filters and holds the process and
+the first failure, `AgentService` takes the policy, filters and listeners (the auto-configuration passes every bean
+in order) and `status()` is now `suspend`, `WasichaiAgent` attaches the process to the run. No route, property or
+migration. New tests: `AgentExtensionsTest` (Embabel's in-memory platform with a recording scripted model: the model
+gets the pseudonym, never the value; summaries filtered; answer restored; filters in order and as the caller; a
+throwing filter fails closed and the model is called once; a filter's own refusal keeps its status; a denied caller
+sees `enabled: false` and is refused with the model never called; one listener call with usage for an answer, a
+truncated run and a model failure; a throwing listener fails the request; with nothing declared the response has
+only `answer`, `steps`, `truncated`), cases in `WasichaiAgentAutoConfigurationTest`, the integration test
+`AgentAccessPolicyApiTest` (status, `403` with the reason, the model never hears it) and a case in `AgentEmbabelTest`
+(no `usage` key over HTTP). Docs: [agent.md](modules/agent.md#extension-points), [rest.md](api/rest.md) "AI
+assistant", [build-your-app.md](guides/build-your-app.md) "The AI assistant and what it sends out".
+
 ## 2026-10-08 — A record create takes an Idempotency-Key
 
 `POST /api/objects/{object}/records` was not idempotent: a client that timed out or got a `5xx` and sent the create
