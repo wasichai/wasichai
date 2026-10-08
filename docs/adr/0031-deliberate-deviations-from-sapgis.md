@@ -233,6 +233,22 @@ These are the only intended differences. Anything else that behaves differently 
   `CorrelationIdWebFilterTest`, `ChangeOriginTest`, `RecordServicePlatformTest`, `AutomationDispatcherTest`,
   `AuditOriginApiTest` and `AutomationOnlyApiTest`.
 
+**Because two people edit the same record**
+
+- **D36. ETag, If-Match and PATCH on records.** The original's record `PUT` was a full replace with the last writer
+  winning, and nothing answered a version. Now `GET`, `POST`, `PUT` and `PATCH` of a record and a workflow transition
+  answer `ETag: "<updatedAt>"`; `PUT`, `PATCH`, `DELETE` and a transition take `If-Match` and write only while the
+  record still carries one of its strong tags, compared in the write's own statement: `412` problem+json naming
+  `If-Match` when the caller still reads the record, `404` when it is gone or out of reach, nothing stored or audited;
+  a malformed `If-Match` is a `400` on it; none, or `*`, is the old write
+  ([ADR-051](0051-optimistic-locking-and-partial-update-of-records.md)). The new
+  `PATCH /api/objects/{object}/records/{id}` writes only the attribute keys sent (`null` clears), under every rule of
+  `PUT`, and answers `400` on a key that is no attribute and `403` on an `editable: false` field, where `PUT` ignores
+  both. `updated_at` is now set by the statement's `clock_timestamp()`, not the transaction's `now()`, so two writes in
+  one transaction get different `updatedAt` values. CORS exposes `ETag`. Tested by `RecordETagTest`,
+  `RecordServicePreconditionTest`, `PhysicalTableRecordStoreTest`, `RecordPreconditionApiTest` and
+  `WorkflowOnlyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

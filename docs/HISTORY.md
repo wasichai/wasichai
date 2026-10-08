@@ -2,6 +2,39 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Records: ETag, If-Match in the write itself, and a partial PATCH
+
+A record `PUT` was a full replace with the last writer winning: a client that knew some fields blanked the others, and
+two people (or a person and an automation) editing one record silently lost an edit; an app's own `updatedAt` check
+before the write left a window open ([#51](https://github.com/wasichai/wasichai/issues/51)). Now `GET`, `POST`, `PUT`
+and the new `PATCH` of a record, and a workflow transition, answer `ETag: "<updatedAt>"`, the instant exactly as the
+JSON writes it, so a list item's `updatedAt` gives its ETag too; CORS exposes `ETag`
+([ADR-051](adr/0051-optimistic-locking-and-partial-update-of-records.md), ADR-031 D36). `PUT`, `PATCH`, `DELETE` and
+`POST …/transitions/{name}` take `If-Match`: the write carries `AND CAST(EXTRACT(EPOCH FROM updated_at) * 1000000 AS
+bigint) = ANY(:expected)` in its own `UPDATE` or `DELETE`, so of N writers holding one version exactly one wins. No row
+matched and the caller still reads the record: `412` problem+json naming `If-Match`
+(`wasichai.core.common.PreconditionFailedException`), nothing stored, audited or told; gone or out of reach: `404`, as
+ADR-048 answers. A weak tag never matches; a malformed header is a `400` on `If-Match`; none, or `*`, is the old write.
+Every other refusal comes first and keeps its status, and on the delete that checks append-only references under a row
+lock (ADR-044) the compare sits in that same `DELETE`. Link and unlink take no `If-Match`: they change no record row.
+The version is `updated_at`, now set by `clock_timestamp()` on update and transition instead of `now()`, so two writes
+in one transaction differ; no migration, and `version` stays a reserved name without a column. `PATCH
+/api/objects/{object}/records/{id}` merges `attributes` (only the keys sent are written, `null` clears) under every rule
+of `PUT`, through one shared path in `RecordService`; a guard sees the stored record with the sent keys over it. Its own
+answers: `400` on a key that is no attribute, `403` on an `editable: false` field (where `PUT` ignores both); a field
+the caller's roles may not write stays a `400`, as on `PUT`. In-process: new overloads
+`RecordService.update(…, reason, expectedUpdatedAt: Instant?)` and `delete(…, reason, expectedUpdatedAt)`, the new
+`RecordService.patch(…)`, and `WorkflowService.apply(…, reason, expectedUpdatedAt: List<Instant>?)`; the `RecordStore`
+port gains `updateIfUnchanged`, `deleteIfUnchanged` and `transitionStateIfUnchanged`, whose default bodies refuse, so an
+app's own store keeps compiling. New tests: `RecordETagTest`, `RecordServicePreconditionTest`, cases in
+`PhysicalTableRecordStoreTest`, the integration test `RecordPreconditionApiTest` (ETag round trip, two clients, eight
+concurrent writers with one `If-Match`, `PUT` without it, stale delete, weak and malformed tags, `PATCH` rules and its
+audit `changes`, `appendOnly`/`apiOnly`/`requiresReason`, the locked delete, two writes in one transaction) and a case in
+`WorkflowOnlyApiTest`. wasichai-ui may adopt `If-Match` and `PATCH`; it needs no change to keep working (ADR-032).
+Docs: [rest.md](api/rest.md) "Concurrent edits" and "Partial update", [core.md](modules/core.md),
+[workflow.md](modules/workflow.md), [build-your-app.md](guides/build-your-app.md) "Two people edit the same record".
+Plan: [2026-10-08-record-preconditions.md](superpowers/plans/2026-10-08-record-preconditions.md).
+
 ## 2026-10-08 — A correlation id and the source of every change on the audit row
 
 `audit_log` could not tie a row to the request that wrote it, nor say what wrote it: a person through the API, an app's

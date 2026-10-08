@@ -44,7 +44,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
-- Dynamic records and related records: `/api/objects/{object}/records`.
+- Dynamic records and related records: `/api/objects/{object}/records`. A record answer carries its `ETag`
+  (`"<updatedAt>"`); `PUT`, the partial `PATCH` and `DELETE` take `If-Match` and compare it in the write's own
+  statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)).
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
@@ -352,6 +354,8 @@ Core is always installed.
   (ADR-049).
 - D35: `X-Correlation-Id` on every response, and `correlationId` and `source` on new audit entries, filtered by
   `/api/audit?correlationId=&source=`; two nullable `audit_log` columns (ADR-050).
+- D36: `ETag` on record answers and transitions, `If-Match` on `PUT`, `PATCH`, `DELETE` and transitions (`412` when
+  stale), `PATCH` for a partial update, and `updated_at` from the statement's clock (ADR-051).
 
 ## Known limitations
 

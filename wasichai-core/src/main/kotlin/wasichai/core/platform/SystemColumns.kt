@@ -47,7 +47,8 @@ class SystemColumns(
                 SystemColumn("updated_by", "UUID", SystemColumnScope.ALWAYS)
             )
 
-        // reserved, never created. version: optimistic locking does not exist yet. count and after: record
+        // reserved, never created. version: optimistic locking rides on updated_at (ADR-051), the name is kept free
+        // for a counter should one ever be needed. count and after: record
         // list parameters (ADR-036), so a field of that name could never be filtered on.
         val RESERVED: List<SystemColumn> =
             listOf(

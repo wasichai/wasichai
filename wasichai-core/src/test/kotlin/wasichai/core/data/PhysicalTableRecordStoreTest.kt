@@ -17,6 +17,7 @@ import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
+import java.time.Instant
 import java.util.UUID
 
 class PhysicalTableRecordStoreTest {
@@ -320,5 +321,25 @@ class PhysicalTableRecordStoreTest {
         assertThat(store().isDataException(RuntimeException("wrapped", cast))).isTrue()
         assertThat(store().isDataException(grammar)).isFalse()
         assertThat(store().isDataException(IllegalStateException("no sqlstate"))).isFalse()
+    }
+
+    // ADR-051: the version compare rides in the write's own WHERE, on updated_at in epoch micros
+    @Test
+    fun `a write with no precondition adds nothing to its where, one with a precondition compares updated_at`() {
+        assertThat(store().versionMatch(null)).isEmpty()
+        assertThat(store().versionMatch(arrayOf(1L)))
+            .isEqualTo(" AND CAST(EXTRACT(EPOCH FROM updated_at) * 1000000 AS bigint) = ANY(:expected)")
+    }
+
+    @Test
+    fun `versions are epoch micros, and an instant no updated_at can hold matches nothing`() {
+        val read = Instant.parse("2026-10-07T10:15:30.123456Z")
+
+        assertThat(store().versions(listOf(read, read))).containsExactly(1_791_368_130_123_456L)
+        assertThat(store().versions(listOf(Instant.parse("1969-12-31T23:59:59.5Z")))).containsExactly(-500_000L)
+        // finer than postgres keeps, or past a long: never stored, so no statement at all
+        assertThat(store().versions(listOf(Instant.parse("2026-10-07T10:15:30.123456789Z")))).isNull()
+        assertThat(store().versions(listOf(Instant.ofEpochSecond(Instant.MAX.epochSecond)))).isNull()
+        assertThat(store().versions(emptyList())).isNull()
     }
 }

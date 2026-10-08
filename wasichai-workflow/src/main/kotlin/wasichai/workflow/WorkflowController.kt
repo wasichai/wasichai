@@ -1,6 +1,7 @@
 package wasichai.workflow
 
 import org.springframework.http.HttpStatus
+import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -12,7 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import wasichai.core.data.ChangeReason
+import wasichai.core.data.RecordETag
 import wasichai.core.data.RecordResponse
+import wasichai.core.data.withETag
 import java.util.UUID
 
 data class WorkflowResponse(
@@ -67,6 +70,12 @@ class WorkflowController(
         @PathVariable("object") objectName: String,
         @PathVariable id: UUID,
         @PathVariable name: String,
-        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?
-    ): RecordResponse = workflows.apply(objectName, id, name, ChangeReason.fromHeader(reason))
+        @RequestHeader(ChangeReason.HEADER, required = false) reason: String?,
+        @RequestHeader(RecordETag.IF_MATCH, required = false) ifMatch: String?,
+        response: ServerHttpResponse
+    ): RecordResponse {
+        // a transition writes the record: If-Match and its ETag as on PUT (ADR-051)
+        val expected = RecordETag.parseIfMatch(ifMatch)
+        return workflows.apply(objectName, id, name, ChangeReason.fromHeader(reason), expected).withETag(response)
+    }
 }

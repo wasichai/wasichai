@@ -332,7 +332,7 @@ Three flags, all `false` unless set, all in the create request, in `PUT` and in 
 { "name": "recibo", "label": "Recibo", "appendOnly": true, "apiOnly": true, "fields": [] }
 ```
 
-- `appendOnly: true` — records are created, never changed or deleted, by anyone: `PUT` and `DELETE` on a record, a
+- `appendOnly: true` — records are created, never changed or deleted, by anyone: `PUT`, `PATCH` and `DELETE` on a record, a
   workflow transition, and a link or unlink touching one of its records answer `409`, for `ADMIN` too, even a link
   that already exists or an unlink of one that does not (elsewhere those are a no-op `204`). So do deleting the
   object, one of its fields, a relationship that holds its values, or an object it shares a join table with: switch
@@ -342,11 +342,11 @@ Three flags, all `false` unless set, all in the create request, in `PUT` and in 
   delete run in one transaction behind a lock on the record, so an append-only record created at the same moment
   either is seen (`409`) or fails its own insert with `409`; it is never nulled
   ([ADR-044](../adr/0044-append-only-delete-check-under-a-row-lock.md)).
-- `apiOnly: true` — the generic record API (`POST`, `PUT`, `DELETE` under `/records`, and link or unlink when either
+- `apiOnly: true` — the generic record API (`POST`, `PUT`, `PATCH`, `DELETE` under `/records`, and link or unlink when either
   end is api-only) answers `403` on writes, for `ADMIN` too. Only the app's own code writes it, in-process. Reads
   are unchanged.
 - `requiresReason: true` — every write of its records must say why, in the `X-Change-Reason` header (see "Change
-  reason" under Records): without one, `POST`, `PUT`, `DELETE`, a link or unlink touching one of its records and a
+  reason" under Records): without one, `POST`, `PUT`, `PATCH`, `DELETE`, a link or unlink touching one of its records and a
   workflow transition answer `400` on `reason`, and nothing is stored
   ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
 
@@ -923,9 +923,13 @@ invisible, and both publishing and unpublishing retire it — republishing is ho
 GET    /api/objects/{object}/records?page=0&size=25&sort=codigo&dir=asc&q=text&<field>=<value>
 POST   /api/objects/{object}/records
 GET    /api/objects/{object}/records/{id}
-PUT    /api/objects/{object}/records/{id}
+PUT    /api/objects/{object}/records/{id}       full replace: a field left out is cleared
+PATCH  /api/objects/{object}/records/{id}       partial: only the attributes sent are written
 DELETE /api/objects/{object}/records/{id}
 ```
+
+`GET`, `POST`, `PUT` and `PATCH` of one record answer its `ETag`; `PUT`, `PATCH` and `DELETE` take `If-Match` (see
+"Concurrent edits" below).
 
 A record:
 
@@ -977,8 +981,8 @@ same way.
 `geometry` names the geometry field a `bbox` applies to; without it, the object's first. A `bbox` on
 an object with no geometry, or naming one it does not have, is a `400`.
 
-Writes answer `409` on an `appendOnly` object (`PUT`, `DELETE`) and `403` on an `apiOnly` one (`POST`, `PUT`,
-`DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
+Writes answer `409` on an `appendOnly` object (`PUT`, `PATCH`, `DELETE`) and `403` on an `apiOnly` one (`POST`,
+`PUT`, `PATCH`, `DELETE`), whatever the caller's roles (see "Write rules" under Objects). An app's `RecordWriteGuard` may refuse any
 write with its own status, `400` or `409` as a rule.
 
 A `RELATION` value must name a record of the caller's organization that the caller can read: `READ` on the target
@@ -1008,7 +1012,8 @@ that is a `409`, "A record this one points at does not exist any more" (ADR-031 
 An app may keep a person or a service account to some records of an object, such as those of their projects, with a
 `RecordReadScope` bean ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). No route or parameter
 changes; what the caller reads does. A list and its `totalElements` hold only the records in scope, and with an empty
-scope every total is `0`. A record out of scope answers exactly as a missing one: `404` on `GET`, `PUT` and `DELETE`,
+scope every total is `0`. A record out of scope answers exactly as a missing one: `404` on `GET`, `PUT`, `PATCH` and
+`DELETE`, with or without `If-Match`,
 on its related records, its history and its transitions, on a link or unlink naming it, and on its GIS feature; `400`
 on a `RELATION` field naming it. Never `403`. `ADMIN` is not narrowed. Without such a bean every answer above is
 unchanged.
@@ -1020,7 +1025,7 @@ PUT /api/objects/recibo/records/{id}
 X-Change-Reason: UTF-8''correcci%C3%B3n%20del%20monto%20por%20error%20de%20digitaci%C3%B3n
 ```
 
-Every record write takes an optional `X-Change-Reason` header: `POST`, `PUT` and `DELETE` here, link and unlink
+Every record write takes an optional `X-Change-Reason` header: `POST`, `PUT`, `PATCH` and `DELETE` here, link and unlink
 (Related records) and a workflow transition ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)). It is stored
 on that write's audit entry and comes back as `reason` from the audit API.
 
@@ -1042,6 +1047,63 @@ on that write's audit entry and comes back as `reason` from the audit API.
 
 The missing reason is judged right before the write: after permissions, field rules, an unknown record (`404`) and
 `appendOnly` (`409`), before the app's `RecordWriteGuard`s. A reason over the cap is refused first of all.
+
+### Concurrent edits: ETag and If-Match
+
+Two people editing the same record no longer overwrite each other when their client sends back the version it read
+([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)):
+
+```http
+GET /api/objects/caso/records/{id}
+→ 200, ETag: "2026-10-07T10:15:30.123456Z"
+
+PUT /api/objects/caso/records/{id}
+If-Match: "2026-10-07T10:15:30.123456Z"
+→ 200, ETag: "2026-10-07T10:16:02.481920Z"     or 412 when someone wrote it in between
+```
+
+- The `ETag` is the record's `updatedAt` in quotes, exactly as the JSON writes it, on `GET`, `POST`, `PUT` and `PATCH`
+  of one record and on a workflow transition. A list item has no header: `"` + its `updatedAt` + `"` is its ETag.
+  Treat it as opaque; it changes on every write, two writes in one transaction included.
+- `If-Match` on `PUT`, `PATCH`, `DELETE` and `POST …/transitions/{name}`: the write lands only while the record still
+  has that version. The compare is part of the write's own statement, so of several writers holding the same version
+  exactly one wins. A list of tags is fine (any may match); a weak tag `W/"…"` never matches.
+- Stale: `412 Precondition Failed`, and nothing is stored or audited. Re-read and decide again:
+
+```json
+{ "type": "https://wasichai.dev/problems/412", "title": "Precondition Failed", "status": 412,
+  "detail": "Record 6f1c… changed since you read it",
+  "errors": [{ "field": "If-Match", "message": "does not match the record's current ETag; read it again" }] }
+```
+
+- A record that is missing, of another organization, not the caller's under own-records-only or out of their read
+  scope is a `404` as without the header, never a `412`. Every other refusal also comes first and keeps its status:
+  permissions, field rules, `appendOnly` (`409`), a missing reason (`400`), a `RecordWriteGuard`.
+- No `If-Match`, or `If-Match: *`, is the write it always was: last writer wins. A malformed value (unquoted, empty,
+  `*` mixed with tags) is a `400` on `If-Match`.
+- Link and unlink take no `If-Match`: they change no record row, so no record's version.
+- In-process: `RecordService.update(…, reason, expectedUpdatedAt)`, `delete(…, reason, expectedUpdatedAt)` and
+  `patch(…, expectedUpdatedAt = …)` take the `updatedAt` you read and throw `PreconditionFailedException` (412) when
+  stale, inside your transaction too.
+
+### Partial update (PATCH)
+
+```http
+PATCH /api/objects/caso/records/{id}
+If-Match: "2026-10-07T10:15:30.123456Z"
+
+{ "attributes": { "estado": "EN_CURSO", "nota": null } }
+```
+
+JSON merge on `attributes`: only the keys sent are written, `null` clears one, and every other field keeps its stored
+value, even against a concurrent write of another field. Sections such as `geometries` merge as on `PUT`. The answer
+is the whole record, with its new `ETag`. Everything else is `PUT`'s: `UPDATE` permission, field permissions (a field
+your roles may not write is a `400` on it), `appendOnly`, `apiOnly`, `requiresReason` and `X-Change-Reason`, the
+`RELATION` check (for the values sent), every `RecordWriteGuard` (which sees the stored record with the sent keys over
+it), the audit entry (`changes` names only what moved) and automations. Two answers are `PATCH`'s own, where `PUT`
+silently ignores the key: a key that is no attribute of the object is a `400` on that key, and a field whose metadata
+says `editable: false` is a `403` "Field '…' is read-only". `Content-Type` may be `application/json` or
+`application/merge-patch+json`.
 
 ## GIS
 
@@ -1202,7 +1264,9 @@ A transition is the only way to move a record (ADR-013): the state is not a Cust
 record payload can set it. Applying one from the wrong state answers 409 naming the current state.
 Every transition is written to the audit log, so workflow movement shows up in the history screen
 beside field changes. The transition takes an `X-Change-Reason` header like any record write, stored on its audit
-entry; on a `requiresReason` object it is required (`400` on `reason` without one).
+entry; on a `requiresReason` object it is required (`400` on `reason` without one). It answers the record's new
+`ETag` and takes `If-Match` like `PUT` (see "Concurrent edits" under Records): stale is a `412`, and a transition from
+the wrong state keeps its `409`, whatever `If-Match` says.
 
 ## Automations
 
@@ -1554,3 +1618,4 @@ RFC 7807 `application/problem+json`:
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
 | 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile |
+| 412 | `If-Match` no longer matches the record: someone wrote it since it was read (`errors[]` names `If-Match`) |

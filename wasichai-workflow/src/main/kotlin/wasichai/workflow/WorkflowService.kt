@@ -13,6 +13,7 @@ import wasichai.core.data.ChangeReason
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordChangeListener
+import wasichai.core.data.RecordETag
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordResponse
 import wasichai.core.data.RecordStore
@@ -24,8 +25,10 @@ import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.metadata.readableBy
+import java.time.Instant
 import java.util.UUID
 
 // nullable on purpose: a missing field must read as a validation error, not a 500 from jackson
@@ -201,6 +204,20 @@ class WorkflowService(
         id: UUID,
         transitionName: String,
         reason: String?
+    ): RecordResponse = apply(objectName, id, transitionName, reason, expectedUpdatedAt = null)
+
+    /**
+     * [apply], only while the record still carries one of [expectedUpdatedAt] (ADR-051): the versions an
+     * If-Match accepts, or the `updatedAt` the caller read. Compared in the transition's own UPDATE: a record
+     * that moved on is a 412 and nothing is stored, audited or told. null: no check.
+     */
+    @Transactional
+    suspend fun apply(
+        objectName: String,
+        id: UUID,
+        transitionName: String,
+        reason: String?,
+        expectedUpdatedAt: List<Instant>?
     ): RecordResponse {
         val changeReason = ChangeReason.normalize(reason)
         val user = currentUser.require()
@@ -251,8 +268,11 @@ class WorkflowService(
             )
         )
         val moved =
-            store.transitionState(visible, user.organizationId, user.userId, id, transition.from, transition.to)
-                ?: throw ConflictException("Record $id left state '${transition.from}' before the transition ran")
+            if (expectedUpdatedAt == null) {
+                store.transitionState(visible, user.organizationId, user.userId, id, transition.from, transition.to)
+            } else {
+                store.transitionStateIfUnchanged(visible, user.organizationId, user.userId, id, transition.from, transition.to, expectedUpdatedAt)
+            } ?: throw missedTransition(definition, user, id, transition, expectedUpdatedAt)
 
         audit.record(
             organizationId = user.organizationId,
@@ -283,6 +303,24 @@ class WorkflowService(
         // every listener, in @Order, inside this transaction (P1 R9)
         changes.forEach { it.recordChanged(change) }
         return moved.toResponse()
+    }
+
+    // the guarded UPDATE matched no row: gone or out of reach (404), stale against If-Match (412, ADR-051), or
+    // the state moved on (409). the re-read narrows like the first one, so nothing out of reach is told apart
+    private suspend fun missedTransition(
+        definition: ObjectDefinition,
+        user: AuthenticatedUser,
+        id: UUID,
+        transition: WorkflowTransition,
+        expectedUpdatedAt: List<Instant>?
+    ): Exception {
+        if (expectedUpdatedAt != null) {
+            val now =
+                store.findById(definition, user.organizationId, id, access.ownerFilter(user), true, readScopes.criteria(user, definition))
+                    ?: return NotFoundException("Record $id does not exist")
+            if (now.updatedAt !in expectedUpdatedAt) return RecordETag.stale(id)
+        }
+        return ConflictException("Record $id left state '${transition.from}' before the transition ran")
     }
 
     // empty roles means anyone with UPDATE on the object. ADMIN always may.

@@ -19,6 +19,7 @@ import wasichai.core.platform.Rows
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.bindNullable
+import java.time.Instant
 import java.util.UUID
 
 // one physical table per object (ADR-004). every column goes through its type's handler, so a
@@ -82,12 +83,38 @@ class PhysicalTableRecordStore(
         attributes: Map<String, Any?>,
         sections: Map<String, Map<String, Any?>>,
         withState: Boolean
-    ): RecordRow {
+    ): RecordRow =
+        write(definition, organizationId, userId, id, attributes, sections, withState, expected = null)
+            ?: throw NotFoundException("Record $id does not exist")
+
+    override suspend fun updateIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID?,
+        id: UUID,
+        attributes: Map<String, Any?>,
+        sections: Map<String, Map<String, Any?>>,
+        withState: Boolean,
+        expectedUpdatedAt: List<Instant>
+    ): RecordRow? = write(definition, organizationId, userId, id, attributes, sections, withState, versions(expectedUpdatedAt) ?: return null)
+
+    // expected null: no precondition. otherwise updated_at must still be one of them, in this same statement (ADR-051)
+    private suspend fun write(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID?,
+        id: UUID,
+        attributes: Map<String, Any?>,
+        sections: Map<String, Map<String, Any?>>,
+        withState: Boolean,
+        expected: Array<Long>?
+    ): RecordRow? {
         val writable = attributeFields(definition).filter { it.editable }
         val values = writable.associateWith { types.handler(it.type).toDatabase(it, attributes[it.name]) }
         val sectionValues = sectionValues(definition, sections)
 
-        val assignments = mutableListOf("updated_at = now()", "updated_by = :userId")
+        // the statement's clock, not the transaction's start: two writes in one transaction must not share a version (ADR-051)
+        val assignments = mutableListOf("updated_at = clock_timestamp()", "updated_by = :userId")
         values.keys.forEachIndexed { index, field ->
             assignments += "${SqlIdentifier.quote(field.columnName)} = ${types.handler(field.type).bindExpression(field, "p$index")}"
         }
@@ -101,7 +128,7 @@ class PhysicalTableRecordStore(
                     """
                     UPDATE ${tableOf(definition)}
                     SET ${assignments.joinToString(", ")}
-                    WHERE id = :id AND organization_id = :organizationId
+                    WHERE id = :id AND organization_id = :organizationId${versionMatch(expected)}
                     RETURNING ${selectList(definition, withState)}
                     """.trimIndent()
                 ).bind("id", id)
@@ -109,9 +136,9 @@ class PhysicalTableRecordStore(
                 .bindNullable("userId", userId)
         spec = bindValues(spec, "p", values)
         spec = bindValues(spec, "s", sectionValues)
+        if (expected != null) spec = spec.bind("expected", expected)
 
         return spec.map { row, _ -> mapRow(definition, row, withState) }.one().awaitFirstOrNull()
-            ?: throw NotFoundException("Record $id does not exist")
     }
 
     // guarded by the current state in the WHERE, so a racing caller loses instead of overwriting
@@ -122,6 +149,26 @@ class PhysicalTableRecordStore(
         id: UUID,
         from: String?,
         to: String
+    ): RecordRow? = transition(definition, organizationId, userId, id, from, to, expected = null)
+
+    override suspend fun transitionStateIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID,
+        id: UUID,
+        from: String?,
+        to: String,
+        expectedUpdatedAt: List<Instant>
+    ): RecordRow? = transition(definition, organizationId, userId, id, from, to, versions(expectedUpdatedAt) ?: return null)
+
+    private suspend fun transition(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID,
+        id: UUID,
+        from: String?,
+        to: String,
+        expected: Array<Long>?
     ): RecordRow? {
         val column = SqlIdentifier.quote(ObjectSchemaManager.STATE_COLUMN)
         val guard = if (from == null) "$column IS NULL" else "$column = :from"
@@ -130,8 +177,8 @@ class PhysicalTableRecordStore(
                 .sql(
                     """
                     UPDATE ${tableOf(definition)}
-                    SET $column = :to, updated_at = now(), updated_by = :userId
-                    WHERE id = :id AND organization_id = :organizationId AND $guard
+                    SET $column = :to, updated_at = clock_timestamp(), updated_by = :userId
+                    WHERE id = :id AND organization_id = :organizationId AND $guard${versionMatch(expected)}
                     RETURNING ${selectList(definition, true)}
                     """.trimIndent()
                 ).bind("id", id)
@@ -139,6 +186,7 @@ class PhysicalTableRecordStore(
                 .bind("userId", userId)
                 .bind("to", to)
         if (from != null) spec = spec.bind("from", from)
+        if (expected != null) spec = spec.bind("expected", expected)
         return spec.map { row, _ -> mapRow(definition, row, true) }.one().awaitFirstOrNull()
     }
 
@@ -146,14 +194,52 @@ class PhysicalTableRecordStore(
         definition: ObjectDefinition,
         organizationId: UUID,
         id: UUID
-    ): Boolean =
-        db
-            .sql("DELETE FROM ${tableOf(definition)} WHERE id = :id AND organization_id = :organizationId")
-            .bind("id", id)
-            .bind("organizationId", organizationId)
+    ): Boolean = remove(definition, organizationId, id, expected = null)
+
+    override suspend fun deleteIfUnchanged(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        id: UUID,
+        expectedUpdatedAt: List<Instant>
+    ): Boolean = remove(definition, organizationId, id, versions(expectedUpdatedAt) ?: return false)
+
+    private suspend fun remove(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        id: UUID,
+        expected: Array<Long>?
+    ): Boolean {
+        var spec =
+            db
+                .sql("DELETE FROM ${tableOf(definition)} WHERE id = :id AND organization_id = :organizationId${versionMatch(expected)}")
+                .bind("id", id)
+                .bind("organizationId", organizationId)
+        if (expected != null) spec = spec.bind("expected", expected)
+        return spec
             .fetch()
             .rowsUpdated()
             .awaitSingle() > 0
+    }
+
+    // pure, so it is tested directly: the version compare a write adds to its WHERE. updated_at in epoch
+    // micros, its own precision, so nothing is rounded between what a read said and what is compared.
+    internal fun versionMatch(expected: Array<Long>?): String =
+        if (expected == null) "" else " AND CAST(EXTRACT(EPOCH FROM updated_at) * 1000000 AS bigint) = ANY(:expected)"
+
+    // the instants as epoch micros. one finer than a micro, or past a long, was never an updated_at: it
+    // matches nothing. null: none left, nothing can match, no statement needed.
+    internal fun versions(expected: List<Instant>): Array<Long>? =
+        expected
+            .mapNotNull { instant ->
+                if (instant.nano % 1_000 != 0) return@mapNotNull null
+                try {
+                    Math.addExact(Math.multiplyExact(instant.epochSecond, 1_000_000L), instant.nano / 1_000L)
+                } catch (_: ArithmeticException) {
+                    null
+                }
+            }.distinct()
+            .toTypedArray()
+            .takeIf { it.isNotEmpty() }
 
     // a record the caller may not see must look missing, not forbidden: no existence leak
     override suspend fun findById(
