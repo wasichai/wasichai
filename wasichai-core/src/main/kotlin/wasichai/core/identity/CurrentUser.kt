@@ -29,9 +29,11 @@ data class AuthenticatedUser(
 }
 
 // tenant comes from the token, never from the request body. every query filters by it.
+// separateProvisioning: wasichai.organizations.separate-provisioning (ADR-056).
 @Component
 class CurrentUser(
-    private val roleQueries: RoleQueries
+    private val roleQueries: RoleQueries,
+    private val separateProvisioning: Boolean = false
 ) {
     suspend fun require(): AuthenticatedUser {
         val authentication =
@@ -86,7 +88,17 @@ class CurrentUser(
         // administering the tenant (users, roles, service accounts) stays with people: a leaked
         // secret must not mint users or more accounts (ADR-043)
         if (user.serviceAccount != null && action == Actions.MANAGE_ORGANIZATION) return false
+        // creating and deleting tenants (ADR-056): switch off, the tenant administrator's right as it always was.
+        // switch on, only a grant counts: ADMIN is a customer's administrator too
+        if (action == Actions.MANAGE_TENANTS) {
+            return if (separateProvisioning) holdsTenantsGrant(user) else hasPermission(user, Actions.MANAGE_ORGANIZATION)
+        }
         if (user.isAdmin) return true
         return roleQueries.hasPermission(user.roles, user.organizationId, action, objectId)
     }
+
+    // an org-wide MANAGE_TENANTS row on one of the caller's roles. never ADMIN alone, never a service account
+    // (ADR-043), whatever the switch: only such a holder hands the action on, so no tenant grants it to itself
+    suspend fun holdsTenantsGrant(user: AuthenticatedUser): Boolean =
+        user.serviceAccount == null && roleQueries.hasPermission(user.roles, user.organizationId, Actions.MANAGE_TENANTS)
 }

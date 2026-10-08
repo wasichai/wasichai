@@ -22,6 +22,14 @@ class ObjectActionNameTest {
         }
     }
 
+    // issue 56 (ADR-056)
+    @Test
+    fun `MANAGE_TENANTS is built in too, so no object declares it`() {
+        assertThatThrownBy { ObjectActionService.requireValidName("manage_tenants") }
+            .isInstanceOf(ValidationException::class.java)
+            .hasMessageContaining("built in")
+    }
+
     @Test
     fun `a name that is not upper snake is refused`() {
         listOf("ANULAR AJENO", "9LIVES", "_X", "A", "ANULAR-AJENO", "A".repeat(50)).forEach { name ->

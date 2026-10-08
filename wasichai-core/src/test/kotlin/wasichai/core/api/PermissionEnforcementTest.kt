@@ -515,8 +515,9 @@ class PermissionEnforcementTest : WasichaiIntegrationTest() {
         )
     }
 
+    // MANAGE_TENANTS too: switch off, it is MANAGE_ORGANIZATION's (ADR-056)
     @Test
-    fun `the administrator holds both capabilities, admin and objects unchanged`() {
+    fun `the administrator holds every capability, admin and objects unchanged`() {
         client
             .get()
             .uri("/api/auth/me/permissions")
@@ -528,7 +529,7 @@ class PermissionEnforcementTest : WasichaiIntegrationTest() {
             .jsonPath("$.admin")
             .isEqualTo(true)
             .jsonPath("$.capabilities")
-            .isEqualTo(listOf("MANAGE_METADATA", "MANAGE_ORGANIZATION"))
+            .isEqualTo(listOf("MANAGE_METADATA", "MANAGE_ORGANIZATION", "MANAGE_TENANTS"))
             .jsonPath("$.objects.$objectName")
             .isEqualTo(listOf("READ", "CREATE", "UPDATE", "DELETE"))
     }

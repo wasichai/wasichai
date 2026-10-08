@@ -10,5 +10,8 @@ object Actions {
     const val MANAGE_METADATA = "MANAGE_METADATA"
     const val MANAGE_ORGANIZATION = "MANAGE_ORGANIZATION"
 
-    val BUILT_IN = setOf(READ, CREATE, UPDATE, DELETE, MANAGE_METADATA, MANAGE_ORGANIZATION)
+    // creating and deleting tenants (ADR-056). object-less; with separate provisioning never ADMIN alone: see CurrentUser
+    const val MANAGE_TENANTS = "MANAGE_TENANTS"
+
+    val BUILT_IN = setOf(READ, CREATE, UPDATE, DELETE, MANAGE_METADATA, MANAGE_ORGANIZATION, MANAGE_TENANTS)
 }

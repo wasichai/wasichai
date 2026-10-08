@@ -77,6 +77,51 @@ class OrganizationApiTest : WasichaiIntegrationTest() {
             .isEqualTo("ADMIN")
     }
 
+    // issue 56 (ADR-056): switch off, the administrator provisions as before, yet hands MANAGE_TENANTS to nobody,
+    // so no tenant holds it by the time the switch goes on
+    @Test
+    fun `by default MANAGE_TENANTS is the administrator's, but only a holder of the grant hands it on`() {
+        val token = bearer()
+        val role = "R" + uniqueName("").uppercase()
+        client
+            .post()
+            .uri("/api/roles")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("name" to role, "label" to "Operator"))
+            .exchange()
+            .expectStatus()
+            .isCreated
+
+        client
+            .put()
+            .uri("/api/roles/$role/permissions")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("permissions" to listOf(mapOf("objectName" to null, "action" to "MANAGE_TENANTS", "allowed" to true))))
+            .exchange()
+            .expectStatus()
+            .isForbidden
+
+        client
+            .put()
+            .uri("/api/roles/$role/permissions")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("permissions" to listOf(mapOf("objectName" to null, "action" to "MANAGE_EVERYTHING", "allowed" to true))))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+
+        client
+            .get()
+            .uri("/api/auth/me/permissions")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.capabilities[2]")
+            .isEqualTo("MANAGE_TENANTS")
+    }
+
     @Test
     fun `rejects a short administrator password and a bad slug`() {
         val token = bearer()

@@ -105,6 +105,19 @@ class CoreMigrationSqlTest {
             .contains("SELECT nullif('\${auditPurgeRole}', '')")
     }
 
+    // ADR-056: one more built-in action, object-less only. the seed and provisioning do not grant it
+    @Test
+    fun `MANAGE_TENANTS joins the built-in actions, with no object, and the dev seed does not grant it`() {
+        val tenants = sql("/db/wasichai/core/V15__manage_tenants.sql")
+
+        assertThat(tenants)
+            .contains("'MANAGE_METADATA', 'MANAGE_ORGANIZATION', 'MANAGE_TENANTS'")
+            .contains("ADD CONSTRAINT permissions_action_valid CHECK (")
+            .contains("ADD CONSTRAINT permissions_tenants_no_object CHECK (action <> 'MANAGE_TENANTS' OR object_id IS NULL);")
+            .contains("ADD CONSTRAINT object_actions_not_builtin CHECK (name NOT IN (")
+        assertThat(seed).doesNotContain("MANAGE_TENANTS")
+    }
+
     @Test
     fun `the dev seed names the wasichai admin and every admin action`() {
         assertThat(seed).contains("admin@wasichai.local").contains("MANAGE_ORGANIZATION").doesNotContainIgnoringCase("sapgis")

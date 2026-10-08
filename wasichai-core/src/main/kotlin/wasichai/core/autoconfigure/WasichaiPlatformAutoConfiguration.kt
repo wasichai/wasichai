@@ -18,12 +18,19 @@ import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
 import wasichai.core.platform.WasichaiMigrations
+import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.WasichaiWebProperties
 
 // properties, schema names, system columns, migrations, errors, health, correlation id. no scanning: every bean here.
 @AutoConfiguration
-@EnableConfigurationProperties(WasichaiDatabaseProperties::class, JwtProperties::class, WasichaiWebProperties::class, WasichaiAuditProperties::class)
+@EnableConfigurationProperties(
+    WasichaiDatabaseProperties::class,
+    JwtProperties::class,
+    WasichaiWebProperties::class,
+    WasichaiAuditProperties::class,
+    WasichaiOrganizationsProperties::class
+)
 class WasichaiPlatformAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean

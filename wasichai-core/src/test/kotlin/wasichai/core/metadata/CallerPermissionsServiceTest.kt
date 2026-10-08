@@ -52,9 +52,15 @@ class CallerPermissionsServiceTest {
     private fun service(
         caller: AuthenticatedUser,
         vararg grants: Grant
+    ): CallerPermissionsService = service(caller, false, *grants)
+
+    private fun service(
+        caller: AuthenticatedUser,
+        separateProvisioning: Boolean,
+        vararg grants: Grant
     ): CallerPermissionsService {
         val currentUser =
-            object : CurrentUser(FakeRoles(grants.toList())) {
+            object : CurrentUser(FakeRoles(grants.toList()), separateProvisioning) {
                 override suspend fun require() = caller
             }
         val objects = mock(CustomObjectRepository::class.java)
@@ -97,8 +103,9 @@ class CallerPermissionsServiceTest {
             assertThat(answer.objects).isEqualTo(mapOf("predio" to listOf(Actions.READ, Actions.CREATE)))
         }
 
+    // switch off, MANAGE_TENANTS is MANAGE_ORGANIZATION's (ADR-056)
     @Test
-    fun `both capabilities come in the fixed order, whatever the grant order`() =
+    fun `the capabilities come in the fixed order, whatever the grant order`() =
         runTest {
             val answer =
                 service(
@@ -107,16 +114,45 @@ class CallerPermissionsServiceTest {
                     Grant("GESTOR", Actions.MANAGE_METADATA, null)
                 ).ofCaller()
 
-            assertThat(answer.capabilities).containsExactly(Actions.MANAGE_METADATA, Actions.MANAGE_ORGANIZATION)
+            assertThat(answer.capabilities).containsExactly(Actions.MANAGE_METADATA, Actions.MANAGE_ORGANIZATION, Actions.MANAGE_TENANTS)
         }
 
     @Test
-    fun `the administrator holds both capabilities with no grant row`() =
+    fun `the administrator holds every capability with no grant row`() =
         runTest {
             val answer = service(person(AuthenticatedUser.ADMIN_ROLE)).ofCaller()
 
             assertThat(answer.capabilities).isEqualTo(CallerPermissionsService.CAPABILITIES)
+            assertThat(answer.capabilities).containsExactly(Actions.MANAGE_METADATA, Actions.MANAGE_ORGANIZATION, Actions.MANAGE_TENANTS)
+        }
+
+    // issue 56 (ADR-056): with separate provisioning, MANAGE_TENANTS is a grant's, never ADMIN's alone
+    @Test
+    fun `switch on, the administrator does not hold MANAGE_TENANTS without a grant row`() =
+        runTest {
+            val answer = service(person(AuthenticatedUser.ADMIN_ROLE), true).ofCaller()
+
+            assertThat(answer.admin).isTrue()
             assertThat(answer.capabilities).containsExactly(Actions.MANAGE_METADATA, Actions.MANAGE_ORGANIZATION)
+        }
+
+    @Test
+    fun `switch on, an org-wide MANAGE_TENANTS grant is the capability, and MANAGE_ORGANIZATION alone is not`() =
+        runTest {
+            val operator = service(person("OPERADOR"), true, Grant("OPERADOR", Actions.MANAGE_TENANTS, null)).ofCaller()
+            val manager = service(person("GESTOR"), true, Grant("GESTOR", Actions.MANAGE_ORGANIZATION, null)).ofCaller()
+
+            assertThat(operator.capabilities).containsExactly(Actions.MANAGE_TENANTS)
+            assertThat(manager.capabilities).containsExactly(Actions.MANAGE_ORGANIZATION)
+        }
+
+    @Test
+    fun `a service account never holds MANAGE_TENANTS, whatever the switch`() =
+        runTest {
+            val grants = arrayOf(Grant("INTEGRADOR", Actions.MANAGE_ORGANIZATION, null), Grant("INTEGRADOR", Actions.MANAGE_TENANTS, null))
+
+            assertThat(service(account("INTEGRADOR"), false, *grants).ofCaller().capabilities).isEmpty()
+            assertThat(service(account("INTEGRADOR"), true, *grants).ofCaller().capabilities).isEmpty()
         }
 
     @Test
@@ -160,7 +196,7 @@ class CallerPermissionsServiceTest {
                 """{"admin":false,"capabilities":["MANAGE_METADATA"],"objects":{"predio":["READ","UPDATE"]}}"""
             )
             assertThat(json(admin)).isEqualTo(
-                """{"admin":true,"capabilities":["MANAGE_METADATA","MANAGE_ORGANIZATION"],""" +
+                """{"admin":true,"capabilities":["MANAGE_METADATA","MANAGE_ORGANIZATION","MANAGE_TENANTS"],""" +
                     """"objects":{"predio":["READ","CREATE","UPDATE","DELETE"]}}"""
             )
         }

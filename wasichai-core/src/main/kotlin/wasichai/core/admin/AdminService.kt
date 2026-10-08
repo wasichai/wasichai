@@ -249,24 +249,37 @@ class AdminService(
         val objects = ObjectLookup(admin.organizationId)
 
         val resolved =
-            request.permissions.map { entry ->
-                val action = entry.action.trim().uppercase()
-                val objectName =
-                    entry.objectName
-                        ?.trim()
-                        ?.lowercase()
-                        ?.ifBlank { null }
-                // the action is judged before the object, as it always was
-                if (action !in Actions.BUILT_IN && !objects.declares(objectName, action)) {
-                    throw ValidationException(
-                        "Unknown action '$action'",
-                        "action",
-                        "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
-                    )
-                }
-                val objectId = objectName?.let { objects.require(it).obj.id }
-                Triple(objectId, action, entry.allowed)
-            }
+            request.permissions
+                .map { entry ->
+                    val action = entry.action.trim().uppercase()
+                    val objectName =
+                        entry.objectName
+                            ?.trim()
+                            ?.lowercase()
+                            ?.ifBlank { null }
+                    // the action is judged before the object, as it always was
+                    if (action !in Actions.BUILT_IN && !objects.declares(objectName, action)) {
+                        throw ValidationException(
+                            "Unknown action '$action'",
+                            "action",
+                            "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
+                        )
+                    }
+                    // tenant-wide by nature: an object-scoped row would mean nothing (ADR-056)
+                    if (action == Actions.MANAGE_TENANTS && objectName != null) {
+                        throw ValidationException("Action '$action' takes no object", "objectName", "must be empty for $action")
+                    }
+                    val objectId = objectName?.let { objects.require(it).obj.id }
+                    Triple(objectId, action, entry.allowed)
+                }.distinctBy { it.first to it.second }
+
+        // only a holder hands MANAGE_TENANTS on or takes it away, whatever the switch: else any tenant's
+        // administrator could grant it to itself (ADR-056)
+        val tenantsBefore = before.permissions.filter { it.action == Actions.MANAGE_TENANTS }.map { it.allowed }
+        val tenantsAfter = resolved.filter { it.second == Actions.MANAGE_TENANTS }.map { it.third }
+        if (tenantsBefore != tenantsAfter && !currentUser.holdsTenantsGrant(admin)) {
+            throw ForbiddenException("Missing permission ${Actions.MANAGE_TENANTS}")
+        }
 
         db
             .sql("DELETE FROM ${schemas.metadata}.permissions WHERE role_id = :roleId")
@@ -275,7 +288,7 @@ class AdminService(
             .rowsUpdated()
             .awaitSingle()
 
-        resolved.distinctBy { it.first to it.second }.forEach { (objectId, action, allowed) ->
+        resolved.forEach { (objectId, action, allowed) ->
             db
                 .sql(
                     """
