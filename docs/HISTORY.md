@@ -2,6 +2,30 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — The audit list pages by cursor and narrows by period and user
+
+`GET /api/audit` answered the newest 500 rows of the tenant at most, with no period and no user filter, so the rest of
+the log was out of reach of the API and "what did user X change between two dates?" had no answer; the record history
+had the same cap ([#52](https://github.com/wasichai/wasichai/issues/52)). Now both routes take `from` and `to`
+(ISO-8601 instants, `Z` or an offset, `occurred_at >= from AND occurred_at < to`) and `userId`, the list also
+`serviceAccount` (by name), and both page with `after=<cursor>`: keyset on `(occurred_at DESC, id DESC)`, one row read
+past `limit`, the next cursor in an `X-Next-Cursor` response header only when another row follows, the body still a
+JSON array ([ADR-052](adr/0052-audit-pages-by-cursor-period-and-user.md), ADR-031 D37). `limit` keeps its default of
+100 and cap of 500 per page. The cursor (`AuditCursor`, built like `RecordCursor`) carries the row's `occurred_at` to
+the microsecond, its `id` and a hash of every filter as applied, the route included: a cursor of another filter set is
+a `400` naming `after`, as is a malformed one; a malformed `from`, `to` or `userId` is a `400` naming it. The cursor is
+taken before ADR-048's read scope drops entries, so a scoped caller may get short or empty pages with a cursor, but
+never a skipped or repeated entry. `AuditQueryService` gains `page` and `historyPage` returning `AuditPage(entries,
+nextCursor)`; `list` and `history` keep their signatures. `AuditFilter` gains `from`, `to`, `userId` and
+`serviceAccount`. Core's default CORS configuration exposes `X-Next-Cursor`. `V12__audit_user_index.sql` adds
+`audit_log_user_time_idx (organization_id, user_id, occurred_at DESC)` (core has no `V11`). New tests:
+`AuditPagingTest`, cases in `CoreMigrationSqlTest` and `WasichaiAutoConfigurationTest`, the integration test
+`AuditPagingApiTest` (1,200 rows at `limit=500`: every row once, in order, the last page without a header; period,
+user, service account and their combinations with object, record and operation; the `400`s; the unchanged default;
+the history; a scoped caller; `EXPLAIN` showing the new index), and the index as a D37 deviation in
+`SchemaParityTest`. Docs: [rest.md](api/rest.md) "Period, user and pages", [core.md](modules/core.md).
+Plan: [2026-10-08-audit-paging.md](superpowers/plans/2026-10-08-audit-paging.md).
+
 ## 2026-10-08 — Records: ETag, If-Match in the write itself, and a partial PATCH
 
 A record `PUT` was a full replace with the last writer winning: a client that knew some fields blanked the others, and

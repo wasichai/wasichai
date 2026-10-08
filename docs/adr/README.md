@@ -72,3 +72,5 @@ supersedes it and says so in its status line.
   change](0050-correlation-id-and-change-source-on-audit-rows.md)
 - [ADR-051: Records answer an ETag, honour If-Match in the write itself, and take a partial
   PATCH](0051-optimistic-locking-and-partial-update-of-records.md)
+- [ADR-052: The audit list pages by cursor and narrows by period and
+  user](0052-audit-pages-by-cursor-period-and-user.md)

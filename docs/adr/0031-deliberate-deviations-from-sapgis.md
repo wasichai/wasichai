@@ -249,6 +249,18 @@ These are the only intended differences. Anything else that behaves differently 
   `RecordServicePreconditionTest`, `PhysicalTableRecordStoreTest`, `RecordPreconditionApiTest` and
   `WorkflowOnlyApiTest`.
 
+**Because an auditor asks about a period and a person**
+
+- **D37. The audit list pages and narrows by period and user.** The original answered the newest rows of the tenant,
+  500 at most, with no period and no user filter. Now `GET /api/audit` takes `from` and `to` (ISO-8601 instants,
+  `occurred_at >= from AND occurred_at < to`), `userId` and `serviceAccount`, and `after=<cursor>`; the record history
+  takes `from`, `to`, `userId` and `after` ([ADR-052](0052-audit-pages-by-cursor-period-and-user.md)). Observable
+  changes: the body stays a JSON array, and `X-Next-Cursor` carries the next page's cursor when another row follows,
+  exposed to browsers by core's CORS default; a malformed `from`, `to`, `userId` or `after`, or a cursor of another
+  filter set, is a `400` naming the parameter; a read-scoped caller may get a short or empty page before the last. A
+  request without the new parameters answers the same body. The index `audit_log_user_time_idx` is a known
+  schema-parity deviation. Tested by `AuditPagingTest`, `WasichaiAutoConfigurationTest` and `AuditPagingApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
