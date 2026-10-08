@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import wasichai.core.common.PageResponse
 import wasichai.core.metadata.RelatedSideResponse
+import wasichai.core.metadata.RelationshipDirection
 import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipService
 import java.util.UUID
@@ -41,7 +42,10 @@ class RelatedRecordController(
         @PathVariable relationship: String,
         @RequestParam params: Map<String, String>
     ): PageResponse<RecordResponse> {
-        val (_, page) = related.relatedRecords(objectName, id, relationship, queries.parse(params))
+        // direction picks the end of a self-relationship to walk from; it is no field filter here
+        val direction = RelationshipDirection.parse(params[RelationshipDirection.PARAMETER])
+        val query = queries.parse(params - RelationshipDirection.PARAMETER)
+        val (_, page) = related.relatedRecords(objectName, id, relationship, query, direction)
         return page.map { it.toResponse() }
     }
 

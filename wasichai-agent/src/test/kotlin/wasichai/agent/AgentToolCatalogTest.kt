@@ -89,6 +89,15 @@ class AgentToolCatalogTest {
         assertThat(definitionOf(AgentToolCatalog.QUERY_RECORDS).description).contains(MAX_TOOL_LIMIT.toString())
     }
 
+    // #61: a self-relationship can be walked both ways; the direction is optional, forward by default
+    @Test
+    fun `related_records takes an optional direction`() {
+        assertThat(argumentsOf(AgentToolCatalog.RELATED_RECORDS).map { it.name })
+            .containsExactlyInAnyOrder("object", "id", "relationship", "limit", "direction")
+        assertThat(requiredOf(AgentToolCatalog.RELATED_RECORDS)).containsExactlyInAnyOrder("object", "id", "relationship")
+        assertThat(argumentsOf(AgentToolCatalog.RELATED_RECORDS).first { it.name == "direction" }.description).contains("inverse")
+    }
+
     @Test
     fun `the tools that page tell the model about the cap`() {
         listOf(

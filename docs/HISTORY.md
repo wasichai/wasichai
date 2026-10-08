@@ -2,6 +2,32 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — A self-relationship is read from either end
+
+A relationship may join an object to itself (a parent unit, a previous version, a duplicate-of), but the related read
+and the object's relationship list decided the end from the object alone, which is both, so a parent's children or the
+sources linked to a record could not be read through the relationship
+([#61](https://github.com/wasichai/wasichai/issues/61)). `GET /api/objects/{object}/records/{id}/related/{relationship}`
+now takes `direction=forward|inverse`: `forward`, the default, is exactly the walk the read made before (from the source
+end, but for `ONE_TO_MANY` from the target end, which holds the key: the record's parent); `inverse` walks the other end
+(the records whose relation field points at this one, the `ONE_TO_MANY` children, or for `MANY_TO_MANY` the join
+table's `source_id` side), with paging, `count=false` and `after=` and the same permissions, field permissions,
+own-records-only and read scope. `inverse` on a relationship between two objects, or any other value, is a `400` naming
+`direction`. `GET /api/objects/{object}/relationships` lists a self-relationship twice, forward then inverse, each
+entry with `direction` and the label and `many` of what that direction reads (for a `ONE_TO_MANY` self-relationship,
+forward is the parent, so `inverseLabel` and `many: false`, where the one entry used to say `label` and `many: true`);
+other entries are unchanged, with no `direction` key, so a client keying by `relationship` alone keeps working if it
+keeps the first entry of a name (ADR-031 D42). No default read changes. In code: `RelationshipDirection` (`parse`, `wire`, `fromSource(type)`), a
+`Relationship.selfReferencing` flag, `RelatedSide.direction` and `fromSource`, a `direction` argument on
+`RelationshipService.side` and on `RelatedRecordService.relatedRecords` and `relatedRows` (defaulting to forward), and
+`direction` on `RelatedSideResponse` (left out when null). Link and unlink are unchanged. A generated page keeps one
+`RELATED_LIST` per relationship (the forward one), since a component names no direction yet. The agent's
+`list_relationships` reports `direction` and `related_records` takes an optional `direction`. No migration. New tests:
+`RelationshipSideTest`, the integration suite `SelfRelationshipApiTest` (each relationship type as a self-relationship,
+paging and keyset for the inverse read, the `400`s, the listing, own-records-only), and cases in
+`RecordReadScopeApiTest`, `PageServiceTest` and `AgentToolCatalogTest`. Docs: [rest.md](api/rest.md) "Relationships"
+and "Related records", [metadata-model.md](domain/metadata-model.md), [core.md](modules/core.md).
+
 ## 2026-10-08 — Creating and deleting tenants can be kept apart from administering one
 
 `POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always

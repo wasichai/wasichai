@@ -1,5 +1,6 @@
 package wasichai.core.metadata
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
@@ -27,14 +28,17 @@ data class RelationshipResponse(
     val joinTable: String?
 )
 
-// the same relationship as seen from one object: which object is on the other end, and how many
+// the same relationship as seen from one object: which object is on the other end, and how many.
+// direction: forward or inverse, only on a self-relationship (listed once per direction); left out
+// for any other, so its entry reads as before.
 data class RelatedSideResponse(
     val relationship: String,
     val label: String,
     val type: String,
     val objectName: String,
     val objectLabel: String,
-    val many: Boolean
+    val many: Boolean,
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val direction: String? = null
 )
 
 @Component
@@ -65,7 +69,8 @@ class RelationshipMapper(
             type = side.relationship.type.name,
             objectName = side.otherObject.name,
             objectLabel = side.otherObject.pluralLabel,
-            many = side.many
+            many = side.many,
+            direction = side.direction?.wire
         )
 }
 

@@ -529,6 +529,29 @@ Creating a relationship builds what it needs: a `RELATION` field with a real for
 (`MANY_TO_ONE`, `ONE_TO_ONE`, `ONE_TO_MANY`) or a join table (`MANY_TO_MANY`). Deleting it removes
 them again.
 
+`GET /api/objects/{object}/relationships` answers one entry per side the object stands on, ordered by the relationship's
+`label`:
+
+```json
+[
+  { "relationship": "unidad_jefe", "label": "Jefe", "type": "MANY_TO_ONE",
+    "objectName": "persona", "objectLabel": "Personas", "many": false },
+  { "relationship": "unidad_padre", "label": "Unidad padre", "type": "MANY_TO_ONE",
+    "objectName": "unidad", "objectLabel": "Unidades", "many": false, "direction": "forward" },
+  { "relationship": "unidad_padre", "label": "Subunidades", "type": "MANY_TO_ONE",
+    "objectName": "unidad", "objectLabel": "Unidades", "many": true, "direction": "inverse" }
+]
+```
+
+A relationship whose `source` and `target` are the same object (a parent unit, a previous version, a duplicate-of) is
+listed **twice**, forward first, each entry describing what that direction reads (see the table under Related records):
+`label` when the read stands on the source end, `inverseLabel` (or the object's plural label when there is none) when
+it stands on the target end, and `many` accordingly. Any
+other relationship is listed once, and its entry has no `direction` key at all. Pass `direction` to the related read
+below to walk the side an entry describes. A client that keys entries by `relationship` alone should key them by
+`relationship` and `direction`, or keep the first (forward) entry of each name, which is the one it saw before
+(ADR-031 D42).
+
 ### Related records
 
 ```http
@@ -539,6 +562,31 @@ DELETE /api/objects/{object}/records/{id}/related/{relationship}/{otherId}
 
 The read works from **either** end: from a plot it returns its owner, from the owner it returns their
 plots. Link and unlink apply to `MANY_TO_MANY` only — for the others, set the field on the record.
+
+The read takes the record list's paging and filters (`page`, `size`, `sort`, `dir`, `q`, field filters, `count=false`,
+`after=`; see Records), plus `direction`. On a relationship from an object to itself the object is both ends, so
+`direction` says which end the record stands on:
+
+```http
+GET /api/objects/unidad/records/{child}/related/unidad_padre                      its parent (forward, the default)
+GET /api/objects/unidad/records/{parent}/related/unidad_padre?direction=inverse   its children
+```
+
+| Type | `forward` (the default) | `inverse` |
+|---|---|---|
+| `MANY_TO_ONE`, `ONE_TO_ONE` | the record its field points at (from the source end) | the records whose field points at it |
+| `ONE_TO_MANY` | the record its field points at (from the target end) | the records whose field points at it |
+| `MANY_TO_MANY` | the targets it was linked to (from the source end) | the sources linked to it |
+
+`forward` is the walk this read always made, so no default read changes: for a `ONE_TO_MANY` self-relationship it is
+the target end, which holds the key, and its forward entry in the listing says `inverseLabel` and `many: false`. On a
+relationship between two objects, `forward` or no `direction` reads from the object's own end, as always. `inverse` on a relationship between two
+different objects is a `400` naming `direction` (read it from the other object instead), and so is any value other than
+`forward` or `inverse` (case and surrounding spaces do not matter). On this route `direction` is that parameter, never
+a filter on a field of that name. Permissions, field permissions, own-records-only and the app's read scope apply to
+an inverse read exactly as to a forward one. Link and unlink take no `direction`: the record in the path is the
+source of a `MANY_TO_MANY` self-relationship and `otherId` its target.
+
 A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`, `400`
 on `reason` when either end is `requiresReason` and no `X-Change-Reason` came. A reason sent is stored on both
 records' history.

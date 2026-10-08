@@ -17,7 +17,10 @@ import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.RelatedSide
+import wasichai.core.metadata.Relationship
+import wasichai.core.metadata.RelationshipDirection
 import wasichai.core.metadata.RelationshipService
+import wasichai.core.metadata.RelationshipType
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.forms.FormService
 import java.util.UUID
@@ -52,16 +55,18 @@ class PageServiceTest {
 
     private suspend fun service(
         providers: List<PageComponentProvider>,
-        stored: Page? = null
+        stored: Page? = null,
+        sides: List<RelatedSide> = emptyList()
     ): PageService {
         val currentUser = mock(CurrentUser::class.java)
         val metadata = mock(MetadataService::class.java)
         val relationships = mock(RelationshipService::class.java)
         val forms = mock(FormService::class.java)
+        doReturn(user).`when`(currentUser).require()
         doReturn(user).`when`(currentUser).requireWithPermission(Actions.MANAGE_METADATA)
         doReturn(definition).`when`(metadata).loadDefinition(obj.organizationId, "predio")
         doReturn(definition).`when`(metadata).loadDefinitionById(obj.organizationId, obj.id)
-        doReturn(emptyList<RelatedSide>()).`when`(relationships).forObject("predio")
+        doReturn(sides).`when`(relationships).forObject("predio")
         return PageService(NoWorkflowStates(), FakePageRepository(stored), metadata, relationships, forms, currentUser, PageComponentTypes(providers))
     }
 
@@ -269,5 +274,25 @@ class PageServiceTest {
         assertThat(tabKeys(relabelled.page.definition.page)).containsExactly("FICHA")
         assertThat(retemplated.page.template).isEqualTo(PageTemplate.MAIN_AND_RIGHT_SIDEBAR)
         assertThat(tabKeys(retemplated.page.definition.page)).containsExactly("FICHA")
+    }
+
+    // #61: a self-relationship is listed once per direction, and a RELATED_LIST names no direction:
+    // the generated page keeps its one forward tab, as before
+    @Test
+    fun `a generated page keeps one related tab for a self-relationship`() {
+        val parent =
+            Relationship(UUID.randomUUID(), obj.organizationId, "parent", "Parent", "Children", RelationshipType.MANY_TO_ONE, obj.id, obj.id, null, null)
+        val sides =
+            listOf(
+                RelatedSide(parent, obj, "Parent", false, RelationshipDirection.FORWARD),
+                RelatedSide(parent, obj, "Children", true, RelationshipDirection.INVERSE)
+            )
+
+        lateinit var resolved: ResolvedPage
+        runTest { resolved = service(emptyList(), sides = sides).resolve("predio", PageKind.RECORD_DETAIL) }
+
+        fun all(component: PageComponent): List<PageComponent> = listOf(component) + component.children.flatMap { all(it) }
+        val lists = all(resolved.page.definition.page).filter { it.type == ComponentType.RELATED_LIST }
+        assertThat(lists.map { it.title to it.relationship }).containsExactly("Parent" to "parent")
     }
 }

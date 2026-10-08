@@ -33,13 +33,20 @@ data class UpdateRelationshipRequest(
     val target: String? = null
 )
 
-// one relationship, seen from the object you are standing on
+// one relationship, seen from the object you are standing on. direction: which way a relationship
+// from an object to itself is walked, null for any other (the object already says which end).
 data class RelatedSide(
     val relationship: Relationship,
     val otherObject: CustomObject,
     val label: String,
-    val many: Boolean
-)
+    val many: Boolean,
+    val direction: RelationshipDirection? = null
+) {
+    // the end this side stands on is the source. on a self-relationship the object is both ends,
+    // so the direction decides.
+    val fromSource: Boolean
+        get() = direction?.fromSource(relationship.type) ?: (otherObject.id == relationship.targetObjectId)
+}
 
 // every change leaves one admin:relationship entry; the column or join table behind it is part of it (ADR-049)
 @Service
@@ -63,7 +70,14 @@ class RelationshipService(
             objects.findByName(user.organizationId, objectName)
                 ?: throw NotFoundException("Object '$objectName' does not exist")
         currentUser.requirePermission(user, Actions.READ, obj.id)
-        return relationships.findForObject(user.organizationId, obj.id).map { side(it, obj) }
+        // a self-relationship is both ends of this object: one side per direction, forward first
+        return relationships.findForObject(user.organizationId, obj.id).flatMap { relationship ->
+            if (relationship.selfReferencing) {
+                RelationshipDirection.entries.map { side(relationship, obj, it) }
+            } else {
+                listOf(side(relationship, obj))
+            }
+        }
     }
 
     @Transactional
@@ -225,19 +239,28 @@ class RelationshipService(
             "joinTable" to relationship.joinTable
         )
 
-    // one relationship seen from one object. data walks records with it.
+    // one relationship seen from one object. data walks records with it. on a self-relationship
+    // inverse walks the end forward does not; any other relationship has no inverse to walk.
     suspend fun side(
         relationship: Relationship,
-        obj: CustomObject
+        obj: CustomObject,
+        direction: RelationshipDirection = RelationshipDirection.FORWARD
     ): RelatedSide {
-        val fromSource = obj.id == relationship.sourceObjectId
-        if (!fromSource && obj.id != relationship.targetObjectId) {
+        if (obj.id != relationship.sourceObjectId && obj.id != relationship.targetObjectId) {
             throw ValidationException(
                 "Relationship '${relationship.name}' does not involve '${obj.name}'",
                 "relationship",
                 "wrong object"
             )
         }
+        if (direction == RelationshipDirection.INVERSE && !relationship.selfReferencing) {
+            throw ValidationException(
+                "Relationship '${relationship.name}' joins two objects",
+                RelationshipDirection.PARAMETER,
+                "inverse only applies to a relationship from an object to itself; read it from the other object"
+            )
+        }
+        val fromSource = if (relationship.selfReferencing) direction.fromSource(relationship.type) else obj.id == relationship.sourceObjectId
         val otherId = if (fromSource) relationship.targetObjectId else relationship.sourceObjectId
         val other =
             objects.findById(relationship.organizationId, otherId)
@@ -251,7 +274,7 @@ class RelationshipService(
             }
         val label =
             if (fromSource) relationship.label else relationship.inverseLabel ?: other.pluralLabel
-        return RelatedSide(relationship, other, label, many)
+        return RelatedSide(relationship, other, label, many, direction.takeIf { relationship.selfReferencing })
     }
 
     private suspend fun objectOrFail(
