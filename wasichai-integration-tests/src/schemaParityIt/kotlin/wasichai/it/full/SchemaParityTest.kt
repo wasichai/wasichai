@@ -291,7 +291,17 @@ class SchemaParityTest : FullAppIntegrationTest() {
             mapOf(
                 "index audit_log.audit_log_user_time_idx CREATE INDEX audit_log_user_time_idx ON META.audit_log USING btree " +
                     "(organization_id, user_id, occurred_at DESC)" to "ADR-031 D37: audit pages, period and user filters"
-            )
+            ) +
+            // audit_log refuses update, delete and truncate in the database (ADR-031 D39, ADR-054). a body is its md5:
+            // change V13 or R__audit_purge_role.sql and this changes too (the purge role is empty here)
+            listOf(
+                "function audit_log_guard() returns trigger body bd309dadb39e9e30d129c364d8a751fe",
+                "function audit_log_purge_role() returns text body 4c15c07985ba73997f80c5550bd9e0a2",
+                "trigger audit_log.audit_log_append_only CREATE TRIGGER audit_log_append_only BEFORE DELETE OR UPDATE ON META.audit_log " +
+                    "FOR EACH ROW EXECUTE FUNCTION META.audit_log_guard()",
+                "trigger audit_log.audit_log_no_truncate CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON META.audit_log " +
+                    "FOR EACH STATEMENT EXECUTE FUNCTION META.audit_log_guard()"
+            ).associateWith { "ADR-031 D39: audit_log is append-only in the database" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

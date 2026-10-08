@@ -15,6 +15,7 @@ import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
+import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
 import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiSchemas
@@ -22,7 +23,7 @@ import wasichai.core.platform.WasichaiWebProperties
 
 // properties, schema names, system columns, migrations, errors, health, correlation id. no scanning: every bean here.
 @AutoConfiguration
-@EnableConfigurationProperties(WasichaiDatabaseProperties::class, JwtProperties::class, WasichaiWebProperties::class)
+@EnableConfigurationProperties(WasichaiDatabaseProperties::class, JwtProperties::class, WasichaiWebProperties::class, WasichaiAuditProperties::class)
 class WasichaiPlatformAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -48,8 +49,9 @@ class WasichaiPlatformAutoConfiguration {
     fun wasichaiMigrations(
         database: WasichaiDatabaseProperties,
         schemas: WasichaiSchemas,
-        migrations: ObjectProvider<ModuleMigration>
-    ): WasichaiMigrations = WasichaiMigrations(database, schemas, migrations.orderedStream().toList())
+        migrations: ObjectProvider<ModuleMigration>,
+        audit: WasichaiAuditProperties
+    ): WasichaiMigrations = WasichaiMigrations(database, schemas, migrations.orderedStream().toList(), audit)
 
     @Bean
     @ConditionalOnMissingBean

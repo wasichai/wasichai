@@ -76,3 +76,5 @@ supersedes it and says so in its status line.
   user](0052-audit-pages-by-cursor-period-and-user.md)
 - [ADR-053: The caller is told their tenant-wide capabilities
   too](0053-the-caller-is-told-their-tenant-wide-capabilities.md)
+- [ADR-054: The audit log is append-only in the database, with a purge only a configured login can
+  run](0054-audit-log-is-append-only-in-the-database.md)

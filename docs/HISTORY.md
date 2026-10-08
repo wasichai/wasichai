@@ -2,6 +2,33 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — The audit log is append-only in the database
+
+`audit_log` was append-only by convention only: the credential wasichai connects with, by default the one Flyway
+migrates with, owns the table and could `UPDATE`, `DELETE` and `TRUNCATE` it, as could app code using
+`DatabaseClient` or an operator in `psql` ([#58](https://github.com/wasichai/wasichai/issues/58)). Core's new
+`V13__audit_log_immutable.sql` adds `audit_log_guard()` and two triggers, `audit_log_append_only` (`BEFORE UPDATE OR
+DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`), that refuse every such statement for every role
+with `42501` and `audit_log is append-only: <operation> is not allowed`
+([ADR-054](adr/0054-audit-log-is-append-only-in-the-database.md), ADR-031 D39). Inserts and reads are unaffected. Two
+holes: an update that only nulls `document_id` from inside a foreign-key action (wasichai-documents'
+`audit_log_document_id_fkey`, `ON DELETE SET NULL`), so deleting a document or a tenant still works; and a purge,
+`DELETE` or `TRUNCATE` in a transaction that ran `SET LOCAL wasichai.audit.purge = 'on'`, from a session that logged
+in (`session_user`) as the role the new property `wasichai.audit.purge-role` names (`WasichaiAuditProperties`, none by
+default, validated as a plain role name). The name reaches the database through the Flyway placeholder
+`auditPurgeRole` and the repeatable `R__audit_purge_role.sql`, which runs again when it changes, so only the migration
+role can set it; `WasichaiMigrations` takes the audit properties as a fourth constructor argument (the three-argument one stays).
+Deleting a tenant still leaves its entries (there is no foreign key to `organizations`). The new bean
+`auditLogOwnershipCheck` (`AuditLogOwnershipCheck`, `@ConditionalOnMissingBean`) logs a `WARN` once the app is ready
+when the role wasichai runs as can act as the table's owner, and never fails startup. No migration or test support
+updated or deleted audit rows, so none changed; the schema-parity catalog lists the two functions and two triggers as
+known deviations. New tests: `AuditLogOwnershipCheckTest`, cases in `CoreMigrationSqlTest`, `WasichaiMigrationsTest`
+and `WasichaiAutoConfigurationTest`, the integration test `AuditLogAppendOnlyApiTest` (the three statements, the
+set-null path, the purge path for the configured login only, a non-owner runtime role, the startup check, the
+repeatable migration) and a case in `DocumentsOnlyApiTest` (a tenant with issued documents deleted, its trail kept).
+Docs: [build-your-app.md](guides/build-your-app.md) "Two database roles, and a trail nobody rewrites" (the two-role
+setup and the purge procedure), [core.md](modules/core.md), [authentication.md](security/authentication.md).
+
 ## 2026-10-08 — The caller's permissions report tenant-wide capabilities
 
 `GET /api/auth/me/permissions` answered `admin` and per-object record actions only, so a role granted `MANAGE_METADATA`

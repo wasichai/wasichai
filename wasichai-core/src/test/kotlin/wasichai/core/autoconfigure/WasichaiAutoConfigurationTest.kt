@@ -26,6 +26,7 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.admin.ServiceAccountService
 import wasichai.core.audit.AuditLogAdminAudit
+import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditPage
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
@@ -52,6 +53,7 @@ import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiMigrations
+import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
@@ -109,6 +111,8 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasSingleBean(CorrelationIdWebFilter::class.java)
             // issue 49 (ADR-049): admin changes go to the audit log
             assertThat(context.getBean(AdminAudit::class.java)).isInstanceOf(AuditLogAdminAudit::class.java)
+            // issue 58 (ADR-054): who owns audit_log is checked once the app is ready, never at bean creation
+            assertThat(context).hasSingleBean(AuditLogOwnershipCheck::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)
             // order, not just size: core's twelve types, in ScalarFieldTypes.ALL's declared order
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).containsExactly(
@@ -237,6 +241,25 @@ class WasichaiAutoConfigurationTest {
                 assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
                 assertThat(context.getBeansOfType(ModuleMigration::class.java)).hasSize(2)
             }
+    }
+
+    @Test
+    fun `an app AuditLogOwnershipCheck wins over the default`() {
+        val mine = AuditLogOwnershipCheck(mock(DatabaseClient::class.java), WasichaiSchemas("wasichai", "app_data"))
+        runner.withBean(AuditLogOwnershipCheck::class.java, { mine }).run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(AuditLogOwnershipCheck::class.java)).isSameAs(mine)
+        }
+    }
+
+    // issue 58 (ADR-054): a purge role that is not a plain role name never reaches the migration
+    @Test
+    fun `an unsafe wasichai audit purge-role fails at boot and names the property`() {
+        runner.withPropertyValues("wasichai.audit.purge-role=x'; DROP TABLE y; --").run { context ->
+            assertThat(context).hasFailed()
+            assertThat(generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }.joinToString(" | "))
+                .contains("wasichai.audit.purge-role")
+        }
     }
 
     @Test

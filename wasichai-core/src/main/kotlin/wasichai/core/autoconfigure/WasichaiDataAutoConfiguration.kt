@@ -10,6 +10,7 @@ import org.springframework.transaction.reactive.TransactionalOperator
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditController
 import wasichai.core.audit.AuditLogAdminAudit
+import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditQueryService
 import wasichai.core.audit.AuditService
 import wasichai.core.data.AppendOnlyReferences
@@ -54,6 +55,14 @@ class WasichaiDataAutoConfiguration {
         objectMapper: JsonMapper,
         schemas: WasichaiSchemas
     ): AuditService = AuditService(db, objectMapper, schemas)
+
+    // a WARN at start when the runtime role could drop audit_log's append-only triggers (ADR-054). never fails startup.
+    @Bean
+    @ConditionalOnMissingBean
+    fun auditLogOwnershipCheck(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): AuditLogOwnershipCheck = AuditLogOwnershipCheck(db, schemas)
 
     // the admin trail (ADR-049): metadata, admin and organization write through this port, in their transaction
     @Bean

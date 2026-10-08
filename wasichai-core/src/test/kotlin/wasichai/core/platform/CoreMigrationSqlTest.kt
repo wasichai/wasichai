@@ -72,6 +72,39 @@ class CoreMigrationSqlTest {
         assertThat(index.lines().filterNot { it.startsWith("--") || it.isBlank() }).hasSize(1)
     }
 
+    // ADR-054: append-only in the database. idempotent, schema from the placeholder, the two holes spelled out
+    @Test
+    fun `audit_log refuses update, delete and truncate through triggers, with the set-null and purge holes only`() {
+        val guard = sql("/db/wasichai/core/V13__audit_log_immutable.sql")
+
+        assertThat(guard)
+            .contains("CREATE OR REPLACE FUNCTION \${metadataSchema}.audit_log_guard() RETURNS trigger")
+            .contains("SET search_path = pg_catalog, pg_temp")
+            .contains("DROP TRIGGER IF EXISTS audit_log_append_only ON \${metadataSchema}.audit_log;")
+            .contains("BEFORE UPDATE OR DELETE ON \${metadataSchema}.audit_log")
+            .contains("FOR EACH ROW EXECUTE FUNCTION \${metadataSchema}.audit_log_guard();")
+            .contains("DROP TRIGGER IF EXISTS audit_log_no_truncate ON \${metadataSchema}.audit_log;")
+            .contains("BEFORE TRUNCATE ON \${metadataSchema}.audit_log")
+            .contains("FOR EACH STATEMENT EXECUTE FUNCTION \${metadataSchema}.audit_log_guard();")
+            // the set-null hole: only document_id changes, and only inside a foreign-key action
+            .contains("pg_trigger_depth() > 1")
+            .contains("(to_jsonb(OLD) - 'document_id') = (to_jsonb(NEW) - 'document_id')")
+            // the purge hole: the flag, and the login, never current_user
+            .contains("current_setting('wasichai.audit.purge', true) = 'on'")
+            .contains("session_user = \${metadataSchema}.audit_log_purge_role()")
+            .doesNotContain("= current_user")
+            .contains("RAISE EXCEPTION 'audit_log is append-only: % is not allowed', TG_OP")
+    }
+
+    @Test
+    fun `the purge role is a repeatable migration that runs again when the property changes`() {
+        val role = sql("/db/wasichai/core/R__audit_purge_role.sql")
+
+        assertThat(role)
+            .contains("CREATE OR REPLACE FUNCTION \${metadataSchema}.audit_log_purge_role() RETURNS text")
+            .contains("SELECT nullif('\${auditPurgeRole}', '')")
+    }
+
     @Test
     fun `the dev seed names the wasichai admin and every admin action`() {
         assertThat(seed).contains("admin@wasichai.local").contains("MANAGE_ORGANIZATION").doesNotContainIgnoringCase("sapgis")
