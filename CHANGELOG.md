@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.6.0](https://github.com/wasichai/wasichai/compare/v0.5.0...v0.6.0) (2026-10-08)
+
+
+### Features
+
+* **agent:** filter tool results, gate the assistant per caller and report token usage ([a3ce3ae](https://github.com/wasichai/wasichai/commit/a3ce3ae9172de1a0d03f76492fc3d812dbbae237))
+* **agent:** filter tool results, gate the assistant per caller and report token usage ([d16a8cd](https://github.com/wasichai/wasichai/commit/d16a8cd678f762df0dee97f4594888859f405e15))
+* **automation:** NOTIFY action through an AutomationNotifier port ([abcb8f7](https://github.com/wasichai/wasichai/commit/abcb8f75d743052ba1664c17b3d72802be8e2f3f))
+* **core:** an Idempotency-Key on the generic record create ([36d81c7](https://github.com/wasichai/wasichai/commit/36d81c77036ed0f8848ee5cef7e89d9dd01e866d))
+* **core:** an Idempotency-Key on the generic record create ([452ea10](https://github.com/wasichai/wasichai/commit/452ea100abc4a6fa975f76f5367c3fdbc479c60c)), closes [#63](https://github.com/wasichai/wasichai/issues/63)
+* **core:** directory ports name the people a role, a unit subtree or everyone reaches ([d3dddb1](https://github.com/wasichai/wasichai/commit/d3dddb1d1554f871aa57cc0a37ea5d8643225d90))
+* **core:** RecordService.createAll, a batch create that looks things up once ([84963e1](https://github.com/wasichai/wasichai/commit/84963e16cf2797e2eef2195b17f7c106e20e391a))
+* **core:** RecordService.createAll, a batch create that looks things up once ([796267a](https://github.com/wasichai/wasichai/commit/796267ac14b3e50d362289c18143c08c963c7241)), closes [#77](https://github.com/wasichai/wasichai/issues/77)
+* **core:** RecordService.createAll, a batch create that looks things up once ([#89](https://github.com/wasichai/wasichai/issues/89)) ([84963e1](https://github.com/wasichai/wasichai/commit/84963e16cf2797e2eef2195b17f7c106e20e391a))
+* **core:** token revocation, sign-in attempt limits and a password policy ([dd45997](https://github.com/wasichai/wasichai/commit/dd459979a71211c7c94827514ae01ac4452666f1))
+* **core:** token revocation, sign-in attempt limits and a password policy ([ccfed0a](https://github.com/wasichai/wasichai/commit/ccfed0a7e6505475a411d9a5c3e2972455d275e7))
+* **files:** FILE and IMAGE field types with a storage SPI ([db7a3bb](https://github.com/wasichai/wasichai/commit/db7a3bba2660fd0a943522fbe43c2642e83097f8))
+* **files:** FILE and IMAGE field types with a storage SPI ([ad060ba](https://github.com/wasichai/wasichai/commit/ad060ba5269bf4cc3229d0cf16df0321f27d4089))
+* **notifications:** email and delivery channels, notification preferences and automation NOTIFY ([829e830](https://github.com/wasichai/wasichai/commit/829e8304c6836e6dfd7be425702ce6896ff94ddc))
+* **notifications:** email and delivery channels, preferences and automation NOTIFY ([6e439ff](https://github.com/wasichai/wasichai/commit/6e439ff50c7315b5fd4969d1b7ba3fa928c5373a))
+
+
+### Bug Fixes
+
+* **core:** createAll never lets a batch lookup pre-empt an earlier refusal ([38e163a](https://github.com/wasichai/wasichai/commit/38e163a6973f4ad2e9b47021c5d80380eee3ead8))
+
 ## [0.5.0](https://github.com/wasichai/wasichai/compare/v0.4.0...v0.5.0) (2026-10-08)
 
 
