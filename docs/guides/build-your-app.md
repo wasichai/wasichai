@@ -263,10 +263,56 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | CORS origins | `wasichai.web.cors-allowed-origin-patterns` | [core.md](../modules/core.md) |
 | Dev seed data | `wasichai.seed.dev` | [core.md](../modules/core.md) |
 | Audit purge role | `wasichai.audit.purge-role` (default none: no purge) | [core.md](../modules/core.md) |
+| Who creates and deletes tenants | `wasichai.organizations.separate-provisioning` | [core.md](../modules/core.md) |
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
 | Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
+
+## Operator and customer tenants
+
+By default every tenant's administrator can create tenants (`POST /api/organizations`) and delete their own
+(`DELETE /api/organizations/current`). That is fine when one organization runs the deployment. When you run it for
+several customers, keep those two routes with your own people: turn on
+`wasichai.organizations.separate-provisioning`, and only roles granted `MANAGE_TENANTS` may use them; a customer's
+`ADMIN` keeps its users, roles, service accounts, units and the tenant's name
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md),
+[authentication.md](../security/authentication.md#tenant-administration-and-tenant-lifecycle)).
+
+The **operator tenant** is the one your people sign in to; **customer tenants** are the ones they create. Nobody gets
+`MANAGE_TENANTS` from the API without already holding it, so the first grant is written into the database, once, the
+same way the first tenant is (the dev seed's `demo`, or your own SQL):
+
+1. In the operator tenant, create a role for the operator's people, say `OPERATOR` (`POST /api/roles`), and give it
+   to them. Granting the action to the operator tenant's `ADMIN` role instead works too.
+2. Grant it `MANAGE_TENANTS`, with no object, in the metadata schema (`wasichai.database.metadata-schema`, `wasichai`
+   by default). The slug and the role name are yours:
+
+   ```sql
+   INSERT INTO wasichai.permissions (role_id, object_id, action)
+   SELECT r.id, NULL, 'MANAGE_TENANTS'
+   FROM wasichai.roles r
+   JOIN wasichai.organizations o ON o.id = r.organization_id
+   WHERE o.slug = 'operator' AND r.name = 'OPERATOR';
+   ```
+
+   It inserts one row; zero means the slug or the role name is wrong.
+3. Set the switch and restart:
+
+   ```yaml
+   wasichai:
+     organizations:
+       separate-provisioning: true
+   ```
+
+4. Sign in as an operator and create customer tenants with `POST /api/organizations`. Each gets an `ADMIN` role with
+   every permission except `MANAGE_TENANTS`, so it can neither create tenants nor delete itself.
+
+From then on an operator whose roles also hold `MANAGE_ORGANIZATION` hands `MANAGE_TENANTS` to more roles of the
+operator tenant with `PUT /api/roles/{name}/permissions` (`{ "objectName": null, "action": "MANAGE_TENANTS" }`); a
+customer administrator who tries gets `403`. Do steps 1 and 2 before step 3, or nobody can create a tenant once the
+switch is on. `GET /api/auth/me/permissions` lists `MANAGE_TENANTS` in `capabilities` exactly when the two routes let
+the caller in, so a client can show them on that alone.
 
 ## Override a bean
 

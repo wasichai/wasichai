@@ -28,6 +28,7 @@ import wasichai.core.admin.ServiceAccountService
 import wasichai.core.audit.AuditLogAdminAudit
 import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditPage
+import wasichai.core.common.Actions
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
@@ -38,6 +39,8 @@ import wasichai.core.data.RecordService
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.RoleQueries
 import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
@@ -53,6 +56,7 @@ import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiMigrations
+import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 import javax.crypto.SecretKey
@@ -269,6 +273,32 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context.getBean(ClusterLock::class.java)).isSameAs(mine)
         }
+    }
+
+    // issue 56 (ADR-055): off by default, so ADMIN still provisions; on, CurrentUser asks for a grant
+    @Test
+    fun `separate provisioning is off by default and reaches CurrentUser when on`() {
+        val admin = AuthenticatedUser(UUID.randomUUID(), UUID.randomUUID(), "ana@example.com", listOf(AuthenticatedUser.ADMIN_ROLE))
+        runner.run { context ->
+            assertThat(context.getBean(WasichaiOrganizationsProperties::class.java).separateProvisioning).isFalse()
+            assertThat(runBlocking { context.getBean(CurrentUser::class.java).hasPermission(admin, Actions.MANAGE_TENANTS) }).isTrue()
+        }
+        val noGrants =
+            object : RoleQueries(mock(DatabaseClient::class.java), WasichaiSchemas("wasichai", "app_data")) {
+                override suspend fun hasPermission(
+                    roleNames: List<String>,
+                    organizationId: UUID,
+                    action: String,
+                    objectId: UUID?
+                ) = false
+            }
+        runner
+            .withPropertyValues("wasichai.organizations.separate-provisioning=true")
+            .withBean(RoleQueries::class.java, { noGrants })
+            .run { context ->
+                assertThat(context.getBean(WasichaiOrganizationsProperties::class.java).separateProvisioning).isTrue()
+                assertThat(runBlocking { context.getBean(CurrentUser::class.java).hasPermission(admin, Actions.MANAGE_TENANTS) }).isFalse()
+            }
     }
 
     @Test

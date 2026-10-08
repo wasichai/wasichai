@@ -39,7 +39,10 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Identity: login and the signed-in user, under `/api/auth` (`POST /api/auth/login`, `GET /api/auth/me`,
   `GET /api/auth/me/permissions` for caller permissions per object and tenant-wide `capabilities`, ADR-053), and
   `POST /api/auth/token` for service accounts.
-- Organizations: the tenant itself, under `/api/organizations`.
+- Organizations: the tenant itself, under `/api/organizations`. Renaming it is `MANAGE_ORGANIZATION`; creating and
+  deleting tenants is `MANAGE_TENANTS`, which by default every `MANAGE_ORGANIZATION` holder has and, with
+  `wasichai.organizations.separate-provisioning`, only a role granted it
+  ([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)).
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
@@ -133,6 +136,7 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
 | `wasichai.audit.purge-role` | *(none)* | the database role whose own login may purge `audit_log` (ADR-054); read by the migration |
+| `wasichai.organizations.separate-provisioning` | `false` | `true`: creating and deleting tenants needs a `MANAGE_TENANTS` grant, not `ADMIN` (ADR-055) |
 
 The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
 first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
@@ -250,6 +254,10 @@ character classes and the index `audit_log_correlation_idx (organization_id, cor
 ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 `V12__audit_user_index.sql` adds the index `audit_log_user_time_idx (organization_id, user_id, occurred_at DESC)` for
 the audit list by user and period ([ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
+`V15__manage_tenants.sql` adds `MANAGE_TENANTS` to the built-in actions of `permissions_action_valid` and
+`object_actions_not_builtin`, and `permissions_tenants_no_object` keeps its grants object-less
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)). An object that declared an action
+of that name stops the migration; rename it first. Core has no `V13` or `V14` of its own yet.
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes

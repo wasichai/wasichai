@@ -71,10 +71,11 @@ class OrganizationService(
         return updated
     }
 
-    // provisioning: a tenant plus the administrator who can then configure it
+    // provisioning: a tenant plus the administrator who can then configure it.
+    // MANAGE_TENANTS: MANAGE_ORGANIZATION as ever, unless wasichai.organizations.separate-provisioning (ADR-055)
     @Transactional
     suspend fun provision(request: CreateOrganizationRequest): Organization {
-        val actor = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        val actor = currentUser.requireWithPermission(Actions.MANAGE_TENANTS)
         val slug = request.slug.trim().lowercase()
         if (!SLUG.matches(slug)) {
             throw ValidationException("Invalid slug '$slug'", "slug", "must match ^[a-z][a-z0-9-]{1,48}$")
@@ -107,6 +108,7 @@ class OrganizationService(
             .rowsUpdated()
             .awaitSingle()
 
+        // every action but MANAGE_TENANTS: the new tenant's administrator never creates or deletes tenants (ADR-055)
         db
             .sql(
                 """
@@ -160,10 +162,11 @@ class OrganizationService(
         return created
     }
 
-    // metadata cascades, but business tables live outside those foreign keys: drop them first
+    // metadata cascades, but business tables live outside those foreign keys: drop them first.
+    // MANAGE_TENANTS, as provisioning (ADR-055)
     @Transactional
     suspend fun deleteCurrent() {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
+        val user = currentUser.requireWithPermission(Actions.MANAGE_TENANTS)
         // null when already gone: deleting nothing stays a 204, and leaves no entry
         val organization = organizations.findById(user.organizationId)
         objects.findAll(user.organizationId).forEach { schema.dropTable(it) }

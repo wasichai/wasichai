@@ -300,6 +300,23 @@ These are the only intended differences. Anything else that behaves differently 
   default, existing records are not touched, and the column gets no SQL `DEFAULT`. Tested by `FieldDefaultsTest`,
   `RecordServiceDefaultsTest`, `FieldDefaultValueApiTest` and `AutomationOnlyApiTest`.
 
+**Because one deployment serves several customer organizations**
+
+- **D41. Creating and deleting tenants takes `MANAGE_TENANTS`.** The original guarded `POST /api/organizations` and
+  `DELETE /api/organizations/current` with `MANAGE_ORGANIZATION`, which `ADMIN` always passes, so a customer's
+  administrator could create and delete tenants. Now both check `MANAGE_TENANTS`, a new object-less built-in action
+  ([ADR-055](0055-tenant-provisioning-apart-from-tenant-administration.md)). With
+  `wasichai.organizations.separate-provisioning=false`, the default, it means `MANAGE_ORGANIZATION` and both routes
+  behave as before. With `true`, only a role's `MANAGE_TENANTS` grant counts: `ADMIN` and `MANAGE_ORGANIZATION` get
+  `403`, and a service account is refused either way. Observable changes, also by default: the action is accepted by
+  `PUT /api/roles/{name}/permissions`, where the original answered `400`, but only from a caller whose roles hold it
+  (`403` otherwise) and only with no object (`400` naming `objectName` otherwise); an object may not declare an action
+  of that name; `capabilities` in `GET /api/auth/me/permissions` lists it third, so the administrator's list is
+  `MANAGE_METADATA`, `MANAGE_ORGANIZATION`, `MANAGE_TENANTS` by default. `PUT /api/organizations/current` and the
+  `ADMIN` role created by provisioning are unchanged. The `V15` constraints are known schema-parity deviations. Tested
+  by `CurrentUserTest`, `CallerPermissionsServiceTest`, `WasichaiAutoConfigurationTest`, `ObjectActionNameTest`,
+  `SeparateProvisioningApiTest`, `OrganizationApiTest` and `PermissionEnforcementTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
