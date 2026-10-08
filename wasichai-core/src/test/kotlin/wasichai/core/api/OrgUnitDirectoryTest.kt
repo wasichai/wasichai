@@ -10,7 +10,6 @@ import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.OrgUnitRef
 import wasichai.core.identity.UserDirectory
-import wasichai.core.organization.OrganizationRepository
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiIntegrationTest
@@ -24,9 +23,6 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
 
     @Autowired
     private lateinit var users: UserDirectory
-
-    @Autowired
-    private lateinit var organizations: OrganizationRepository
 
     @Autowired
     private lateinit var db: DatabaseClient
@@ -145,18 +141,6 @@ class OrgUnitDirectoryTest : WasichaiIntegrationTest() {
             assertThat(users.idsByEmail(DEMO, emptyList())).isEmpty()
             assertThat(users.existing(DEMO, emptyList())).isEmpty()
             assertThat(users.emailsById(DEMO, emptyList())).isEmpty()
-        }
-
-    @Test
-    fun `organization ids hold every tenant, for background work`(): Unit =
-        runBlocking {
-            val org = organization()
-
-            val ids = organizations.ids()
-
-            assertThat(ids).contains(DEMO, org)
-            // postgres orders uuids as unsigned bytes, i.e. as their text; java's compareTo is signed
-            assertThat(ids.map { it.toString() }).isSorted()
         }
 
     // the db is shared: every unit code is unique to its test

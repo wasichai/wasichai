@@ -15,6 +15,52 @@ completion, unknown type ID retention, `Comparable` base type, `Path` scheme all
 downgrade; four logback-core advisories; Kotlin build cache deserialization. Each floor goes once Boot manages a
 version at least as new.
 
+## 2026-10-08 — Background work finds the tenants through a tenant directory
+
+A job that runs per tenant had no supported way to find the tenants: there is no REST list on purpose, and the only
+iteration was internal (`CustomObjectRepository.findAllOrganizations()`, which an app called anyway, and
+`OrganizationRepository.ids()`) ([#62](https://github.com/wasichai/wasichai/issues/62)). Core now declares
+`TenantDirectory` (`wasichai.core.platform`, bean `tenantDirectory`, `@ConditionalOnMissingBean`):
+`organizations()` and `organizationsWithObject(name)` answer `TenantRef(id, slug)` lists ordered by id, read by
+`DatabaseTenantDirectory` from `organizations` and `custom_objects`. Like `asPlatform`, both throw
+`IllegalStateException` inside a request, with a token or anonymous; the check moved from `PlatformCaller` to one
+internal `platform.Background` that both use. `RecordService.forEachOrganization(objectName = null, source =
+"platform") { organizationId -> }` runs a block per tenant inside `asPlatform`, logs one tenant's failure and goes on,
+and refuses a request before asking the directory. `DeclaredIndexReconciler` and the notifications loop walk the
+directory; `OrganizationRepository.ids()` is gone and `findAllOrganizations()` is deprecated. `RecordService` takes the
+directory as its last constructor argument. No REST change, no migration
+([ADR-057](adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md), follows up ADR-039). New tests:
+`TenantDirectoryTest`, five `forEachOrganization` cases in `RecordServicePlatformTest`, `TenantDirectoryBoundaryTest`
+(no controller of core or a module takes the directory) and the integration test `TenantDirectoryApiTest`; the
+`OrganizationRepository.ids()` case left `OrgUnitDirectoryTest`. Docs: [core.md](modules/core.md),
+[notifications.md](modules/notifications.md), [build-your-app.md](guides/build-your-app.md) "Background work".
+
+## 2026-10-08 — A self-relationship is read from either end
+
+A relationship may join an object to itself (a parent unit, a previous version, a duplicate-of), but the related read
+and the object's relationship list decided the end from the object alone, which is both, so a parent's children or the
+sources linked to a record could not be read through the relationship
+([#61](https://github.com/wasichai/wasichai/issues/61)). `GET /api/objects/{object}/records/{id}/related/{relationship}`
+now takes `direction=forward|inverse`: `forward`, the default, is exactly the walk the read made before (from the source
+end, but for `ONE_TO_MANY` from the target end, which holds the key: the record's parent); `inverse` walks the other end
+(the records whose relation field points at this one, the `ONE_TO_MANY` children, or for `MANY_TO_MANY` the join
+table's `source_id` side), with paging, `count=false` and `after=` and the same permissions, field permissions,
+own-records-only and read scope. `inverse` on a relationship between two objects, or any other value, is a `400` naming
+`direction`. `GET /api/objects/{object}/relationships` lists a self-relationship twice, forward then inverse, each
+entry with `direction` and the label and `many` of what that direction reads (for a `ONE_TO_MANY` self-relationship,
+forward is the parent, so `inverseLabel` and `many: false`, where the one entry used to say `label` and `many: true`);
+other entries are unchanged, with no `direction` key, so a client keying by `relationship` alone keeps working if it
+keeps the first entry of a name (ADR-031 D42). No default read changes. In code: `RelationshipDirection` (`parse`, `wire`, `fromSource(type)`), a
+`Relationship.selfReferencing` flag, `RelatedSide.direction` and `fromSource`, a `direction` argument on
+`RelationshipService.side` and on `RelatedRecordService.relatedRecords` and `relatedRows` (defaulting to forward), and
+`direction` on `RelatedSideResponse` (left out when null). Link and unlink are unchanged. A generated page keeps one
+`RELATED_LIST` per relationship (the forward one), since a component names no direction yet. The agent's
+`list_relationships` reports `direction` and `related_records` takes an optional `direction`. No migration. New tests:
+`RelationshipSideTest`, the integration suite `SelfRelationshipApiTest` (each relationship type as a self-relationship,
+paging and keyset for the inverse read, the `400`s, the listing, own-records-only), and cases in
+`RecordReadScopeApiTest`, `PageServiceTest` and `AgentToolCatalogTest`. Docs: [rest.md](api/rest.md) "Relationships"
+and "Related records", [metadata-model.md](domain/metadata-model.md), [core.md](modules/core.md).
+
 ## 2026-10-08 — Creating and deleting tenants can be kept apart from administering one
 
 `POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always

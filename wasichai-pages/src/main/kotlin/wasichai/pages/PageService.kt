@@ -10,6 +10,7 @@ import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.metadata.RelationshipDirection
 import wasichai.core.metadata.RelationshipService
 import wasichai.forms.FormService
 import java.util.UUID
@@ -212,7 +213,8 @@ class PageService(
         // one tab per thing you go looking for. each holds one column, so the tab strip is the
         // layout and nothing sits beside anything.
         val related =
-            relationships.forObject(definition.obj.name).map { side ->
+            // a RELATED_LIST names no direction yet, so a self-relationship keeps its one forward tab
+            relationships.forObject(definition.obj.name).filter { it.direction != RelationshipDirection.INVERSE }.map { side ->
                 PageComponent(type = ComponentType.RELATED_LIST, title = side.label, relationship = side.relationship.name)
             }
         val tabs = generatedTabs(definition, componentTypes.providers, related)

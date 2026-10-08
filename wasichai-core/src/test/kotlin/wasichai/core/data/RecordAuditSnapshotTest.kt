@@ -171,7 +171,8 @@ class RecordAuditSnapshotTest {
             listOf(listener),
             RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
-            RecordReadScopesFixtures.none()
+            RecordReadScopesFixtures.none(),
+            TenantDirectoryFixtures.none()
         )
     }
 

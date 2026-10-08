@@ -317,6 +317,26 @@ These are the only intended differences. Anything else that behaves differently 
   by `CurrentUserTest`, `CallerPermissionsServiceTest`, `WasichaiAutoConfigurationTest`, `ObjectActionNameTest`,
   `SeparateProvisioningApiTest`, `OrganizationApiTest` and `PermissionEnforcementTest`.
 
+**Because a relationship may join an object to itself**
+
+- **D42. A self-relationship is read from either end.** The original accepted a relationship whose source and target
+  are the same object, then decided the end of every read from the object alone, which is both: `GET
+  …/records/{id}/related/{relationship}` always walked one end (so a parent's children, or the sources linked to a
+  record, could not be read), and `GET /api/objects/{object}/relationships` listed one side. Now the related read takes
+  `direction`: `forward` (the default) is exactly the walk the read always made, from the source end and, for
+  `ONE_TO_MANY`, from the target end that holds the key (the record's parent); `inverse` walks the other end. Both keep
+  the read's paging, `count=false` and `after=` unchanged and the same permissions, field permissions, own-records-only and
+  read scope (D30). `inverse` on any other relationship, and any value other than the two, is a `400` naming
+  `direction`; on this route `direction` is no longer read as a filter on a field of that name. The listing answers a
+  self-relationship twice, forward then inverse, each with `direction` and the `label` and `many` of what that direction
+  reads (`label` from the source end, `inverseLabel` or the plural label from the target end); any other entry is
+  unchanged and has no `direction` key. No default read changes. The listing's one entry for a `ONE_TO_MANY`
+  self-relationship used to say `label` and `many: true` while the read returned the parent; its forward entry now says
+  `inverseLabel` and `many: false`, what the read returns. Link, unlink and a generated page's one related tab per relationship are
+  unchanged; the agent's `list_relationships` reports `direction` and `related_records` takes it. Tested by
+  `SelfRelationshipApiTest`, `RelationshipSideTest`, `RecordReadScopeApiTest`, `PageServiceTest` and
+  `AgentToolCatalogTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
