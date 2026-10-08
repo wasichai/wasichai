@@ -5,19 +5,19 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 ## 2026-10-08 — RecordService.createAll: a batch create that looks things up once
 
 `RecordService.create` pays a fixed set of round trips per record (definition, permission and field access, workflow
-state) and, since D29 and D30, an `objects.findById` plus an `id = ANY` lookup per `RELATION` value, so a caller writing
-many records of one object paid it all again for each: srtm-backend's arbitrios determination, 48 `cuota_arbitrio` per
-predio with four `RELATION` fields, measured 17.7 statements per record on 0.3.2 against 11.7 on 0.2.0, 8 of them the
-relation checks ([#77](https://github.com/wasichai/wasichai/issues/77)). New in process:
+state) and, since D29 and D30, an `objects.findById` plus an `id = ANY` lookup per target object of each record, so a
+caller writing many records of one object paid it all again for each: srtm-backend's arbitrios determination, 48
+`cuota_arbitrio` per predio with four `RELATION` fields, measured 17.7 statements per record on 0.3.2 against 11.7 on
+0.2.0, 8 of them the relation checks ([#77](https://github.com/wasichai/wasichai/issues/77)). New in process:
 `RecordService.createAll(objectName, requests: List<RecordRequest>, reason = null): List<RecordResponse>`. It resolves
 the caller, loads the definition, checks the permission and the disabled flag, reads the field access and the workflow
 state **once per batch**, and looks the `RELATION` targets up once per target object over the distinct ids of the whole
-batch (after defaults, in the caller's read scope as D30 has it). Per record, exactly as `create`: the unwritable and
-required checks, defaults, the write guards (`appendOnly`, `requiresReason`, the `RELATION` check answered from the
-batch's lookups, the app's guards), insert, audit row, listeners and the readable projection. Answers come in request
-order, each what `create` would answer. Errors are `create`'s, record by record in request order: the checks that need
-no database run up front but a failure is thrown only when the loop reaches its record, so the batch throws the first
-error the `create` loop would, a missing or unreadable target D29's "Invalid value for '<field>'" on the field. One
+batch (after defaults, in the caller's read scope as D30 has it). Per record, as `create`: the unwritable and required
+checks, defaults, the write guards (`appendOnly`, `requiresReason`, the `RELATION` check answered from the batch's
+lookups, the app's guards), insert, audit row, listeners and the readable projection. Answers come in request order,
+each what `create` would answer. Errors are `create`'s, record by record in request order: the checks that need no
+database run up front but a failure is thrown only when the loop reaches its record, so the batch throws the first error
+the `create` loop would, a missing or unreadable target D29's "Invalid value for '<field>'" on the field. One
 transaction: the caller's when there is one (ADR-038), else its own, the same "join or open" as `IdempotencyKeys.once`;
 the first failure, a guard's or a listener's included, stores, audits and announces nothing of the batch. No REST route,
 so an `apiOnly` object takes it, and no `Idempotency-Key` variant. A per-transaction cache (the issue's option 2) is not
@@ -32,14 +32,14 @@ case by `RecordBatchCreateApiTest`: 2.21 statements per record for `ADMIN` again
 against 14.00 for a scoped reader, the `id = ANY` lookups 4 per batch instead of 192. New tests:
 `RecordServiceBatchTest` (definition, permission and field access once for N records; one `existing` per target object
 with the distinct ids for 48 records and four fields; a missing target fails with `create`'s error and nothing after it
-is inserted; the first failing record in order wins; request order; the empty list asks nothing; the reader mismatch; an
-id the batch did not look up is still looked up; a target it found missing is read again, so one an earlier record's
-listener wrote passes) and the integration test `RecordBatchCreateApiTest`, which counts SQL statements through a
-wrapped `ConnectionFactory` (at most 10 per record for `ADMIN`, fewer than the `create` loop; one relation lookup per
-target object per batch for a scoped reader), refuses a missing and an unreadable target with `create`'s error and
-nothing stored or audited, and rolls the batch back with the caller's transaction. Docs:
-[core.md](modules/core.md#many-records-of-one-object), [build-your-app.md](guides/build-your-app.md) "Write several
-records atomically".
+is inserted; the first failing record in order wins; no lookup past it; a lookup that throws is left to the record's own
+guard; request order; the empty list asks nothing; the reader mismatch; an id the batch did not look up is still looked
+up; a target it found missing is read again, so one an earlier record's listener wrote passes) and the integration test
+`RecordBatchCreateApiTest`, which counts SQL statements through a wrapped `ConnectionFactory` (at most 10 per record for
+`ADMIN`, fewer than the `create` loop; one relation lookup per target object per batch for a scoped reader), refuses a
+missing and an unreadable target with `create`'s error and nothing stored or audited, and rolls the batch back with the
+caller's transaction, and runs inside `asPlatform`. Docs: [core.md](modules/core.md#many-records-of-one-object),
+[build-your-app.md](guides/build-your-app.md) "Write several records atomically".
 
 ## 2026-10-08 — Token revocation, sign-in attempt limits and a password policy
 

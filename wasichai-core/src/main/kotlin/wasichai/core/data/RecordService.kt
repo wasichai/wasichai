@@ -73,7 +73,7 @@ data class RecordResponse(
     fun flattened(): Map<String, Map<String, Any?>> = sections
 }
 
-// [transactions]: resolved on first createAll, as in IdempotencyKeys. no other call opens one (ADR-038)
+// [transactions]: resolved on first createAll, as in IdempotencyKeys. createAll opens one only when the caller has none (ADR-060)
 @Service
 class RecordService(
     private val metadata: MetadataService,
@@ -283,8 +283,9 @@ class RecordService(
      * row and the listeners still run for each record, in order.
      *
      * One transaction: the caller's when there is one (ADR-038), else one of its own. Every record is
-     * stored, audited and told, or none is. A failure throws exactly what calling [create] for each
-     * request in order would throw first, and stores nothing. In-process only, as [create] (`apiOnly`
+     * stored, audited and told, or none is. A failure throws what calling [create] for each request in
+     * order would throw first, and stores nothing. What it looked up is read at the start: a change its
+     * own listeners make to a found target's readability is not seen, where a create loop sees it. In-process only, as [create] (`apiOnly`
      * objects take it); there is no [IdempotencyKeys] variant. [reason]: as for [create] (ADR-041),
      * one for every record. An empty list answers an empty list and checks nothing.
      */
@@ -322,9 +323,26 @@ class RecordService(
                 }
             }
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
-        // what the guard would look up record by record, once: defaults included, failed records left out
-        val checked = guards.relationTargets(caller.organizationId, definition, creations.mapNotNull { it.getOrNull()?.attributes }, caller.user)
+        val checked = relationTargets(write, creations)
         return creations.map { write.created(it.getOrThrow(), fieldAccess, workflow, checked) }
+    }
+
+    // what the guard would look up record by record, once: defaults included, only the records the loop reaches.
+    // best effort: a lookup that throws (an app's read scope, say) is left to the guard of the record that needs it,
+    // so the batch throws where a create loop would, after any earlier record's own refusal
+    private suspend fun relationTargets(
+        write: Write,
+        creations: List<Result<Creation>>
+    ): RelationTargets.Checked? {
+        val reached = creations.takeWhile { it.isSuccess }.map { it.getOrThrow().attributes }
+        return try {
+            guards.relationTargets(write.caller.organizationId, write.definition, reached, write.caller.user)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.debug("batch relation lookups failed, each record looks its own up: {}", e.message)
+            null
+        }
     }
 
     // a create's request, judged without the database: what the store writes, and with which definition
@@ -589,7 +607,7 @@ class RecordService(
      *
      * The write's own RETURNING row wins when it already carries every field: it is atomic with the
      * write. The re-read is best-effort and only used when RETURNING was projected; outside a
-     * transaction (only createAll opens one) a concurrent write could land in between.
+     * transaction a concurrent write could land in between.
      */
     private suspend fun storedRow(
         definition: ObjectDefinition,

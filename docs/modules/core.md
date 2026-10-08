@@ -147,12 +147,13 @@ val cuotas: List<RecordResponse> =
     )
 ```
 
-It loads the definition, checks the permission, reads the field access and the workflow state once per batch, and
-looks the `RELATION` targets up once per target object over the batch's distinct ids, instead of once per record.
-Every record still gets `create`'s checks, defaults, write guards, audit row and listeners, and the answers come in
-request order, each what `create` would answer. The batch throws the error the first failing record would throw from
-`create`, in request order, and stores nothing: it runs in the caller's transaction (ADR-038) or, with none, in its
-own. There is no REST route and no `Idempotency-Key` variant; `update` and `delete` have no batch form.
+It loads the definition, checks the permission, reads the field access and the workflow state once per batch, and looks
+the `RELATION` targets up once per target object over the batch's distinct ids, instead of once per record. Every record
+still gets `create`'s checks, defaults, write guards, audit row and listeners, and the answers come in request order,
+each what `create` would answer. The batch throws the error the first failing record would throw from `create`, in
+request order, and stores nothing. What it looked up stays as read at the start of the batch, so a change its own
+listeners make to a target's readability is not seen. It runs in the caller's transaction (ADR-038) or, with none, in
+its own. There is no REST route and no `Idempotency-Key` variant; `update` and `delete` have no batch form.
 
 ## Configuration
 

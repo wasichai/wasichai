@@ -8,10 +8,11 @@ ADR-031 D29 and D30 ([ADR-031](0031-deliberate-deviations-from-sapgis.md))
 `RecordService.create` costs a fixed number of round trips per record: the definition (`metadata.loadDefinition`, two
 statements), the permission and field access (role queries for a caller who is not `ADMIN`), the workflow state
 (`workflows.stateOf`), and, since D29 and D30 ([#33](https://github.com/wasichai/wasichai/issues/33),
-[#39](https://github.com/wasichai/wasichai/issues/39)), for every `RELATION` value an `objects.findById` of the target
-object plus a `SELECT id … WHERE id = ANY(:ids)`, with a role-scoped `EXISTS` folded in for a reader who is not
-`ADMIN`. A caller that writes many records of one object in one go pays all of it again for every record, although
-the definition, the caller and most targets are the same each time ([#77](https://github.com/wasichai/wasichai/issues/77)).
+[#39](https://github.com/wasichai/wasichai/issues/39)), for every target object its `RELATION` values name an
+`objects.findById` of that object plus a `SELECT id … WHERE id = ANY(:ids)`, with a role-scoped `EXISTS` folded in for a
+reader who is not `ADMIN`. A caller that writes many records of one object in one go pays all of it again for every
+record, although the definition, the caller and most targets are the same each time
+([#77](https://github.com/wasichai/wasichai/issues/77)).
 
 The measured case is srtm-backend's annual arbitrios determination
 ([wasichai/srtm-backend#84](https://github.com/wasichai/srtm-backend/issues/84),
@@ -43,8 +44,8 @@ suspend fun createAll(
 
 It creates every request as a record of `objectName`, as the current caller (a person, a service account, or the
 platform inside `asPlatform`), and answers in request order, each answer exactly what `create` would answer for that
-request. An empty list answers an empty list, without a query. There is no REST route, so an `apiOnly` object takes it as it takes an
-in-process `create` (ADR-040), and there is no `Idempotency-Key` variant (ADR-058).
+request. An empty list answers an empty list, without a query. There is no REST route, so an `apiOnly` object takes it
+as it takes an in-process `create` (ADR-040), and there is no `Idempotency-Key` variant (ADR-058).
 
 **Once per batch**: the reason is normalised, the caller resolved, the definition loaded, the `CREATE` permission and
 the object's disabled flag checked, the field access read, the workflow state asked, and the `RELATION` targets looked
@@ -87,26 +88,31 @@ read. The batch's lookups live for one call, for one reader, before its first in
 is the concrete user; the cache has no user the batch does not serve (rule 10). It can come with a new ADR when one
 shows up, for example repeated `create` calls from code that cannot gather its records first.
 
-**No ADR-031 entry.** Nothing changes over REST or for `create`: a batch stores the same records, audit rows and listener
-calls as the same `create` calls inside one transaction, as ADR-038's in-process transaction and ADR-039's platform
-writes added none.
+**No ADR-031 entry.** Nothing changes over REST or for `create`: a batch stores the same records, audit rows and
+listener calls as the same `create` calls inside one transaction, as ADR-038's in-process transaction and ADR-039's
+platform writes added none.
 
 ## Consequences
 
-- The measured case drops to at most 10 statements per record, pinned by `RecordBatchCreateApiTest`: on core alone,
-  48 records with four `RELATION` fields cost 2.21 statements per record for `ADMIN` (12.00 with a `create` loop) and
-  2.25 for a scoped reader (14.00), with one `id = ANY` lookup per target object for the batch instead of 192. What is left per
-  record is the insert, the stored row, the audit row, the listeners' own writes and any `RELATION` id the batch could
-  not answer.
+- The measured case drops to at most 10 statements per record, pinned by `RecordBatchCreateApiTest`: on core alone, 48
+  records with four `RELATION` fields cost 2.21 statements per record for `ADMIN` (12.00 with a `create` loop) and 2.25
+  for a scoped reader (14.00), with one `id = ANY` lookup per target object for the batch instead of 192. What is left
+  per record is the insert, the stored row, the audit row, the listeners' own writes and any `RELATION` id the batch
+  could not answer.
 - A batch is atomic even outside a caller's transaction: a listener that throws on record 40 undoes records 1 to 39,
   where 40 plain `create` calls would keep them (ADR-025). It holds one connection, and the foreign-key locks its
   inserts take, until it commits. The app picks the batch size, srtm one predio's cuotas.
-- Permission, field access and relation targets are read once, at the start of the batch. A target deleted after the
-  lookup still fails its foreign key with D28's `409`, as for `create`.
+- Permission, field access, the workflow state and the relation targets found are read once, at the start of the
+  batch: the batch does not see a change its own listeners or guards make to them, where a `create` loop would. A
+  listener that moves a found target out of the caller's read scope does not refuse a later record that names it. A
+  target deleted after the lookup still fails its foreign key with D28's `409`, as for `create`. A lookup that throws
+  (an app's `RecordReadScope`, say) is left to the guard of the first record that needs it, so it never hides an
+  earlier record's refusal.
 - A failed batch stores nothing, so it can be sent again whole. A batch that committed but whose answer was lost is the
   app's to detect, by a unique constraint (ADR-037) for example; there is no key for it.
 - `update` and `delete` are unchanged.
 - Tested by `RecordServiceBatchTest` (lookups once, one `existing` per target object over the distinct ids, the first
-  failing record in order, request order, the empty list, the reader mismatch) and the integration test
+  failing record in order, no lookup past it, a throwing lookup left to the guard, a miss read again, request order, the
+  empty list, the reader mismatch) and the integration test
   `RecordBatchCreateApiTest` (statements counted through a wrapped `ConnectionFactory` against the `create` loop, a
-  missing and an unreadable target store nothing, a caller's transaction rolls the batch back).
+  missing and an unreadable target store nothing, a caller's transaction rolls the batch back, `asPlatform`).

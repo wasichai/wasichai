@@ -8,6 +8,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.mockingDetails
 import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.audit.AuditService
+import wasichai.core.common.ForbiddenException
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
@@ -43,6 +44,9 @@ class RecordServiceBatchTest {
 
     // ids no lookup ever finds
     private val missing = mutableSetOf<UUID>()
+
+    // set: every lookup throws it, as an app's read scope may
+    private var failing: Exception? = null
 
     private val store =
         object : RecordStore {
@@ -114,6 +118,7 @@ class RecordServiceBatchTest {
                 scope: AuthenticatedUser?
             ): Set<UUID> {
                 lookups += targetObjectId to ids
+                failing?.let { throw it }
                 return ids.filter { it !in missing }.toSet()
             }
         }
@@ -123,7 +128,10 @@ class RecordServiceBatchTest {
     private val access = mock(AccessPolicy::class.java)
     private val transactions = TransactionalOperatorFixtures.inline()
 
-    private suspend fun service(fieldAccess: FieldAccess = FieldAccess.FULL): RecordService {
+    private suspend fun service(
+        fieldAccess: FieldAccess = FieldAccess.FULL,
+        definition: ObjectDefinition = this.definition
+    ): RecordService {
         doReturn(user).`when`(currentUser).require()
         doReturn(definition).`when`(metadata).loadDefinition(organizationId, "predio")
         doReturn(fieldAccess).`when`(access).fieldAccess(user, definition.obj.id)
@@ -307,6 +315,33 @@ class RecordServiceBatchTest {
             targets.rejectMissing(organizationId, definition, attributes, reader = user, checked = checked)
 
             assertThat(lookups).containsExactly(parcels to listOf(later), parcels to listOf(later))
+        }
+
+    @Test
+    fun `records past the first refused one are not looked up`() =
+        runTest {
+            val locked = FieldAccess(read = emptyMap(), write = mapOf(codigo.id to false))
+
+            val thrown = runCatching { service(locked).createAll("predio", listOf(RecordRequest(mapOf("codigo" to "X"))) + requests(3)) }
+
+            assertThat(thrown.exceptionOrNull()).hasMessage("Field 'codigo' is not writable for you")
+            assertThat(lookups).isEmpty()
+        }
+
+    @Test
+    fun `a lookup that throws is left to the record's own guard, after the rules create checks first`() =
+        runTest {
+            failing = ForbiddenException("no territory assigned")
+            val reasoned = ObjectDefinition(definition.obj.copy(requiresReason = true), definition.fields)
+
+            val withoutReason = runCatching { service(definition = reasoned).createAll("predio", requests(3)) }.exceptionOrNull()
+            val withReason = runCatching { service(definition = reasoned).createAll("predio", requests(3), reason = "annual run") }.exceptionOrNull()
+
+            // a create loop refuses the missing reason before any lookup, and the scope's own refusal after it
+            assertThat(withoutReason).isInstanceOf(ValidationException::class.java)
+            assertThat((withoutReason as ValidationException).violations.map { it.field }).containsExactly("reason")
+            assertThat(withReason).isInstanceOf(ForbiddenException::class.java).hasMessage("no territory assigned")
+            assertThat(inserted).isEmpty()
         }
 
     @Test

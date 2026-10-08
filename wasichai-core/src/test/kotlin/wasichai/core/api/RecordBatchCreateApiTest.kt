@@ -29,6 +29,7 @@ import wasichai.core.data.RecordChangeListener
 import wasichai.core.data.RecordQuery
 import wasichai.core.data.RecordRequest
 import wasichai.core.data.RecordService
+import wasichai.core.identity.JwtService
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiIntegrationTest
 import java.lang.reflect.InvocationHandler
@@ -263,6 +264,28 @@ class RecordBatchCreateApiTest : WasichaiIntegrationTest() {
         assertThat(thrown).hasMessageContaining("the app gives up")
         asAdmin { assertThat(records.list(cobro, everything).totalElements).isZero() }
         assertThat(auditOf(cobro)).isZero()
+    }
+
+    @Test
+    fun `as the platform a batch writes with no user, in one transaction of its own`() {
+        val input = requests(5)
+        val organizationId =
+            UUID.fromString(runBlocking { decoder.decode(admin.removePrefix("Bearer ")).awaitSingle() }.getClaimAsString(JwtService.CLAIM_ORGANIZATION))
+
+        val answers = runBlocking { records.asPlatform(organizationId, "job:issue-77") { records.createAll(cobro, input) } }
+
+        assertThat(answers).hasSize(5)
+        val trail =
+            runBlocking {
+                db
+                    .sql("SELECT user_id, source FROM ${schemas.metadata}.audit_log WHERE object_name = :name")
+                    .bind("name", cobro)
+                    .map { row, _ -> row.get("user_id", UUID::class.java) to row.get("source", String::class.java) }
+                    .all()
+                    .collectList()
+                    .awaitSingle()
+            }
+        assertThat(trail).hasSize(5).allSatisfy { assertThat(it).isEqualTo(null to "job:issue-77") }
     }
 
     @Test
