@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean
 import wasichai.core.common.GlobalExceptionHandler
 import wasichai.core.common.HealthController
 import wasichai.core.metadata.ObjectSchemaManager
+import wasichai.core.platform.CorrelationIdWebFilter
 import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumnContributor
@@ -19,7 +20,7 @@ import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.WasichaiWebProperties
 
-// properties, schema names, system columns, migrations, errors, health. no scanning: every bean here.
+// properties, schema names, system columns, migrations, errors, health, correlation id. no scanning: every bean here.
 @AutoConfiguration
 @EnableConfigurationProperties(WasichaiDatabaseProperties::class, JwtProperties::class, WasichaiWebProperties::class)
 class WasichaiPlatformAutoConfiguration {
@@ -56,6 +57,11 @@ class WasichaiPlatformAutoConfiguration {
         web: WasichaiWebProperties,
         schema: ObjectProvider<ObjectSchemaManager>
     ): GlobalExceptionHandler = GlobalExceptionHandler(web.problemBaseUri) { schema.getIfAvailable()?.uniqueFields(it).orEmpty() }
+
+    // X-Correlation-Id on every request and response, ahead of the security chain (ADR-050)
+    @Bean
+    @ConditionalOnMissingBean
+    fun correlationIdWebFilter(): CorrelationIdWebFilter = CorrelationIdWebFilter()
 
     @Bean
     @ConditionalOnMissingBean

@@ -47,6 +47,20 @@ class CoreMigrationSqlTest {
         assertThat(core).doesNotContain("GEOMETRY", "geometry_type", "'ISSUE'")
     }
 
+    // ADR-050: additive, nullable, so rows written before it read back without either
+    @Test
+    fun `audit rows gain a correlation id and a source, both nullable, the id indexed per tenant`() {
+        val origin = sql("/db/wasichai/core/V10__audit_origin.sql")
+
+        assertThat(origin)
+            .contains("ADD COLUMN correlation_id text,")
+            .contains("ADD COLUMN source text;")
+            .contains("CHECK (correlation_id ~ '^[A-Za-z0-9._-]{1,64}\$')")
+            .contains("CHECK (source ~ '^[A-Za-z0-9._:-]{1,64}\$')")
+            .contains("CREATE INDEX audit_log_correlation_idx ON \${metadataSchema}.audit_log (organization_id, correlation_id);")
+            .doesNotContain("NOT NULL")
+    }
+
     @Test
     fun `the dev seed names the wasichai admin and every admin action`() {
         assertThat(seed).contains("admin@wasichai.local").contains("MANAGE_ORGANIZATION").doesNotContainIgnoringCase("sapgis")

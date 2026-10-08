@@ -33,8 +33,20 @@ data class AuditEntry(
     // why, as the writer said it (ADR-041). null when none was given.
     val reason: String? = null,
     // the service account that made the change (ADR-043). left out when a person did: their entries stay as they were
-    @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null,
+    // the request it came from and what wrote it (ADR-050). left out on rows older than both
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val correlationId: String? = null,
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val source: String? = null
 )
+
+// what GET /api/audit narrows by besides the object, the record and the operation. blank is no filter.
+data class AuditFilter(
+    val correlationId: String? = null,
+    val source: String? = null
+) {
+    internal val correlation: String? get() = correlationId?.trim()?.takeIf { it.isNotEmpty() }
+    internal val origin: String? get() = source?.trim()?.takeIf { it.isNotEmpty() }
+}
 
 // raw row. states stay as maps until we know what the caller may read. internal for tests.
 internal data class AuditRow(
@@ -48,7 +60,9 @@ internal data class AuditRow(
     val after: Map<String, Any?>?,
     val documentId: UUID?,
     val reason: String?,
-    val serviceAccount: String?
+    val serviceAccount: String?,
+    val correlationId: String? = null,
+    val source: String? = null
 )
 
 @Service
@@ -64,20 +78,22 @@ class AuditQueryService(
     // tenant-wide read: needs an organization-wide READ grant, not one on some object.
     // the admin trail (admin:*) is MANAGE_ORGANIZATION's instead (ADR-049): asked for by name, anyone else gets
     // nothing, not a 403 that says it is there; unasked, it is left out for them, before the limit.
+    // filter: the rows of one request or one source (ADR-050). it only narrows: who reads what stays as above.
     suspend fun list(
         objectName: String?,
         recordId: UUID?,
         operation: String?,
-        limit: Int?
+        limit: Int?,
+        filter: AuditFilter = AuditFilter()
     ): List<AuditEntry> {
         val user = currentUser.require()
         if (AdminEntity.isAdmin(objectName)) {
             if (!currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)) return emptyList()
-            return toEntries(user, fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin = true))
+            return toEntries(user, fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin = true, filter))
         }
         currentUser.requirePermission(user, Actions.READ)
         val withAdmin = currentUser.hasPermission(user, Actions.MANAGE_ORGANIZATION)
-        val rows = fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin)
+        val rows = fetch(user.organizationId, objectName, recordId, operation, limit, withAdmin, filter)
         return toEntries(user, inScope(user, rows))
     }
 
@@ -136,16 +152,21 @@ class AuditQueryService(
         recordId: UUID?,
         operation: String?,
         limit: Int?,
-        withAdmin: Boolean
+        withAdmin: Boolean,
+        filter: AuditFilter = AuditFilter()
     ): List<AuditRow> {
         val filters = StringBuilder()
         if (recordId != null) filters.append(" AND a.record_id = :recordId")
         if (!withAdmin) filters.append(" AND a.object_name NOT LIKE :adminNames")
+        // next to organization_id: (organization_id, correlation_id) is indexed
+        if (filter.correlation != null) filters.append(" AND a.correlation_id = :correlationId")
+        if (filter.origin != null) filters.append(" AND a.source = :source")
         var spec =
             db
                 .sql(
                     """
                     SELECT a.id, u.email, a.object_name, a.record_id, a.operation, a.occurred_at, a.document_id, a.reason,
+                           a.correlation_id, a.source,
                            a.before_state::text AS before_state, a.after_state::text AS after_state,
                            sa.name AS service_account
                     FROM ${schemas.metadata}.audit_log a
@@ -163,6 +184,8 @@ class AuditQueryService(
                 .bind("limit", (limit ?: 100).coerceIn(1, 500))
         if (recordId != null) spec = spec.bind("recordId", recordId)
         if (!withAdmin) spec = spec.bind("adminNames", AdminEntity.PREFIX + "%")
+        filter.correlation?.let { spec = spec.bind("correlationId", it) }
+        filter.origin?.let { spec = spec.bind("source", it) }
         return spec
             .map { row, _ ->
                 AuditRow(
@@ -176,7 +199,9 @@ class AuditQueryService(
                     after = parse(Rows.stringOrNull(row, "after_state")),
                     documentId = Rows.uuidOrNull(row, "document_id"),
                     reason = Rows.stringOrNull(row, "reason"),
-                    serviceAccount = Rows.stringOrNull(row, "service_account")
+                    serviceAccount = Rows.stringOrNull(row, "service_account"),
+                    correlationId = Rows.stringOrNull(row, "correlation_id"),
+                    source = Rows.stringOrNull(row, "source")
                 )
             }.all()
             .asFlow()
@@ -201,7 +226,9 @@ class AuditQueryService(
                 changes = changes(row, allowed),
                 documentId = row.documentId?.toString(),
                 reason = row.reason,
-                serviceAccount = row.serviceAccount
+                serviceAccount = row.serviceAccount,
+                correlationId = row.correlationId,
+                source = row.source
             )
         }
     }

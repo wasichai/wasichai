@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.springframework.security.core.context.SecurityContext
 import reactor.util.context.Context
 import reactor.util.context.ContextView
+import wasichai.core.platform.ChangeOrigin
 import java.util.UUID
 
 /**
@@ -24,15 +25,18 @@ internal object PlatformCaller {
     // spring security's own key (ReactiveSecurityContextHolder): present on every request through its filters
     private val SECURITY = SecurityContext::class.java
 
+    // source: what the audit rows of this block say wrote them (ADR-050), checked before anything runs
     suspend fun <T> run(
         organizationId: UUID,
+        source: String,
         block: suspend () -> T
     ): T {
         val reactor = currentCoroutineContext()[ReactorContext]?.context ?: Context.empty()
         check(!reactor.hasKey(SECURITY)) {
             "RecordService.asPlatform is for background work: a request, with a token or without one, never becomes the platform"
         }
-        return withContext(reactor.put(KEY, organizationId).asCoroutineContext()) { block() }
+        val labelled = ChangeOrigin.label(reactor.put(KEY, organizationId), source)
+        return withContext(labelled.asCoroutineContext()) { block() }
     }
 
     // the organization the platform acts in, or null when the caller is not the platform
