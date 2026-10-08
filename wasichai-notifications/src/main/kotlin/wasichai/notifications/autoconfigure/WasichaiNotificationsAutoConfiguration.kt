@@ -20,10 +20,10 @@ import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.UserDirectory
 import wasichai.core.metadata.MetadataService
-import wasichai.core.organization.OrganizationRepository
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.Connections
 import wasichai.core.platform.ModuleMigration
+import wasichai.core.platform.TenantDirectory
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.notifications.AudienceResolver
 import wasichai.notifications.InboxController
@@ -161,7 +161,7 @@ class WasichaiNotificationsAutoConfiguration {
         sources: ObjectProvider<NotificationSource>,
         clusterLock: ClusterLock,
         records: RecordService,
-        organizations: OrganizationRepository,
+        tenants: TenantDirectory,
         preparer: NotificationPreparer,
         writer: NotificationWriter,
         repository: NotificationRepository,
@@ -178,7 +178,7 @@ class WasichaiNotificationsAutoConfiguration {
             listOf(RulesWork(rules, metadata, ruleNotifications, properties.ruleInterval)),
             clusterLock,
             records,
-            organizations,
+            tenants,
             preparer,
             writer,
             repository,

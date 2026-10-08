@@ -3,6 +3,10 @@ package wasichai.core.data
 import com.fasterxml.jackson.annotation.JsonAnyGetter
 import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import wasichai.core.audit.AuditOperation
 import wasichai.core.audit.AuditService
@@ -23,7 +27,9 @@ import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.readableBy
 import wasichai.core.metadata.readableNames
 import wasichai.core.metadata.writableBy
+import wasichai.core.platform.Background
 import wasichai.core.platform.ChangeOrigin
+import wasichai.core.platform.TenantDirectory
 import java.time.Instant
 import java.util.UUID
 
@@ -76,8 +82,11 @@ class RecordService(
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
     private val references: AppendOnlyReferences,
-    private val readScopes: RecordReadScopes
+    private val readScopes: RecordReadScopes,
+    private val tenants: TenantDirectory
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
      * acts in that organization, with no user. No permission or field rule applies, as for ADMIN; the
@@ -105,6 +114,37 @@ class RecordService(
         source: String,
         block: suspend () -> T
     ): T = PlatformCaller.run(organizationId, source, block)
+
+    /**
+     * Runs [block] once per organization of the [TenantDirectory] (ADR-057), each inside
+     * [asPlatform] for that organization with [source] on its audit rows. With [objectName], only the
+     * organizations that define that object. In id order, one at a time.
+     *
+     * One organization's failure is logged and the loop goes on; the block handles what must not be
+     * lost. Background work only: inside a request it throws before any block runs, as [asPlatform]
+     * does. A bad [source] throws `IllegalArgumentException` before anything runs.
+     */
+    suspend fun forEachOrganization(
+        objectName: String? = null,
+        source: String = ChangeOrigin.PLATFORM,
+        block: suspend (organizationId: UUID) -> Unit
+    ) {
+        // before the directory: a replaced one may lack the tripwire, and asPlatform's own throw would be swallowed below
+        Background.require("RecordService.forEachOrganization", "never becomes the platform")
+        ChangeOrigin.requireValidSource(source)
+        val organizations = if (objectName == null) tenants.organizations() else tenants.organizationsWithObject(objectName)
+        organizations.forEach { tenant ->
+            try {
+                asPlatform(tenant.id, source) { block(tenant.id) }
+            } catch (e: CancellationException) {
+                // our own cancellation stops the loop; a block's own timeout is a failure like any other
+                currentCoroutineContext().ensureActive()
+                log.warn("{} failed for organization {} ({}): {}", source, tenant.slug, tenant.id, e.message, e)
+            } catch (e: Exception) {
+                log.warn("{} failed for organization {} ({}): {}", source, tenant.slug, tenant.id, e.message, e)
+            }
+        }
+    }
 
     suspend fun list(
         objectName: String,

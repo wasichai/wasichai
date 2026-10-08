@@ -242,7 +242,7 @@ what its rules published, in the delete's transaction, before the rules go with 
 `wasichai.core.metadata.FieldUsage`, for date rules (`NotificationRuleFieldUsage`: a rule, disabled ones included,
 names itself, "notification rule '<name>'", as a user of a field it reads, so deleting that field is a `409`). It uses
 core's ports, never core's tables: `OrgUnitDirectory`, `UserDirectory`, `RoleDirectory`, `RecordStore`,
-`OrganizationRepository.ids()`, `ClusterLock` and `Connections.unpooled`.
+`TenantDirectory`, `ClusterLock` and `Connections.unpooled`.
 
 **Overridable beans:** `audienceResolver`, `notificationPreparer`, `notificationRepository`, `inboxRepository`,
 `notificationWriter`, `inboxService`, `inboxController`, `notifications`, `notificationAdminService`,

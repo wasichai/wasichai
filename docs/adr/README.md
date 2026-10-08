@@ -80,3 +80,5 @@ supersedes it and says so in its status line.
   run](0054-audit-log-is-append-only-in-the-database.md)
 - [ADR-055: Creating and deleting tenants can be kept apart from administering
   one](0055-tenant-provisioning-apart-from-tenant-administration.md)
+- [ADR-057: Background work finds the tenants through a tenant
+  directory](0057-background-work-finds-the-tenants-through-a-tenant-directory.md)

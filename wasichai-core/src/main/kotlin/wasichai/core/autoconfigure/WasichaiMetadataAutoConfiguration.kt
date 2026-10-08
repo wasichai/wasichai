@@ -32,7 +32,9 @@ import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
 import wasichai.core.metadata.SystemFieldController
+import wasichai.core.platform.DatabaseTenantDirectory
 import wasichai.core.platform.SystemColumns
+import wasichai.core.platform.TenantDirectory
 import wasichai.core.platform.WasichaiSchemas
 
 // custom objects, fields, relationships and the field-type registry modules extend
@@ -78,15 +80,24 @@ class WasichaiMetadataAutoConfiguration {
         types: FieldTypeRegistry
     ): ObjectSchemaManager = ObjectSchemaManager(db, schemas, types)
 
+    // the tenants, for background work only (ADR-057). no controller takes it
+    @Bean
+    @ConditionalOnMissingBean
+    fun tenantDirectory(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas
+    ): TenantDirectory = DatabaseTenantDirectory(db, schemas)
+
     // switched off by an app that manages its data-table indexes itself
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty("wasichai.metadata.reconcile-indexes", havingValue = "true", matchIfMissing = true)
     fun declaredIndexReconciler(
+        tenants: TenantDirectory,
         objects: CustomObjectRepository,
         fields: CustomFieldRepository,
         schema: ObjectSchemaManager
-    ): DeclaredIndexReconciler = DeclaredIndexReconciler(objects, fields, schema)
+    ): DeclaredIndexReconciler = DeclaredIndexReconciler(tenants, objects, fields, schema)
 
     @Bean
     @ConditionalOnMissingBean

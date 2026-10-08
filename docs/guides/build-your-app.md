@@ -386,6 +386,37 @@ class OutboxPublisher(
   the lock and holds it until the transaction ends, joining yours if there is one.
 - Both compose with `TransactionalOperator`, either way round.
 
+A job that runs for every tenant gets them from `TenantDirectory`, or lets `RecordService.forEachOrganization` loop
+for it ([ADR-057](../adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md)):
+
+```kotlin
+@Component
+class Retention(
+    private val records: RecordService,
+    private val clusterLock: ClusterLock
+) {
+    @Scheduled(cron = "0 30 2 * * *")
+    suspend fun nightly() {
+        clusterLock.tryLock("sgspe.retention")?.use {
+            // only the tenants that have the app's model; each block runs as the platform of that tenant
+            records.forEachOrganization("expediente", source = "job:retention") { organizationId ->
+                records.list("expediente", expired).content.forEach { records.delete("expediente", UUID.fromString(it.id)) }
+            }
+        }
+    }
+}
+```
+
+- `TenantDirectory.organizations()` lists every organization, `organizationsWithObject(name)` only those that define
+  that object (enabled or not). Both answer `TenantRef(id, slug)`, ordered by id: a snapshot, not a live view.
+- `forEachOrganization(objectName = null, source = "platform") { }` walks that list in order and runs the block inside
+  `asPlatform(organizationId, source)`. One tenant's exception is logged and the next tenant still runs; keep what
+  must not be lost inside the block.
+- Both throw `IllegalStateException` inside a request, with a token or without one, so a tenant can never list the
+  others. Keep `TenantDirectory` out of your controllers, as wasichai's own build does for every controller of core
+  and the modules.
+- `CustomObjectRepository.findAllOrganizations()` is deprecated: repositories are internal (ADR-024).
+
 ## Records nobody rewrites, and rules the record API cannot skip
 
 Receipts and an outbox are written once. Mark the object `appendOnly` and nobody, `ADMIN` and the platform included,

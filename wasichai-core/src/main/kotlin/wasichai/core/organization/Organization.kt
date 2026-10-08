@@ -1,8 +1,6 @@
 package wasichai.core.organization
 
 import io.r2dbc.spi.Row
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
@@ -40,15 +38,6 @@ class OrganizationRepository(
             .map { row, _ -> map(row) }
             .one()
             .awaitFirstOrNull()
-
-    // every tenant, for background work that runs per organization. no REST list of organizations uses it
-    suspend fun ids(): List<UUID> =
-        db
-            .sql("SELECT id FROM ${schemas.metadata}.organizations ORDER BY id")
-            .map { row, _ -> Rows.uuid(row, "id") }
-            .all()
-            .asFlow()
-            .toList()
 
     private fun map(row: Row): Organization =
         Organization(
