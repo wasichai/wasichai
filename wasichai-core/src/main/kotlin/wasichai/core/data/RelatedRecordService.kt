@@ -22,6 +22,7 @@ import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.Relationship
+import wasichai.core.metadata.RelationshipDirection
 import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
 import wasichai.core.metadata.readableBy
@@ -46,12 +47,14 @@ class RelatedRecordService(
     private val guards: RecordWriteGuards,
     private val readScopes: RecordReadScopes
 ) {
-    // records on the other side of a relationship, from one record
+    // records on the other side of a relationship, from one record. direction: INVERSE walks a
+    // self-relationship from its target end (who points at me); 400 on any other relationship.
     suspend fun relatedRecords(
         objectName: String,
         recordId: UUID,
         relationshipName: String,
-        query: RecordQuery
+        query: RecordQuery,
+        direction: RelationshipDirection = RelationshipDirection.FORWARD
     ): Pair<ObjectDefinition, PageResponse<RecordRow>> {
         val user = currentUser.require()
         val obj =
@@ -65,7 +68,8 @@ class RelatedRecordService(
             relationshipName,
             query.copy(createdBy = access.ownerFilter(user)),
             narrow = { definition -> definition.readableBy(access.fieldAccess(user, definition.obj.id)) },
-            reader = user
+            reader = user,
+            direction = direction
         )
     }
 
@@ -79,7 +83,8 @@ class RelatedRecordService(
         relationshipName: String,
         query: RecordQuery,
         narrow: suspend (ObjectDefinition) -> ObjectDefinition = { it },
-        reader: AuthenticatedUser? = null
+        reader: AuthenticatedUser? = null,
+        direction: RelationshipDirection = RelationshipDirection.FORWARD
     ): Pair<ObjectDefinition, PageResponse<RecordRow>> {
         val obj =
             objects.findByName(organizationId, objectName)
@@ -87,7 +92,8 @@ class RelatedRecordService(
         val relationship =
             relationships.findByName(organizationId, relationshipName)
                 ?: throw NotFoundException("Relationship '$relationshipName' does not exist")
-        val view = relationshipService.side(relationship, obj)
+        // which end we stand on: the object's, or for a self-relationship the direction's
+        val view = relationshipService.side(relationship, obj, direction)
         val other = metadata.loadDefinition(organizationId, view.otherObject.name)
         val otherDefinition = narrow(other)
         val scoped = reader?.takeIf { readScopes.appliesTo(it) }
@@ -98,10 +104,10 @@ class RelatedRecordService(
         val resolved =
             when {
                 relationship.usesJoinTableFor() -> {
-                    val ids = linkedIds(relationship, obj, recordId)
+                    val ids = linkedIds(relationship, view.fromSource, recordId)
                     store.query(otherDefinition, organizationId, sideQuery.copy(ids = ids))
                 }
-                fkIsOn(relationship, obj) -> {
+                fkIsOn(relationship, view.fromSource) -> {
                     // this record carries the foreign key: follow it to a single record
                     val definition = metadata.loadDefinition(organizationId, obj.name)
                     val field = relationFieldOrFail(relationship)
@@ -353,10 +359,9 @@ class RelatedRecordService(
 
     private suspend fun linkedIds(
         relationship: Relationship,
-        obj: CustomObject,
+        fromSource: Boolean,
         recordId: UUID
     ): List<UUID> {
-        val fromSource = obj.id == relationship.sourceObjectId
         val selected = if (fromSource) "target_id" else "source_id"
         val matched = if (fromSource) "source_id" else "target_id"
         return db
@@ -377,10 +382,10 @@ class RelatedRecordService(
     // true when the record we start from owns the foreign key column
     private fun fkIsOn(
         relationship: Relationship,
-        obj: CustomObject
+        fromSource: Boolean
     ): Boolean =
-        (relationship.type.fkOnSource && obj.id == relationship.sourceObjectId) ||
-            (relationship.type.fkOnTarget && obj.id == relationship.targetObjectId)
+        (relationship.type.fkOnSource && fromSource) ||
+            (relationship.type.fkOnTarget && !fromSource)
 }
 
 // what a link or unlink looks like in a record's history: the relationship as the "field", the other

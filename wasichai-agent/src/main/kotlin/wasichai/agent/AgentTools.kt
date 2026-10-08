@@ -16,6 +16,7 @@ import wasichai.core.data.toResponse
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.MetadataMapper
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.RelationshipDirection
 import wasichai.core.metadata.RelationshipService
 
 // the payload section wasichai-gis fills. absent without gis, so a record simply has no geometry.
@@ -144,15 +145,17 @@ class AgentTools(
     private suspend fun listRelationships(input: Map<String, Any?>): Pair<Any, String> {
         val name = AgentToolInput.string(input, "object")
         val sides =
-            relationships.forObject(name).map {
-                mapOf(
-                    "relationship" to it.relationship.name,
-                    "label" to it.label,
-                    "type" to it.relationship.type.name,
-                    "relatedObject" to it.otherObject.name,
-                    "relatedLabel" to it.otherObject.label,
-                    "many" to it.many
-                )
+            relationships.forObject(name).map { side ->
+                buildMap {
+                    put("relationship", side.relationship.name)
+                    put("label", side.label)
+                    put("type", side.relationship.type.name)
+                    put("relatedObject", side.otherObject.name)
+                    put("relatedLabel", side.otherObject.label)
+                    put("many", side.many)
+                    // a self-relationship shows up once per direction; the model passes it back to related_records
+                    side.direction?.let { put("direction", it.wire) }
+                }
             }
         return mapOf("object" to name, "relationships" to sides) to "$name: ${sides.size} relationships"
     }
@@ -162,8 +165,9 @@ class AgentTools(
         val id = AgentToolInput.uuid(input, "id")
         val relationship = AgentToolInput.string(input, "relationship")
         val limit = AgentToolInput.limit(input)
+        val direction = RelationshipDirection.parse(AgentToolInput.optionalString(input, "direction"))
         val (definition, page) =
-            related.relatedRecords(name, id, relationship, RecordQuery(page = PageRequest.of(0, limit)))
+            related.relatedRecords(name, id, relationship, RecordQuery(page = PageRequest.of(0, limit)), direction)
         val payload =
             mapOf(
                 "relationship" to relationship,

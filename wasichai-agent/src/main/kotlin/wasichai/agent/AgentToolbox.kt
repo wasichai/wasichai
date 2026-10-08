@@ -77,11 +77,12 @@ class AgentToolbox(
         @LlmTool.Param(description = AgentToolCatalog.OBJECT_ARGUMENT) `object`: String,
         @LlmTool.Param(description = AgentToolCatalog.ID_ARGUMENT) id: String,
         @LlmTool.Param(description = AgentToolCatalog.RELATIONSHIP_ARGUMENT) relationship: String,
-        @LlmTool.Param(description = AgentToolCatalog.LIMIT_ARGUMENT, required = false) limit: Int? = null
+        @LlmTool.Param(description = AgentToolCatalog.LIMIT_ARGUMENT, required = false) limit: Int? = null,
+        @LlmTool.Param(description = AgentToolCatalog.RELATED_DIRECTION_ARGUMENT, required = false) direction: String? = null
     ): String =
         call(
             AgentToolCatalog.RELATED_RECORDS,
-            mapOf("object" to `object`, "id" to id, "relationship" to relationship, "limit" to limit)
+            mapOf("object" to `object`, "id" to id, "relationship" to relationship, "limit" to limit, "direction" to direction)
         )
 
     @LlmTool(name = AgentToolCatalog.RECORD_HISTORY, description = AgentToolCatalog.RECORD_HISTORY_DESCRIPTION)
