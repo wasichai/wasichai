@@ -285,7 +285,7 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "btree (organization_id, correlation_id)",
                 "column automation_runs.correlation_id #17 text"
             ).associateWith { "ADR-031 D35: correlation id and change source" } +
-            // MANAGE_TENANTS joins the built-in actions, object-less only (ADR-031 D41, ADR-056). the declared_object_id
+            // MANAGE_TENANTS joins the built-in actions, object-less only (ADR-031 D41, ADR-055). the declared_object_id
             // expression above keeps the six: an object-less row is null there either way
             listOf(
                 "constraint object_actions.object_actions_not_builtin CHECK ((name <> ALL ($BUILT_IN_ACTIONS_V15)))",

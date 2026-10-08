@@ -78,5 +78,5 @@ supersedes it and says so in its status line.
   too](0053-the-caller-is-told-their-tenant-wide-capabilities.md)
 - [ADR-054: The audit log is append-only in the database, with a purge only a configured login can
   run](0054-audit-log-is-append-only-in-the-database.md)
-- [ADR-056: Creating and deleting tenants can be kept apart from administering
-  one](0056-tenant-provisioning-apart-from-tenant-administration.md)
+- [ADR-055: Creating and deleting tenants can be kept apart from administering
+  one](0055-tenant-provisioning-apart-from-tenant-administration.md)

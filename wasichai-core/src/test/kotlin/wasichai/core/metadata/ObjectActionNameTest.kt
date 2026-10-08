@@ -22,7 +22,7 @@ class ObjectActionNameTest {
         }
     }
 
-    // issue 56 (ADR-056)
+    // issue 56 (ADR-055)
     @Test
     fun `MANAGE_TENANTS is built in too, so no object declares it`() {
         assertThatThrownBy { ObjectActionService.requireValidName("manage_tenants") }

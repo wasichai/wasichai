@@ -515,7 +515,7 @@ class PermissionEnforcementTest : WasichaiIntegrationTest() {
         )
     }
 
-    // MANAGE_TENANTS too: switch off, it is MANAGE_ORGANIZATION's (ADR-056)
+    // MANAGE_TENANTS too: switch off, it is MANAGE_ORGANIZATION's (ADR-055)
     @Test
     fun `the administrator holds every capability, admin and objects unchanged`() {
         client

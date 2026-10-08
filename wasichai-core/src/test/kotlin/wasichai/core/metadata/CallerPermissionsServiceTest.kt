@@ -103,7 +103,7 @@ class CallerPermissionsServiceTest {
             assertThat(answer.objects).isEqualTo(mapOf("predio" to listOf(Actions.READ, Actions.CREATE)))
         }
 
-    // switch off, MANAGE_TENANTS is MANAGE_ORGANIZATION's (ADR-056)
+    // switch off, MANAGE_TENANTS is MANAGE_ORGANIZATION's (ADR-055)
     @Test
     fun `the capabilities come in the fixed order, whatever the grant order`() =
         runTest {
@@ -126,7 +126,7 @@ class CallerPermissionsServiceTest {
             assertThat(answer.capabilities).containsExactly(Actions.MANAGE_METADATA, Actions.MANAGE_ORGANIZATION, Actions.MANAGE_TENANTS)
         }
 
-    // issue 56 (ADR-056): with separate provisioning, MANAGE_TENANTS is a grant's, never ADMIN's alone
+    // issue 56 (ADR-055): with separate provisioning, MANAGE_TENANTS is a grant's, never ADMIN's alone
     @Test
     fun `switch on, the administrator does not hold MANAGE_TENANTS without a grant row`() =
         runTest {

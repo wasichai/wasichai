@@ -305,7 +305,7 @@ These are the only intended differences. Anything else that behaves differently 
 - **D41. Creating and deleting tenants takes `MANAGE_TENANTS`.** The original guarded `POST /api/organizations` and
   `DELETE /api/organizations/current` with `MANAGE_ORGANIZATION`, which `ADMIN` always passes, so a customer's
   administrator could create and delete tenants. Now both check `MANAGE_TENANTS`, a new object-less built-in action
-  ([ADR-056](0056-tenant-provisioning-apart-from-tenant-administration.md)). With
+  ([ADR-055](0055-tenant-provisioning-apart-from-tenant-administration.md)). With
   `wasichai.organizations.separate-provisioning=false`, the default, it means `MANAGE_ORGANIZATION` and both routes
   behave as before. With `true`, only a role's `MANAGE_TENANTS` grant counts: `ADMIN` and `MANAGE_ORGANIZATION` get
   `403`, and a service account is refused either way. Observable changes, also by default: the action is accepted by

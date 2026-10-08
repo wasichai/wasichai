@@ -105,7 +105,7 @@ class CoreMigrationSqlTest {
             .contains("SELECT nullif('\${auditPurgeRole}', '')")
     }
 
-    // ADR-056: one more built-in action, object-less only. the seed and provisioning do not grant it
+    // ADR-055: one more built-in action, object-less only. the seed and provisioning do not grant it
     @Test
     fun `MANAGE_TENANTS joins the built-in actions, with no object, and the dev seed does not grant it`() {
         val tenants = sql("/db/wasichai/core/V15__manage_tenants.sql")

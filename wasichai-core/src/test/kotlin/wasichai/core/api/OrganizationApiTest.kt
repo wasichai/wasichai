@@ -77,7 +77,7 @@ class OrganizationApiTest : WasichaiIntegrationTest() {
             .isEqualTo("ADMIN")
     }
 
-    // issue 56 (ADR-056): switch off, the administrator provisions as before, yet hands MANAGE_TENANTS to nobody,
+    // issue 56 (ADR-055): switch off, the administrator provisions as before, yet hands MANAGE_TENANTS to nobody,
     // so no tenant holds it by the time the switch goes on
     @Test
     fun `by default MANAGE_TENANTS is the administrator's, but only a holder of the grant hands it on`() {

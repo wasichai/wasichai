@@ -1,4 +1,4 @@
-# ADR-056: Creating and deleting tenants can be kept apart from administering one
+# ADR-055: Creating and deleting tenants can be kept apart from administering one
 
 **Status**: accepted · 2026-10-08 · amends [ADR-053](0053-the-caller-is-told-their-tenant-wide-capabilities.md),
 builds on [ADR-042](0042-app-declared-actions.md), [ADR-043](0043-service-accounts.md) and

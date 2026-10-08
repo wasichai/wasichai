@@ -1,4 +1,4 @@
--- MANAGE_TENANTS (ADR-056): creating and deleting tenants, apart from administering one. a built-in action,
+-- MANAGE_TENANTS (ADR-055): creating and deleting tenants, apart from administering one. a built-in action,
 -- granted with no object only. the generated declared_object_id keeps its six names: an object-less row is
 -- null there anyway, so the declared-action foreign key never binds it.
 -- an object that already declared an action of this name (ADR-042) stops this migration: rename it first.

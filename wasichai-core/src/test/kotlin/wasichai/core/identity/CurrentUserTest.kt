@@ -12,7 +12,7 @@ import wasichai.core.common.ForbiddenException
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 
-// issue 56 (ADR-056): who may create and delete tenants, with wasichai.organizations.separate-provisioning off and on
+// issue 56 (ADR-055): who may create and delete tenants, with wasichai.organizations.separate-provisioning off and on
 class CurrentUserTest {
     private val organizationId = UUID.randomUUID()
 

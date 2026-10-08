@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiIntegrationTest
 
-// issue 56 (ADR-056): with separate provisioning, creating and deleting tenants takes MANAGE_TENANTS, granted to a
+// issue 56 (ADR-055): with separate provisioning, creating and deleting tenants takes MANAGE_TENANTS, granted to a
 // role, never implied by ADMIN or MANAGE_ORGANIZATION, and never a service account's. renaming stays MANAGE_ORGANIZATION.
 // the demo tenant plays the operator: a role of its own holds the action, bootstrapped by SQL as the guide says.
 // nothing here deletes the demo tenant: every DELETE runs in a tenant the test provisioned.

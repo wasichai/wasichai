@@ -275,7 +275,7 @@ class WasichaiAutoConfigurationTest {
         }
     }
 
-    // issue 56 (ADR-056): off by default, so ADMIN still provisions; on, CurrentUser asks for a grant
+    // issue 56 (ADR-055): off by default, so ADMIN still provisions; on, CurrentUser asks for a grant
     @Test
     fun `separate provisioning is off by default and reaches CurrentUser when on`() {
         val admin = AuthenticatedUser(UUID.randomUUID(), UUID.randomUUID(), "ana@example.com", listOf(AuthenticatedUser.ADMIN_ROLE))

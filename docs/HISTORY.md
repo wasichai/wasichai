@@ -7,7 +7,7 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 `POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always
 passes and the `ADMIN` role of every provisioned tenant holds, so a customer's administrator could create tenants and
 drop its own ([#56](https://github.com/wasichai/wasichai/issues/56)). Now both check a new object-less built-in action,
-`MANAGE_TENANTS` ([ADR-056](adr/0056-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41; amends
+`MANAGE_TENANTS` ([ADR-055](adr/0055-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41; amends
 ADR-053). The new property `wasichai.organizations.separate-provisioning` (default `false`) decides who holds it: off,
 whoever passes the `MANAGE_ORGANIZATION` check, exactly as before; on, only a role granted it with no object, the one
 built-in action `ADMIN` does not short-circuit. A service account never holds it (ADR-043). `PUT

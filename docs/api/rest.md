@@ -420,7 +420,7 @@ permission except `MANAGE_TENANTS`, and the administrator account:
 ```
 
 Renaming needs `MANAGE_ORGANIZATION`; provisioning and deleting need `MANAGE_TENANTS`
-([ADR-056](../adr/0056-tenant-provisioning-apart-from-tenant-administration.md)). Who holds it depends on
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)). Who holds it depends on
 `wasichai.organizations.separate-provisioning`:
 
 | Switch | `MANAGE_TENANTS` is held by |

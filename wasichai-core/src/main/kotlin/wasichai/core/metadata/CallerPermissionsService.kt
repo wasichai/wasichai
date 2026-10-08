@@ -26,7 +26,7 @@ class CallerPermissionsService(
         val all = objects.findAll(user.organizationId)
         // the services' own check, so the answer never disagrees with them: ADMIN holds the first two, a service
         // account never MANAGE_ORGANIZATION (ADR-043), and only a grant with no object counts. MANAGE_TENANTS
-        // follows MANAGE_ORGANIZATION, or with the switch on its own grant only (ADR-056)
+        // follows MANAGE_ORGANIZATION, or with the switch on its own grant only (ADR-055)
         val capabilities = CAPABILITIES.filter { currentUser.hasPermission(user, it) }
         // declared actions (ADR-042) follow the record ones, by name
         if (user.isAdmin) {

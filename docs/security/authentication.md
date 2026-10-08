@@ -98,13 +98,13 @@ Field- and record-level permissions are enforced: `own_records_only` limits a ro
 caller with several roles is restricted only if every one of them sets it), and field access hides unreadable fields
 from responses and refuses writes to unwritable ones. `GET /api/auth/me/permissions` tells the caller what they may do
 (ADR-020), the tenant-wide `MANAGE_METADATA`, `MANAGE_ORGANIZATION` and `MANAGE_TENANTS` included, as `capabilities`
-(ADR-053, ADR-056).
+(ADR-053, ADR-055).
 
 ### Tenant administration and tenant lifecycle
 
 `MANAGE_ORGANIZATION` administers one tenant: its users, roles, service accounts, units and name. `MANAGE_TENANTS`
 creates tenants (`POST /api/organizations`) and deletes the caller's own (`DELETE /api/organizations/current`)
-([ADR-056](../adr/0056-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41). By default they are one
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41). By default they are one
 right: `MANAGE_TENANTS` is held by whoever holds `MANAGE_ORGANIZATION`, `ADMIN` included, and every tenant's
 administrator can create and delete tenants, as in the original.
 

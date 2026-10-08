@@ -265,7 +265,7 @@ class AdminService(
                             "must be one of ${Actions.BUILT_IN.joinToString(", ")} or an action the object declares"
                         )
                     }
-                    // tenant-wide by nature: an object-scoped row would mean nothing (ADR-056)
+                    // tenant-wide by nature: an object-scoped row would mean nothing (ADR-055)
                     if (action == Actions.MANAGE_TENANTS && objectName != null) {
                         throw ValidationException("Action '$action' takes no object", "objectName", "must be empty for $action")
                     }
@@ -274,7 +274,7 @@ class AdminService(
                 }.distinctBy { it.first to it.second }
 
         // only a holder hands MANAGE_TENANTS on or takes it away, whatever the switch: else any tenant's
-        // administrator could grant it to itself (ADR-056)
+        // administrator could grant it to itself (ADR-055)
         val tenantsBefore = before.permissions.filter { it.action == Actions.MANAGE_TENANTS }.map { it.allowed }
         val tenantsAfter = resolved.filter { it.second == Actions.MANAGE_TENANTS }.map { it.third }
         if (tenantsBefore != tenantsAfter && !currentUser.holdsTenantsGrant(admin)) {

@@ -276,7 +276,7 @@ By default every tenant's administrator can create tenants (`POST /api/organizat
 several customers, keep those two routes with your own people: turn on
 `wasichai.organizations.separate-provisioning`, and only roles granted `MANAGE_TENANTS` may use them; a customer's
 `ADMIN` keeps its users, roles, service accounts, units and the tenant's name
-([ADR-056](../adr/0056-tenant-provisioning-apart-from-tenant-administration.md),
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md),
 [authentication.md](../security/authentication.md#tenant-administration-and-tenant-lifecycle)).
 
 The **operator tenant** is the one your people sign in to; **customer tenants** are the ones they create. Nobody gets
