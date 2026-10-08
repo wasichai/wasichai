@@ -2,6 +2,26 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Background work finds the tenants through a tenant directory
+
+A job that runs per tenant had no supported way to find the tenants: there is no REST list on purpose, and the only
+iteration was internal (`CustomObjectRepository.findAllOrganizations()`, which an app called anyway, and
+`OrganizationRepository.ids()`) ([#62](https://github.com/wasichai/wasichai/issues/62)). Core now declares
+`TenantDirectory` (`wasichai.core.platform`, bean `tenantDirectory`, `@ConditionalOnMissingBean`):
+`organizations()` and `organizationsWithObject(name)` answer `TenantRef(id, slug)` lists ordered by id, read by
+`DatabaseTenantDirectory` from `organizations` and `custom_objects`. Like `asPlatform`, both throw
+`IllegalStateException` inside a request, with a token or anonymous; the check moved from `PlatformCaller` to one
+internal `platform.Background` that both use. `RecordService.forEachOrganization(objectName = null, source =
+"platform") { organizationId -> }` runs a block per tenant inside `asPlatform`, logs one tenant's failure and goes on,
+and refuses a request before asking the directory. `DeclaredIndexReconciler` and the notifications loop walk the
+directory; `OrganizationRepository.ids()` is gone and `findAllOrganizations()` is deprecated. `RecordService` takes the
+directory as its last constructor argument. No REST change, no migration
+([ADR-057](adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md), follows up ADR-039). New tests:
+`TenantDirectoryTest`, five `forEachOrganization` cases in `RecordServicePlatformTest`, `TenantDirectoryBoundaryTest`
+(no controller of core or a module takes the directory) and the integration test `TenantDirectoryApiTest`; the
+`OrganizationRepository.ids()` case left `OrgUnitDirectoryTest`. Docs: [core.md](modules/core.md),
+[notifications.md](modules/notifications.md), [build-your-app.md](guides/build-your-app.md) "Background work".
+
 ## 2026-10-08 — A self-relationship is read from either end
 
 A relationship may join an object to itself (a parent unit, a previous version, a duplicate-of), but the related read

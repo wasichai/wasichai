@@ -80,7 +80,13 @@ An app overrides any core bean by declaring its own bean of the same type — se
   `asPlatform(organizationId, source = "job:retention") { }` for the app's own label), and the `ClusterLock` bean
   (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
   ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)). Work that runs per tenant
-  walks `OrganizationRepository.ids()`, every organization's id (there is still no REST list of organizations). A
+  asks the `TenantDirectory` bean (`wasichai.core.platform`): `organizations()` and `organizationsWithObject(name)`
+  answer `TenantRef(id, slug)` lists ordered by id, and throw `IllegalStateException` inside a request, with a token or
+  without, like `asPlatform`; no controller takes it, and there is still no REST list of organizations.
+  `RecordService.forEachOrganization(objectName = null, source = "platform") { organizationId -> }` runs a block per
+  tenant inside `asPlatform`, logging one tenant's failure and going on
+  ([ADR-057](../adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md)). The startup index
+  reconciliation and the notifications loop walk the same directory. A
   connection that holds session state (an advisory lock, a `LISTEN`) comes from
   `wasichai.core.platform.Connections.unpooled(factory)`, the factory under the R2DBC pool, so it never goes back to
   the pool with that state; `ClusterLock` takes its lease the same way.
@@ -224,7 +230,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `currentUser`, `accessPolicy`, `userRepository`, `jwtService`, `authService`, `authController`,
   `myOrgUnitsController`.
 - Metadata (`WasichaiMetadataAutoConfiguration`): `fieldTypeRegistry`, `customObjectRepository`,
-  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `metadataService`, `relationshipService`,
+  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `tenantDirectory`, `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
 - Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditLogOwnershipCheck`, `adminAudit`, `auditQueryService`,
