@@ -2,6 +2,19 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Security floors over the Spring Boot BOM
+
+Clears the open Dependabot alerts. Spring Boot 4.1.1, the newest release, still manages vulnerable patch versions, so
+`gradle/libs.versions.toml` gains floors the convention plugins apply: `wasichai.spring-module` imports the Jackson 2
+(`2.21.7`) and Jackson 3 (`3.1.7`) BOMs next to Boot's and constrains `com.ongres.scram` (pgjdbc and r2dbc-postgresql)
+to `3.3`, all as `api` so apps on the modules get them too; `wasichai.kotlin-library` lifts the `ktlint*` tool
+classpath from logback `1.3.15` to `1.5.38`; build-logic constrains its buildscript classpath so `kotlin-dsl` uses
+kotlin-gradle-plugin `2.4.20` instead of Gradle's embedded `2.4.10`. Fixed: jackson-core ReDoS in `NumberInput` and
+unbounded `_reportInvalidToken`; jackson-databind `Duration`/`XMLGregorianCalendar` parse DoS, forward-reference
+completion, unknown type ID retention, `Comparable` base type, `Path` scheme allowlist; SCRAM channel-binding
+downgrade; four logback-core advisories; Kotlin build cache deserialization. Each floor goes once Boot manages a
+version at least as new.
+
 ## 2026-10-08 — Creating and deleting tenants can be kept apart from administering one
 
 `POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always

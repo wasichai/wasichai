@@ -1,3 +1,12 @@
+// kotlin-dsl pulls gradle's embedded kotlin plugin (2.4.10, vulnerable build cache). lift it to ours
+buildscript {
+    dependencies {
+        constraints {
+            classpath(libs.kotlin.gradle.plugin)
+        }
+    }
+}
+
 plugins {
     `kotlin-dsl`
 }
