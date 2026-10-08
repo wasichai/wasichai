@@ -88,8 +88,12 @@ class CustomObjectRepository(
             .asFlow()
             .toList()
 
-    // every organization's objects, for the platform's own startup work (index reconciliation). no
-    // caller, no tenant: never reachable from a request.
+    // every organization's objects. core no longer reads it: the tenants of a job come from the
+    // TenantDirectory (ADR-057). kept one release for the apps that called it
+    @Deprecated(
+        "Repositories are internal (ADR-024). Use TenantDirectory.organizationsWithObject(name) for the tenants, " +
+            "then findAll(organizationId) or RecordService inside asPlatform (ADR-057)."
+    )
     suspend fun findAllOrganizations(): List<CustomObject> =
         db
             .sql("SELECT $OBJECT_COLUMNS FROM ${schemas.metadata}.custom_objects ORDER BY organization_id, name")

@@ -4,9 +4,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.reactor.asCoroutineContext
 import kotlinx.coroutines.withContext
-import org.springframework.security.core.context.SecurityContext
 import reactor.util.context.Context
 import reactor.util.context.ContextView
+import wasichai.core.platform.Background
 import wasichai.core.platform.ChangeOrigin
 import java.util.UUID
 
@@ -22,19 +22,14 @@ import java.util.UUID
 internal object PlatformCaller {
     private val KEY = Any()
 
-    // spring security's own key (ReactiveSecurityContextHolder): present on every request through its filters
-    private val SECURITY = SecurityContext::class.java
-
     // source: what the audit rows of this block say wrote them (ADR-050), checked before anything runs
     suspend fun <T> run(
         organizationId: UUID,
         source: String,
         block: suspend () -> T
     ): T {
+        Background.require("RecordService.asPlatform", "never becomes the platform")
         val reactor = currentCoroutineContext()[ReactorContext]?.context ?: Context.empty()
-        check(!reactor.hasKey(SECURITY)) {
-            "RecordService.asPlatform is for background work: a request, with a token or without one, never becomes the platform"
-        }
         val labelled = ChangeOrigin.label(reactor.put(KEY, organizationId), source)
         return withContext(labelled.asCoroutineContext()) { block() }
     }
@@ -43,5 +38,5 @@ internal object PlatformCaller {
     suspend fun current(): UUID? = currentCoroutineContext()[ReactorContext]?.context?.let(::organizationOf)
 
     // a security context next to the key means someone put a user in later: the user wins, never the wider caller
-    private fun organizationOf(context: ContextView): UUID? = if (context.hasKey(SECURITY)) null else context.getOrDefault<UUID>(KEY, null)
+    private fun organizationOf(context: ContextView): UUID? = if (Background.isRequest(context)) null else context.getOrDefault<UUID>(KEY, null)
 }

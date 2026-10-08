@@ -143,7 +143,8 @@ class RecordServiceTest {
             emptyList(),
             RecordWriteGuards(emptyList(), relationTargets),
             AppendOnlyReferencesFixtures.none(),
-            RecordReadScopesFixtures.none()
+            RecordReadScopesFixtures.none(),
+            TenantDirectoryFixtures.none()
         )
     }
 

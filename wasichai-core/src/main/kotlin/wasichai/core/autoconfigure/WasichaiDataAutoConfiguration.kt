@@ -41,6 +41,7 @@ import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
 import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.TenantDirectory
 import wasichai.core.platform.WasichaiSchemas
 
 // records, audit and related records. a module that gives records a state, or stores them another
@@ -158,9 +159,10 @@ class WasichaiDataAutoConfiguration {
         changes: ObjectProvider<RecordChangeListener>,
         guards: RecordWriteGuards,
         references: AppendOnlyReferences,
-        readScopes: RecordReadScopes
+        readScopes: RecordReadScopes,
+        tenants: TenantDirectory
     ): RecordService =
-        RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references, readScopes)
+        RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references, readScopes, tenants)
 
     @Bean
     @ConditionalOnMissingBean
