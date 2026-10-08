@@ -28,6 +28,16 @@ ktlint {
 
 // a plain library (no spring-module) still needs a test runner
 dependencies {
+    // security floors over the boot bom: highest version wins, and they ship in the published metadata
+    api(platform(lib("jackson-bom")))
+    api(platform(lib("jackson2-bom")))
+    constraints {
+        api(lib("scram-client"))
+        api(lib("scram-common"))
+        // ktlint's own classpath, not the library's: never published
+        add("ktlint", lib("ktlint-logback"))
+    }
+
     testImplementation(platform(lib("spring-boot-bom")))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

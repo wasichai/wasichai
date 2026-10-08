@@ -2,6 +2,25 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — Security floors for the open Dependabot alerts
+
+The 21 open Dependabot alerts came from five transitive dependencies that Spring Boot 4.1.1 (the latest 4.1 release)
+or the build tools still pin to a vulnerable version. `gradle/libs.versions.toml` now sets a floor for each, and Gradle
+resolves the highest version, so each floor can go once the Boot BOM or the tool reaches it:
+
+- Jackson 3 `tools.jackson` 3.1.5 → 3.1.7 and Jackson 2 `com.fasterxml.jackson` 2.21.5 → 2.21.7 (jackson-core ReDoS
+  and unbounded error token, jackson-databind DoS, `Path` scheme allowlist, `Comparable` base type), as
+  `api(platform(...jackson-bom))` in `wasichai.kotlin-library` and in `wasichai-bom`, so apps that import the BOM get
+  them too.
+- OnGres SCRAM 3.2 → 3.3 (silent channel-binding downgrade, GHSA-p9jg-fcr6-3mhf), pulled by `r2dbc-postgresql`, as a
+  constraint in the same two places.
+- logback 1.3.15 → 1.5.38 on the `ktlint` configuration only (ktlint 1.7.1 brings 1.3.15); never on a library's
+  classpath, never published.
+- kotlin-gradle-plugin 2.4.10 → 2.4.20 on `build-logic`'s buildscript classpath, where `kotlin-dsl` puts it
+  (GHSA-r937-wjx7-w2jp, build cache deserialization). Gradle 9.8.1 still embeds 2.4.10.
+
+No behaviour change; patch releases only.
+
 ## 2026-10-08 — A field's default is applied on create
 
 A field took `defaultValue`, stored it and answered it, and nothing used it: a create that left the field out stored
