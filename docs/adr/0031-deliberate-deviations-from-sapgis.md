@@ -337,6 +337,21 @@ These are the only intended differences. Anything else that behaves differently 
   `SelfRelationshipApiTest`, `RelationshipSideTest`, `RecordReadScopeApiTest`, `PageServiceTest` and
   `AgentToolCatalogTest`.
 
+**Because a client may send a create again**
+
+- **D45. A record create takes an `Idempotency-Key`.** The original had no idempotency: a `POST
+  /api/objects/{object}/records` sent twice, after a timeout or a `5xx`, created two records. Now the request may carry
+  `Idempotency-Key` (1 to 128 printable ASCII characters, a `400` on the header otherwise), kept per organization and
+  caller for `wasichai.idempotency.ttl` (24 hours) in the new core table `idempotency_keys`, written in the record's
+  transaction ([ADR-058](0058-idempotency-key-on-record-creation.md)). The first request answers as before, from the
+  stored bytes. The same key with the same method, path and body answers the stored `201` and body again with
+  `Idempotent-Replayed: true` and the stored record's `ETag`, and writes, audits and announces nothing; with another
+  body or object it is a `422` naming `Idempotency-Key`; while the first is still running it is a `409` with
+  `Retry-After: 1`. A failed first request stores nothing. With the key, a listener that fails after the write rolls
+  the record back too. Another caller's same key is independent. CORS exposes `Idempotent-Replayed` and `Retry-After`.
+  Without the header nothing changes. The table is a known schema-parity deviation. Tested by `IdempotencyKeysTest`,
+  `WasichaiAutoConfigurationTest` and `RecordIdempotencyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

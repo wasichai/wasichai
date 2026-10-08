@@ -2,6 +2,36 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — A record create takes an Idempotency-Key
+
+`POST /api/objects/{object}/records` was not idempotent: a client that timed out or got a `5xx` and sent the create
+again got a second record, which the append-only trail then keeps for good
+([#63](https://github.com/wasichai/wasichai/issues/63)). The create now takes an optional `Idempotency-Key` header (1
+to 128 printable ASCII characters, a `400` on the header otherwise), kept per organization and caller (a person, a
+service account, or the platform in process). The first request is processed as before and its `201` and JSON body are
+stored with the key in the new core table `idempotency_keys` (`V16__idempotency_keys.sql`), in the record's own
+transaction, and answered from those bytes. The same key with the same method, path and body (keys sorted, so order and
+spacing do not count) answers the stored status and body again with `Idempotent-Replayed: true` and the stored record's
+`ETag`, and writes, audits and announces nothing; with another body or object it is a `422` naming the header; while
+the first is still running, a `409` with `Retry-After: 1`. The in-flight marker is a transaction advisory lock taken
+without waiting, so a request never holds a connection waiting for another and a crash leaves no key behind; a row
+means committed, and the issue's `status` column is left out. A failed request stores nothing, so the key can be retried
+with a corrected body; with a key, a listener that fails after the write rolls the record back too. Keys live
+`wasichai.idempotency.ttl` (default `24h`; an expired key never replays) and `IdempotencyKeyPurge` deletes them every
+`wasichai.idempotency.purge-interval` (default `1h`, `0s` off) on one replica under `ClusterLock`. In process:
+`RecordService.create(objectName, request, reason, idempotencyKey)`, an overload; a replay returns the record as its
+stored JSON holds it. New in code: `IdempotencyKeys`, `IdempotencyKeyPurge`, `WasichaiIdempotencyProperties`, and in
+`common` `RetryLaterException` (a `409` with `Retry-After`) and `UnprocessableContentException` (`422`). The keyed
+create is its own handler method (`headers = "Idempotency-Key"`), so a request without the header runs exactly the
+code it ran before. CORS exposes `Idempotent-Replayed` and `Retry-After`. `RecordService` takes `IdempotencyKeys` as
+its last constructor argument. `POST /api/organizations` and links are a follow-up
+([ADR-058](adr/0058-idempotency-key-on-record-creation.md), ADR-031 D45; the table is a known schema-parity
+deviation). New tests: `IdempotencyKeysTest`, two cases in `WasichaiAutoConfigurationTest` (beans, CORS headers, the ttl
+property) and the integration test `RecordIdempotencyApiTest` (replay, one audit row and one listener call, `422`, two
+callers, concurrent senders, in flight `409`, a failed request retried, a failing listener, malformed keys, no header,
+expiry with and without the purge, in process and in the caller's transaction). Docs: [rest.md](api/rest.md) "Retrying
+a create", [core.md](modules/core.md).
+
 ## 2026-10-08 — Security floors over the Spring Boot BOM
 
 Clears the open Dependabot alerts. Spring Boot 4.1.1, the newest release, still manages vulnerable patch versions, so

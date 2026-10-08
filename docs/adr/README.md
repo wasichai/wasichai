@@ -82,3 +82,5 @@ supersedes it and says so in its status line.
   one](0055-tenant-provisioning-apart-from-tenant-administration.md)
 - [ADR-057: Background work finds the tenants through a tenant
   directory](0057-background-work-finds-the-tenants-through-a-tenant-directory.md)
+- [ADR-058: A record create takes an Idempotency-Key, held by an advisory lock and stored with the
+  record](0058-idempotency-key-on-record-creation.md)

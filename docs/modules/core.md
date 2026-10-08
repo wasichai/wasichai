@@ -52,7 +52,11 @@ An app overrides any core bean by declaring its own bean of the same type — se
   direction (`RelatedSide.direction`, ADR-031 D42).
 - Dynamic records and related records: `/api/objects/{object}/records`. A record answer carries its `ETag`
   (`"<updatedAt>"`); `PUT`, the partial `PATCH` and `DELETE` take `If-Match` and compare it in the write's own
-  statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)).
+  statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)). A create
+  may carry `Idempotency-Key`: one record per caller and key for `wasichai.idempotency.ttl`, a retry gets the stored
+  answer with `Idempotent-Replayed: true`, another body under the key is a `422`, one still running a `409` with
+  `Retry-After`; in process `RecordService.create(objectName, request, reason, idempotencyKey)`
+  ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
@@ -145,6 +149,8 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
 | `wasichai.audit.purge-role` | *(none)* | the database role whose own login may purge `audit_log` (ADR-054); read by the migration |
 | `wasichai.organizations.separate-provisioning` | `false` | `true`: creating and deleting tenants needs a `MANAGE_TENANTS` grant, not `ADMIN` (ADR-055) |
+| `wasichai.idempotency.ttl` | `24h` | how long an `Idempotency-Key` replays its create; past it the key is gone (ADR-058) |
+| `wasichai.idempotency.purge-interval` | `1h` | how often one replica deletes expired keys (`ClusterLock`); `0s` keeps the purge off |
 
 The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
 first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
@@ -266,6 +272,10 @@ the audit list by user and period ([ADR-052](../adr/0052-audit-pages-by-cursor-p
 `object_actions_not_builtin`, and `permissions_tenants_no_object` keeps its grants object-less
 ([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)). An object that declared an action
 of that name stops the migration; rename it first. Core has no `V13` or `V14` of its own yet.
+`V16__idempotency_keys.sql` adds `idempotency_keys` (organization, caller, key, request hash, stored status and body,
+`created_at`), unique per `(organization_id, user_id, key)` `NULLS NOT DISTINCT` (a null `user_id` is the platform),
+cascading from the organization and the user, with an index on `created_at` for the purge
+([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes
@@ -400,6 +410,9 @@ Core is always installed.
 - D42: a self-relationship is read from either end with `direction=forward|inverse` on the related read, and listed
   once per direction by `GET /api/objects/{object}/relationships`, each entry labelled for what its direction reads;
   forward is the walk the read always made.
+- D45: `Idempotency-Key` on `POST …/records`: a replay answers the stored `201` and body with `Idempotent-Replayed:
+  true`, another body is a `422`, a key still in flight a `409` with `Retry-After`; the `idempotency_keys` table
+  (ADR-058).
 
 ## Known limitations
 
