@@ -48,6 +48,14 @@ A module ships it, and core does not change.
 `unique` becomes a real `UNIQUE` constraint; `required` becomes `NOT NULL`. Validation lives in the
 database as well as in the application, so bad data cannot arrive by another route.
 
+`default_value` is text, parsed by the field type's own handler when the field is created or its default or enum
+options change, so a default the type cannot read is refused then (`400` on `defaultValue`), not on every later
+insert. Blank means none. On create, and only on create, a record takes the default of every attribute field its
+request leaves out; a key sent, `null` included, wins. The default is the field's value, so it is written even where
+the caller may not write the field. Updates never apply it, and records that exist keep what they hold. It is applied
+by the platform, not by the column: there is no SQL `DEFAULT`. A field type in a payload section (`GEOMETRY`) takes no
+default (ADR-031 D40).
+
 ## Relationships
 
 | Type | Where the foreign key lives | Read from source | Read from target |

@@ -421,13 +421,21 @@ permission, and the administrator account:
 ```http
 GET    /api/metadata/objects/{object}/fields
 POST   /api/metadata/objects/{object}/fields          add a field (ALTER TABLE ADD COLUMN)
-PUT    /api/metadata/objects/{object}/fields/{field}  label, required, unique, enum options, visibility
+PUT    /api/metadata/objects/{object}/fields/{field}  label, required, unique, enum options, default, visibility
 DELETE /api/metadata/objects/{object}/fields/{field}  drop the field and its column
 ```
 
 Updating applies DDL alongside the metadata, in one transaction: `required` toggles `NOT NULL`,
 `unique` adds or drops the constraint, `indexed` adds or drops the field's index, and new `enumOptions` replace the
 `CHECK`.
+
+`defaultValue` is text, parsed as the field's type parses a value sent for it: `"5"` for an `INTEGER`, `"true"` for a
+`BOOLEAN`, `"2026-01-31"` for a `DATE`, one of the options for an `ENUM`, a record id for a `RELATION`. One the type
+cannot parse is a `400` naming `defaultValue`, on `POST` and on `PUT`; a blank one is none, and on `PUT` clears it.
+New `enumOptions` that leave the current default out are a `400` naming `enumOptions`. A `PUT` without either
+property never checks the stored default. A `GEOMETRY` field takes no default. The default fills a record's field on
+create only (see "Defaults" under Records); records that exist keep what they hold. The column has no SQL `DEFAULT`:
+an insert that bypasses the API gets `NULL` (ADR-031 D40).
 
 `name` and `type` are immutable: views, forms and automation rules refer to a field by name, and a
 type change may lose data. Sending either is answered with `400` naming the field — add a new field
@@ -1016,6 +1024,25 @@ not a UUID":
 
 The id is not echoed back. A record deleted between that check and the write still fails the database's foreign key:
 that is a `409`, "A record this one points at does not exist any more" (ADR-031 D28, D29, D30).
+
+### Defaults
+
+A create fills every attribute the body leaves out with the field's `defaultValue`, if it has one (see Fields). A key
+that is sent wins, `null` included: `null` stores `NULL` on purpose, and is a `400` on a `required` field. The same
+holds for every create: `POST`, an app's `RecordService.create`, `asPlatform` and an automation's `CREATE_RECORD`.
+
+```json
+{ "attributes": { "codigo": "E-1" } }
+```
+
+stores `{ "codigo": "E-1", "estado": "NUEVO", "cantidad": 5 }` when `estado` defaults to `NUEVO` and `cantidad` to
+`5`, and answers it so. The default is the field's value, not the caller's input: it is stored where the caller's
+field permissions, or `editable: false`, forbid writing the field, so a `required` field with a default never stops a
+create on its permissions. Sending such a field is still the usual `400`. A `RELATION` default is checked like a value
+sent: a record the caller cannot read is a `400` on the field. A stored default that no longer parses (saved before
+defaults were checked) is a `400` on the field until it is fixed with `PUT …/fields/{field}`. The audit row's `after`,
+guards and listeners see the defaults as stored. `PUT` and `PATCH` never apply a default: `PUT` still clears what it
+leaves out (ADR-031 D40).
 
 ### Read scope
 
