@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.5.0](https://github.com/wasichai/wasichai/compare/v0.4.0...v0.5.0) (2026-10-08)
+
+
+### Features
+
+* **automation:** a run keeps the request's correlation id and labels its writes ([0345303](https://github.com/wasichai/wasichai/commit/0345303718d57cf77cb7ae5566156edc96a03bfb)), closes [#50](https://github.com/wasichai/wasichai/issues/50)
+* **core:** a RecordReadScope SPI narrows what a caller reads of an object ([57abaf3](https://github.com/wasichai/wasichai/commit/57abaf3664c657d96e4f13a4a97a5f088b240852)), closes [#48](https://github.com/wasichai/wasichai/issues/48)
+* **core:** a RecordReadScope SPI so an app can limit what a caller reads ([0cf194e](https://github.com/wasichai/wasichai/commit/0cf194efa79ad8148750b1a434bd411e07079d9a))
+* **core:** a TenantDirectory for background work that runs per tenant ([ae3341c](https://github.com/wasichai/wasichai/commit/ae3341ce88cd00f70753e053a76209a9b57faa9a))
+* **core:** a TenantDirectory for background work that runs per tenant ([b327f28](https://github.com/wasichai/wasichai/commit/b327f2830ad5bd61b789d3ab7a0cc99121b88305))
+* **core:** make audit_log append-only in the database, with a purge only a configured login runs ([c644754](https://github.com/wasichai/wasichai/commit/c644754ab5e66704609bb50025d6c466ac18a743))
+* **core:** make audit_log append-only in the database, with a purge only a configured login runs ([2a20efc](https://github.com/wasichai/wasichai/commit/2a20efc5b1b5c13d6b810c7d791013f2f4be4c95)), closes [#58](https://github.com/wasichai/wasichai/issues/58)
+* **core:** page and filter the audit log by date range and user ([e80dd76](https://github.com/wasichai/wasichai/commit/e80dd760c3ce84a81f3f39c53abb567ac1e8d384))
+* **core:** page and filter the audit log by date range and user ([a08aa1a](https://github.com/wasichai/wasichai/commit/a08aa1a361ecdb5b4d3fb0888d1d62c7e1b8d6cb)), closes [#52](https://github.com/wasichai/wasichai/issues/52)
+* **core:** read a self-relationship from either end with direction=forward|inverse ([6e59001](https://github.com/wasichai/wasichai/commit/6e5900124500dc6e2272c0f7b934654dfb7bf48f))
+* **core:** read a self-relationship from either end with direction=forward|inverse ([65363bb](https://github.com/wasichai/wasichai/commit/65363bbe85bfcd16ddd604f2c941d01752477a5f)), closes [#61](https://github.com/wasichai/wasichai/issues/61)
+* **core:** record changes to users, roles, permissions and metadata in the audit log ([1fc3da7](https://github.com/wasichai/wasichai/commit/1fc3da71b228b88cb6d9150c7401420e19f1b8a9))
+* **core:** record changes to users, roles, permissions and metadata in the audit log ([88db868](https://github.com/wasichai/wasichai/commit/88db868a14f4a51728e8d4346f032acc30102e64)), closes [#49](https://github.com/wasichai/wasichai/issues/49)
+* **core:** records answer an ETag, compare If-Match in the write itself, and take a partial PATCH ([0e44abc](https://github.com/wasichai/wasichai/commit/0e44abc8b4fc84b27e8700f6d7626c00eb3b2b6e))
+* **core:** records answer an ETag, honour If-Match in the write itself, and take a partial PATCH ([12f3abc](https://github.com/wasichai/wasichai/commit/12f3abc4005f4fc1b13ae35bf6410dbea9e697cb))
+* **core:** report tenant-wide capabilities in GET /api/auth/me/permissions ([b5f49a8](https://github.com/wasichai/wasichai/commit/b5f49a826451c8dbbc85fcc5896fddaf7075b8ba))
+* **core:** report tenant-wide capabilities in GET /api/auth/me/permissions ([eecb2fc](https://github.com/wasichai/wasichai/commit/eecb2fc948b2a569958a43b609c16ded73500484)), closes [#53](https://github.com/wasichai/wasichai/issues/53)
+* **core:** separate tenant provisioning and deletion behind MANAGE_TENANTS ([cab4a18](https://github.com/wasichai/wasichai/commit/cab4a18baf1fe983211649aa6b9d3b5df8523d61)), closes [#56](https://github.com/wasichai/wasichai/issues/56)
+* **core:** separate tenant provisioning and deletion from MANAGE_ORGANIZATION ([4e06d62](https://github.com/wasichai/wasichai/commit/4e06d627778124f875aba975055113dc3b528bf1))
+* **core:** store a correlation id and the source of the change on every audit row ([ce6ff8e](https://github.com/wasichai/wasichai/commit/ce6ff8e48aea87ce93dfc171e4b2faea627a77e9))
+* **core:** store a correlation id and the source of the change on every audit row ([3d1aa64](https://github.com/wasichai/wasichai/commit/3d1aa64652e69a7c006d3ef3c42d1c5fc94cfb30)), closes [#50](https://github.com/wasichai/wasichai/issues/50)
+* **workflow:** transitions look the record up in the caller's read scope ([cb59ad6](https://github.com/wasichai/wasichai/commit/cb59ad661b150d60111066653761ff39fcc0b905)), closes [#48](https://github.com/wasichai/wasichai/issues/48)
+
+
+### Bug Fixes
+
+* **core:** apply a field's defaultValue when a record is created without it ([e0d61a7](https://github.com/wasichai/wasichai/commit/e0d61a72dabaeebcff914ef1c932a2a0afe2de3e))
+* **core:** apply a field's defaultValue when a record is created without it ([4c441cd](https://github.com/wasichai/wasichai/commit/4c441cdb8a3503e005de7520f609c5e7f89b0cde)), closes [#60](https://github.com/wasichai/wasichai/issues/60)
+* **core:** keep the default read of a ONE_TO_MANY self-relationship as it was ([6d7bebf](https://github.com/wasichai/wasichai/commit/6d7bebf5f5d8ac178e715c3cecab1ca41463fb54)), closes [#61](https://github.com/wasichai/wasichai/issues/61)
+* **deps:** lift vulnerable jackson, scram, logback and kotlin plugin versions ([3f9eac6](https://github.com/wasichai/wasichai/commit/3f9eac6aa57bec8be5047ccb0c00f3e3bc7916bb))
+* **deps:** lift vulnerable jackson, scram, logback and kotlin plugin versions ([e2d4bcb](https://github.com/wasichai/wasichai/commit/e2d4bcbdce9c7b2026c4c2ca1a860905fdc515af))
+
 ## [0.4.0](https://github.com/wasichai/wasichai/compare/v0.3.3...v0.4.0) (2026-10-07)
 
 
