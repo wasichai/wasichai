@@ -3,6 +3,15 @@
 Base path `/api`. Everything except `/api/auth/login`, `/api/auth/token` and `/api/health` needs
 `Authorization: Bearer <token>`.
 
+## Correlation id
+
+Every response carries `X-Correlation-Id`, a `401` or `403` included. A request may send its own: exactly one value
+matching `^[A-Za-z0-9._-]{1,64}$` is kept and echoed; anything else (a malformed value, more than 64 characters, two
+headers) is replaced by a generated UUID, never echoed. With no header the server generates one. The id is stored on
+every audit entry the request writes, and on the automation runs it queues, so `GET /api/audit?correlationId=…` lists
+everything one request changed ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)). It is in
+the server's log lines as the MDC key `correlationId`.
+
 ## Modules and routes
 
 Core serves auth, organizations, objects, fields, declared actions, relationships, records, related records, caller
@@ -1050,7 +1059,7 @@ geometry, so a request serves one, named by `geometry` or the object's first. Fe
 ## Audit and history
 
 ```http
-GET /api/audit?objectName=&recordId=&operation=&limit=       every recorded change in the tenant
+GET /api/audit?objectName=&recordId=&operation=&correlationId=&source=&limit=   every recorded change in the tenant
 GET /api/objects/{object}/records/{id}/history?limit=        one record's trail, newest first
 ```
 
@@ -1059,7 +1068,8 @@ GET /api/objects/{object}/records/{id}/history?limit=        one record's trail,
   "id": "…", "userEmail": "ana@wasichai.local", "objectName": "predio", "recordId": "…",
   "operation": "UPDATE", "occurredAt": "2026-09-18T09:00:00Z",
   "changes": [ { "field": "area", "before": 850.5, "after": 1200 } ],
-  "reason": "corrección del monto"
+  "reason": "corrección del monto",
+  "correlationId": "5d1e0c4a-8f3b-4a62-9a57-0b9e1f2c7d10", "source": "api"
 }
 ```
 
@@ -1072,6 +1082,21 @@ instead to keep the trail readable.
 `reason` is what the write's `X-Change-Reason` said (see "Change reason" under Records), `null` when it said nothing.
 An automation's writes carry `automation '<name>'`. It is free text about the change, not a field value, so it is
 shown to whoever may read the entry ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
+
+`correlationId` is the [correlation id](#correlation-id) of the request that wrote the entry, and `source` what wrote
+it, set by the server, never by a client ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)):
+
+| `source` | Written by |
+|---|---|
+| `api` | a request: the record API, related records, admin routes, transitions, documents, an app's own endpoint |
+| `platform` | the app's background work through `RecordService.asPlatform` |
+| an app's label | the same, labelled by the app: `job:retention`, `import:42` |
+| `automation:<rule>` | a rule's actions; they keep the `correlationId` of the request whose change queued them |
+| `app` | an in-process write nothing labelled |
+
+Both are left out on entries written before they existed; `correlationId` is also left out when nothing gave one (the
+platform, an app's job). `correlationId=` and `source=` are exact-match filters, blank meaning none. They only narrow:
+`READ`, the admin entries' `MANAGE_ORGANIZATION`, the read scope and field permissions apply as before.
 
 A fourth operation, `ISSUE`, records a document being issued, and it is the only entry that points
 somewhere: it carries `documentId`, which `GET /api/documents/{id}` resolves. The other three have

@@ -36,6 +36,12 @@ refusal fails the run, never the write that triggered it. They may write an `api
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)). With no user to ask why, their writes carry the
 change reason `automation '<name>'`, which also satisfies a `requiresReason` object
 ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
+A queued run keeps the correlation id of the request whose change matched it (`automation_runs.correlation_id`), and
+the runner runs its actions inside `ChangeOrigin.within("automation:<name>", correlationId)`: every audit row they
+write, the `ISSUE` row of a document they issue and the runs their writes queue carry that id and the source
+`automation:<name>`, so `GET /api/audit?correlationId=…` shows the request and what its rules did after it
+([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)). A run with no id (a platform write, or
+queued before this) writes rows without one.
 
 Action kinds (`ActionType`): `UPDATE_FIELD`, `CREATE_RECORD`, `WEBHOOK`, `GENERATE_DOCUMENT`. `WEBHOOK` posts JSON
 to an admin-supplied URL; the URL is validated on save and again before every call, and a host that resolves to a
@@ -99,6 +105,7 @@ Migration location `classpath:db/wasichai/automation`, history table `flyway_his
 `definition` jsonb) and `automation_runs` (one row per automation matched against one change: status, depth, the
 change's payload, the steps it performed once it ran, and its error if it failed). `automation_runs` is claimed
 with `FOR UPDATE SKIP LOCKED`, so more than one instance can drain the same queue without stepping on each other.
+`V2__run_correlation_id.sql` adds `automation_runs.correlation_id`, nullable (ADR-050).
 
 ## Frontend package
 
@@ -126,6 +133,9 @@ this module's own port.
 
 [ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D3: a `GENERATE_DOCUMENT` automation action is refused
 at save time when wasichai-documents is absent, rather than failing later.
+
+D35: a rule's audit rows say `source: automation:<name>` and carry the triggering request's correlation id; the run
+keeps it in the new `automation_runs.correlation_id` column (ADR-050).
 
 ## Known limitations
 

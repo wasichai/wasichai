@@ -48,13 +48,20 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
-  write them through the `AdminAudit` port in `identity`, which `audit` implements.
+  write them through the `AdminAudit` port in `identity`, which `audit` implements. Every entry stores the request's
+  correlation id and its `source` (`api`, `platform`, an app's label, `automation:<rule>`, `app`), filtered by
+  `/api/audit?correlationId=&source=` ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
+- Correlation id: `CorrelationIdWebFilter` keeps a well-formed `X-Correlation-Id` or generates one, echoes it on
+  every response (a `401` included) and puts it in the Reactor context with the source `api`, and from there in the
+  MDC as `correlationId`. `ChangeOrigin` reads both (`correlationId()`, `source()`); a module labels work no request
+  carries with `ChangeOrigin.within(source, correlationId) { }`, as the automation runner does.
 - Admin: users and roles, under `/api/users` and `/api/roles`; service accounts for server-to-server callers, under
   `/api/service-accounts` ([ADR-043](../adr/0043-service-accounts.md)).
 - Organizational units: a tree of units per organization and who sits in which, under `/api/org-units` and
   `PUT /api/users/{id}/org-units`, with each person's own at `GET /api/auth/me/org-units`
   ([ADR-045](../adr/0045-organizational-units.md)). See "Organizational units" below.
-- Background work: `RecordService.asPlatform(organizationId) { }` for writes with no user, and the `ClusterLock` bean
+- Background work: `RecordService.asPlatform(organizationId) { }` for writes with no user (audited as `platform`, or
+  `asPlatform(organizationId, source = "job:retention") { }` for the app's own label), and the `ClusterLock` bean
   (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
   ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)). Work that runs per tenant
   walks `OrganizationRepository.ids()`, every organization's id (there is still no REST list of organizations). A
@@ -128,7 +135,9 @@ plain identifiers at boot.
 Without any YAML, `WasichaiEnvironmentPostProcessor` adds lowest-precedence defaults: `wasichai.database.*` from
 `WASICHAI_DB_HOST`, `WASICHAI_DB_PORT`, `WASICHAI_DB_NAME`, `WASICHAI_DB_USERNAME`, `WASICHAI_DB_PASSWORD` (env names, not a
 mechanical `WASICHAI_DATABASE_*` transform of the property path); `spring.r2dbc.url`/`username`/`password` built from
-those; an R2DBC pool of 5 to 20 connections; and `spring.webflux.problemdetails.enabled=true`. It never sets
+those; an R2DBC pool of 5 to 20 connections; `spring.webflux.problemdetails.enabled=true`; and
+`spring.reactor.context-propagation=auto`, so the correlation id reaches the MDC on every thread (set `limited` to
+turn that off; the header and the audit columns do not depend on it). It never sets
 `wasichai.security.jwt.secret` — only `WASICHAI_JWT_SECRET` does, and an app that sets neither fails at boot instead of
 starting with a usable default.
 
@@ -191,7 +200,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 `RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
-  `globalExceptionHandler`, `healthController`.
+  `globalExceptionHandler`, `correlationIdWebFilter`, `healthController`.
 - Security (`WasichaiSecurityAutoConfiguration`): `wasichaiJwtKey`, `jwtDecoder`, `passwordEncoder`,
   `securityFilterChain`, `corsConfigurationSource`, `roleQueries`, `roleDirectory`, `orgUnitDirectory`, `userDirectory`,
   `currentUser`, `accessPolicy`, `userRepository`, `jwtService`, `authService`, `authController`,
@@ -224,6 +233,9 @@ table, built by `ObjectSchemaManager`. A declared index is named `<physical tabl
 `V4__unique_constraints.sql` adds `custom_objects.unique_constraints`
 ([ADR-037](../adr/0037-composite-unique-constraints-and-409-on-repeats.md)), whose constraints are named
 `<physical table>_uq_<hash of its columns>`.
+`V10__audit_origin.sql` adds `audit_log.correlation_id` and `audit_log.source`, nullable, with `CHECK`s on their
+character classes and the index `audit_log_correlation_idx (organization_id, correlation_id)`
+([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 
 `V9__org_units.sql` keys `org_units` by `id`, unique per `(organization_id, code)`, with the `code` and `label` rules as
 `CHECK`s (label 1 to 120 characters) and a unit never its own parent. The parent is a composite foreign key
@@ -338,6 +350,8 @@ Core is always installed.
 - D34: changes to users, roles, permissions, service accounts, units, objects, fields, relationships and the tenant are
   audit entries under `admin:*` names, listed by `/api/audit` to `MANAGE_ORGANIZATION` only, `[]` to anyone else
   (ADR-049).
+- D35: `X-Correlation-Id` on every response, and `correlationId` and `source` on new audit entries, filtered by
+  `/api/audit?correlationId=&source=`; two nullable `audit_log` columns (ADR-050).
 
 ## Known limitations
 

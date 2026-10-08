@@ -332,6 +332,9 @@ class OutboxPublisher(
   and writes `created_by`, `updated_by` and the audit `user_id` as null, like an automation. Other services still need
   a user.
 - `asPlatform` throws inside a request, with a token or without one: hand the work to a job instead.
+- Its audit rows say `source: platform`. To name the job instead, pass a label matching `^[A-Za-z0-9._:-]{1,64}$`:
+  `records.asPlatform(organizationId, source = "job:retention") { }`. Then `GET /api/audit?source=job:retention`
+  lists what it changed ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 - `tryLock(key)` returns a lease or null, without waiting; `use { }` releases it. `withXactLock(key) { }` waits for
   the lock and holds it until the transaction ends, joining yours if there is one.
 - Both compose with `TransactionalOperator`, either way round.

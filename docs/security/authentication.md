@@ -74,6 +74,11 @@ Background code calls `RecordService.asPlatform(organizationId) { }`: one organi
 it on, and it refuses to run inside a request, authenticated or anonymous: it throws when Spring Security's context is
 present.
 
+The `source` of an audit entry (`api`, `platform`, `automation:<rule>`, an app's label) is set by server code the same
+way: no header, parameter, body property or claim reaches it. A client's `X-Correlation-Id` is kept only when it is one
+value matching `^[A-Za-z0-9._-]{1,64}$`, and replaced otherwise, so it cannot carry arbitrary text into logs, responses
+or the audit table ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
+
 ## Authorization
 
 Permissions are `(role, object, action)` with actions `READ`, `CREATE`, `UPDATE`, `DELETE` and

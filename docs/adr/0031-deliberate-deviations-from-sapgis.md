@@ -218,6 +218,21 @@ These are the only intended differences. Anything else that behaves differently 
   and `DELETE` entries list every key in `changes`. Record entries, their `changes` and the operation CHECK are
   unchanged. Tested by `AdminAuditApiTest`, `AuditQueryServiceAdminTest` and `AdminSnapshotsTest`.
 
+**Because an incident is followed across rows and services**
+
+- **D35. A correlation id and the source of every change.** The original had no correlation id and could not say what
+  wrote an audit row. Now every response carries `X-Correlation-Id`, a `401` or `403` from the security chain included:
+  the request's own when it sent exactly one value matching `^[A-Za-z0-9._-]{1,64}$`, a generated UUID otherwise (a
+  malformed or oversized value is replaced, never echoed). Every new audit entry stores it and a `source` set by code
+  only: `api` for a write made while serving a request, `platform` for `RecordService.asPlatform`, the app's own label
+  for `asPlatform(…, source = "…")`, `automation:<rule>` for a rule's actions (which keep the triggering request's id
+  through the queue), `app` otherwise ([ADR-050](0050-correlation-id-and-change-source-on-audit-rows.md)). Observable
+  changes: the response header; `correlationId` and `source` on `/api/audit` and history entries, left out when null
+  (every entry written before); `GET /api/audit?correlationId=&source=` filters, under the same read rules. Two
+  nullable `audit_log` columns and `automation_runs.correlation_id` are known schema-parity deviations. Tested by
+  `CorrelationIdWebFilterTest`, `ChangeOriginTest`, `RecordServicePlatformTest`, `AutomationDispatcherTest`,
+  `AuditOriginApiTest` and `AutomationOnlyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
