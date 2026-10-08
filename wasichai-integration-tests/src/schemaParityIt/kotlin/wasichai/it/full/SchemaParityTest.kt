@@ -276,7 +276,17 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "table notification_source_runs",
                 "table notification_targets",
                 "table notifications"
-            ).associateWith { "ADR-031 D32: notifications" }
+            ).associateWith { "ADR-031 D32: notifications" } +
+            // correlation id and source on audit rows, the id kept on queued runs (ADR-031 D35, ADR-050)
+            listOf(
+                "column audit_log.correlation_id #12 text",
+                "column audit_log.source #13 text",
+                "constraint audit_log.audit_log_correlation_id_valid CHECK ((correlation_id ~ '^[A-Za-z0-9._-]{1,64}\$'::text)) NOT VALID",
+                "constraint audit_log.audit_log_source_valid CHECK ((source ~ '^[A-Za-z0-9._:-]{1,64}\$'::text)) NOT VALID",
+                "index audit_log.audit_log_correlation_idx CREATE INDEX audit_log_correlation_idx ON META.audit_log USING " +
+                    "btree (organization_id, correlation_id)",
+                "column automation_runs.correlation_id #17 text"
+            ).associateWith { "ADR-031 D35: correlation id and change source" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

@@ -13,6 +13,7 @@ import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.metadata.MetadataService
+import wasichai.core.platform.ChangeOrigin
 
 // runs claimed work. no user sits behind this, so nothing here asks CurrentUser anything: an
 // automation acts as the platform, inside the organization that owns the record. ADR-016.
@@ -44,7 +45,11 @@ class AutomationRunner(
             val automation =
                 automations.findById(run.organizationId, run.automationId)
                     ?: throw NotFoundException("Automation ${run.automationId} no longer exists")
-            automation.definition.actions.forEach { steps += perform(automation, run, it) }
+            // every write below says automation:<name> and carries the triggering request's id (ADR-050),
+            // the document an action issues and the runs it queues included
+            ChangeOrigin.within(ChangeOrigin.automation(automation.name), run.correlationId) {
+                automation.definition.actions.forEach { steps += perform(automation, run, it) }
+            }
             runs.finish(run.id, RunStatus.SUCCEEDED, steps, null)
         } catch (e: Exception) {
             // a failed automation is a logged failure, never a failed user request: the write

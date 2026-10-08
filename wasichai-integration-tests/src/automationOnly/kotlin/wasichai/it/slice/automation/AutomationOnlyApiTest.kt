@@ -14,6 +14,7 @@ import wasichai.automation.DocumentIssuer
 import wasichai.core.data.RecordRequest
 import wasichai.core.data.RecordService
 import wasichai.core.identity.JwtService
+import wasichai.core.platform.ChangeOrigin
 import wasichai.it.support.SliceSmokeTest
 import java.util.UUID
 
@@ -70,7 +71,97 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
         assertRevised(name, id)
     }
 
-    private fun revisionWithRule(): String {
+    // ADR-050: the run is drained later, off the request, and still carries the request's id
+    @Test
+    fun `a rule's write carries the request's correlation id and says which rule wrote it`() {
+        val rule = uniqueName("auto")
+        val name = revisionWithRule(rule)
+        val correlationId = "req-" + uniqueName("")
+        val id =
+            client
+                .post()
+                .uri("/api/objects/$name/records")
+                .header(HttpHeaders.AUTHORIZATION, admin)
+                .header(ChangeOrigin.HEADER, correlationId)
+                .bodyValue(mapOf("attributes" to mapOf("codigo" to "C-1")))
+                .exchange()
+                .expectStatus()
+                .isCreated
+                .expectHeader()
+                .valueEquals(ChangeOrigin.HEADER, correlationId)
+                .expectBody(String::class.java)
+                .returnResult()
+                .responseBody!!
+                .substringAfter("\"id\":\"")
+                .substringBefore("\"")
+
+        assertThat(runBlocking { runner.drainOnce(50) }).isGreaterThanOrEqualTo(1)
+
+        assertRevised(name, id)
+        client
+            .get()
+            .uri("/api/audit?correlationId=$correlationId")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.length()")
+            .isEqualTo(2)
+            .jsonPath("$[0].operation")
+            .isEqualTo("UPDATE")
+            .jsonPath("$[0].source")
+            .isEqualTo("automation:$rule")
+            .jsonPath("$[0].reason")
+            .isEqualTo("automation '$rule'")
+            .jsonPath("$[0].recordId")
+            .isEqualTo(id)
+            .jsonPath("$[1].operation")
+            .isEqualTo("CREATE")
+            .jsonPath("$[1].source")
+            .isEqualTo("api")
+            .jsonPath("$[*].correlationId")
+            .isEqualTo(listOf(correlationId, correlationId))
+        client
+            .get()
+            .uri("/api/audit?correlationId=$correlationId&source=automation:$rule")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.length()")
+            .isEqualTo(1)
+    }
+
+    // ADR-050: no request, no id; the platform's row and the rule's each say who wrote them
+    @Test
+    fun `a rule on a platform write says automation, the platform's row says platform`() {
+        val rule = uniqueName("auto")
+        val name = revisionWithRule(rule)
+        val organizationId =
+            runBlocking { UUID.fromString(decoder.decode(admin.removePrefix("Bearer ")).awaitSingle().getClaimAsString(JwtService.CLAIM_ORGANIZATION)) }
+        runBlocking { records.asPlatform(organizationId) { records.create(name, RecordRequest(mapOf("codigo" to "P-1"))) } }
+
+        assertThat(runBlocking { runner.drainOnce(50) }).isGreaterThanOrEqualTo(1)
+
+        client
+            .get()
+            .uri("/api/audit?objectName=$name")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[*].source")
+            .isEqualTo(listOf("automation:$rule", "platform"))
+            .jsonPath("$[0].correlationId")
+            .doesNotExist()
+            .jsonPath("$[1].correlationId")
+            .doesNotExist()
+    }
+
+    private fun revisionWithRule(rule: String = uniqueName("auto")): String {
         val name = uniqueName("revision")
         client
             .post()
@@ -91,7 +182,7 @@ class AutomationOnlyApiTest : SliceSmokeTest() {
             .header(HttpHeaders.AUTHORIZATION, admin)
             .bodyValue(
                 mapOf(
-                    "name" to uniqueName("auto"),
+                    "name" to rule,
                     "label" to "Automatizacion",
                     "definition" to
                         mapOf(

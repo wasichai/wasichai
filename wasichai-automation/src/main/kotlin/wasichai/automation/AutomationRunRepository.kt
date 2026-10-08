@@ -15,7 +15,7 @@ import java.util.UUID
 private const val COLUMNS =
     "id, organization_id, automation_id, object_name, record_id, trigger_type, status, depth, " +
         "payload::text AS payload, steps::text AS steps, error, attempts, user_id, " +
-        "created_at, started_at, finished_at"
+        "created_at, started_at, finished_at, correlation_id"
 
 @Repository
 class AutomationRunRepository(
@@ -30,9 +30,9 @@ class AutomationRunRepository(
                     """
                     INSERT INTO ${schemas.metadata}.automation_runs
                         (id, organization_id, automation_id, object_name, record_id, trigger_type, status, depth,
-                         payload, steps, error, user_id, finished_at)
+                         payload, steps, error, user_id, finished_at, correlation_id)
                     VALUES (:id, :org, :automationId, :objectName, :recordId, :triggerType, :status, :depth,
-                            CAST(:payload AS jsonb), CAST(:steps AS jsonb), :error, :userId, :finishedAt)
+                            CAST(:payload AS jsonb), CAST(:steps AS jsonb), :error, :userId, :finishedAt, :correlationId)
                     RETURNING $COLUMNS
                     """.trimIndent()
                 ).bind("id", run.id)
@@ -46,6 +46,7 @@ class AutomationRunRepository(
         spec = spec.bindNullable("recordId", run.recordId, UUID::class.java)
         spec = spec.bindNullable("userId", run.userId, UUID::class.java)
         spec = spec.bindNullable("error", run.error, String::class.java)
+        spec = spec.bindNullable("correlationId", run.correlationId, String::class.java)
         spec =
             spec.bindNullable(
                 "steps",
@@ -156,6 +157,7 @@ class AutomationRunRepository(
             createdAt = Rows.instantOrNull(row, "created_at"),
             startedAt = Rows.instantOrNull(row, "started_at"),
             finishedAt = Rows.instantOrNull(row, "finished_at"),
+            correlationId = Rows.stringOrNull(row, "correlation_id"),
             // only the log query joins the definition in
             automationName =
                 if (metadata.columnMetadatas.any { it.name.equals("automation_name", ignoreCase = true) }) {
