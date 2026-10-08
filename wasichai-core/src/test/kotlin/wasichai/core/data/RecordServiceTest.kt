@@ -146,7 +146,7 @@ class RecordServiceTest {
             RecordReadScopesFixtures.none(),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     // issue 39 (D30): the relation check reads in the caller's scope, so it must be told who calls

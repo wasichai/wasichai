@@ -214,7 +214,7 @@ class RecordServicePreconditionTest {
             RecordReadScopes(scopes, mock(RecordStore::class.java)),
             TenantDirectoryFixtures.none(),
             IdempotencyKeysFixtures.none()
-        )
+        ) { TransactionalOperatorFixtures.inline() }
     }
 
     private fun stored(vararg attributes: Pair<String, Any?>): UUID =

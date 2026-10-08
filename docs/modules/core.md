@@ -56,7 +56,8 @@ An app overrides any core bean by declaring its own bean of the same type — se
   may carry `Idempotency-Key`: one record per caller and key for `wasichai.idempotency.ttl`, a retry gets the stored
   answer with `Idempotent-Replayed: true`, another body under the key is a `422`, one still running a `409` with
   `Retry-After`; in process `RecordService.create(objectName, request, reason, idempotencyKey)`
-  ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
+  ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)). Many records of one object in one call:
+  `RecordService.createAll`, in process only (see "Many records of one object" below).
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
@@ -129,6 +130,30 @@ Screens (`packages/core/src/app/coreModule.ts` in
 objects list and builder, relationships, the record list/form/detail pages, users, roles, permissions and audit. Nav
 groups: `data` (order 10), `builder` (30, filled by other modules), `automation` (40, filled by other modules) and
 `administration` (50) — modules that add screens of their own place them in these same groups.
+
+### Many records of one object
+
+`RecordService.createAll(objectName, requests, reason = null)` creates a list of records of one object as the current
+caller, a person, a service account or the platform inside `asPlatform`
+([ADR-062](../adr/0062-batch-record-creation.md)):
+
+```kotlin
+val cuotas: List<RecordResponse> =
+    records.createAll(
+        "cuota_arbitrio",
+        periodos.map { periodo ->
+            RecordRequest(mapOf("predio" to predioId, "servicio" to servicioId, "periodo" to periodo, "monto" to monto))
+        }
+    )
+```
+
+It loads the definition, checks the permission, reads the field access and the workflow state once per batch, and looks
+the `RELATION` targets up once per target object over the batch's distinct ids, instead of once per record. Every record
+still gets `create`'s checks, defaults, write guards, audit row and listeners, and the answers come in request order,
+each what `create` would answer. The batch throws the error the first failing record would throw from `create`, in
+request order, and stores nothing. What it looked up stays as read at the start of the batch, so a change its own
+listeners make to a target's readability is not seen. It runs in the caller's transaction (ADR-038) or, with none, in
+its own. There is no REST route and no `Idempotency-Key` variant; `update` and `delete` have no batch form.
 
 ## Configuration
 

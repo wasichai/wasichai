@@ -69,6 +69,15 @@ class RecordWriteGuards(
         definition: ObjectDefinition,
         change: RecordWrite,
         reader: AuthenticatedUser? = null
+    ) = beforeWrite(definition, change, reader, checked = null)
+
+    // [checked]: a batch's relation lookups (issue 77), made by [relationTargets] for this reader. an
+    // overload: the public one above keeps its signature for the modules that call it
+    internal suspend fun beforeWrite(
+        definition: ObjectDefinition,
+        change: RecordWrite,
+        reader: AuthenticatedUser?,
+        checked: RelationTargets.Checked?
     ) {
         require(reader == null || (reader.userId == change.userId && reader.organizationId == change.organizationId)) {
             "the reader is the one who writes"
@@ -92,10 +101,18 @@ class RecordWriteGuards(
             check(reader != null || change.userId == null || relationTargets.lookups(definition, attributes, change.before).isEmpty()) {
                 "a write by a user that sets RELATION values must pass that user as the reader"
             }
-            relationTargets.rejectMissing(change.organizationId, definition, attributes, change.before, reader)
+            relationTargets.rejectMissing(change.organizationId, definition, attributes, change.before, reader, checked)
         }
         guards.forEach { it.beforeWrite(change) }
     }
+
+    // a batch's RELATION targets, each looked up once (issue 77): handed back to beforeWrite for each of its records
+    internal suspend fun relationTargets(
+        organizationId: UUID,
+        definition: ObjectDefinition,
+        attributes: List<Map<String, Any?>>,
+        reader: AuthenticatedUser?
+    ): RelationTargets.Checked = relationTargets.check(organizationId, definition, attributes, reader)
 }
 
 // apiOnly: the generic record api is a second door around the app's own rules (ADR-040). in-process callers pass.

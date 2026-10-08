@@ -40,6 +40,33 @@ open class RelationTargets(
     private val fields: CustomFieldRepository,
     private val readScopes: RecordReadScopes
 ) {
+    // a batch's RELATION targets, looked up once per target object (issue 77). only for the reader and
+    // organization it was made for
+    internal class Checked(
+        val organizationId: UUID,
+        val reader: AuthenticatedUser?,
+        // target object -> the ids of the batch found there
+        val found: Map<UUID, Set<UUID>>
+    )
+
+    // what rejectMissing would look up for each of [attributes], as creates (no before): one read per target
+    // object for the whole batch, distinct ids only. nothing to look up: no read at all
+    internal suspend fun check(
+        organizationId: UUID,
+        definition: ObjectDefinition,
+        attributes: List<Map<String, Any?>>,
+        reader: AuthenticatedUser?
+    ): Checked {
+        val looked =
+            attributes
+                .flatMap { lookups(definition, it, before = null) }
+                .groupBy({ it.first.relationTargetObjectId!! }, { it.second })
+                .mapValues { (_, ids) -> ids.toSet() }
+        val scope = scopeOf(reader)
+        val found = looked.mapValues { (targetObjectId, ids) -> existing(organizationId, targetObjectId, ids.toList(), scope) }
+        return Checked(organizationId, reader, found)
+    }
+
     // [before]: the stored row on an update. a value it already holds is not looked up again, in scope
     // or not: keeping a link is no new claim on its target.
     // [reader]: who writes. null (the platform, an automation) or ADMIN: the organization is the scope.
@@ -49,14 +76,32 @@ open class RelationTargets(
         attributes: Map<String, Any?>,
         before: Map<String, Any?>? = null,
         reader: AuthenticatedUser? = null
+    ) = rejectMissing(organizationId, definition, attributes, before, reader, checked = null)
+
+    // [checked]: a batch's lookups (issue 77). an id it found is answered from it; any other is read as ever, so a
+    // target an earlier record of the batch brought about (a listener's write) passes, as in a create loop.
+    // an overload, not a default: Checked stays internal and the public signature stays as it was
+    internal suspend fun rejectMissing(
+        organizationId: UUID,
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>,
+        before: Map<String, Any?>? = null,
+        reader: AuthenticatedUser? = null,
+        checked: Checked?
     ) {
+        // another reader's cache could answer what this one may not see
+        require(checked == null || (checked.reader == reader && checked.organizationId == organizationId)) {
+            "a batch's relation lookups answer only the reader and organization they were made for"
+        }
         val sent = lookups(definition, attributes, before)
         if (sent.isEmpty()) return
-        // a service account is never ADMIN (ADR-043), so it is always scoped
-        val scope = reader?.takeUnless { it.isAdmin }
+        val scope = scopeOf(reader)
         val missing =
             sent.groupBy { it.first.relationTargetObjectId!! }.flatMap { (targetObjectId, pairs) ->
-                val found = existing(organizationId, targetObjectId, pairs.map { it.second }.distinct(), scope)
+                val ids = pairs.map { it.second }.distinct()
+                val known = checked?.found?.get(targetObjectId).orEmpty()
+                val rest = ids.filter { it !in known }
+                val found = known + if (rest.isEmpty()) emptySet() else existing(organizationId, targetObjectId, rest, scope)
                 pairs.filter { it.second !in found }.map { it.first }
             }
         if (missing.isEmpty()) return
@@ -139,6 +184,9 @@ open class RelationTargets(
                 terms.forEach { append(" AND $it") }
             }
         }
+
+    // a service account is never ADMIN (ADR-043), so it is always scoped
+    private fun scopeOf(reader: AuthenticatedUser?): AuthenticatedUser? = reader?.takeUnless { it.isAdmin }
 
     private fun uuidOf(value: Any?): UUID? =
         when (value) {

@@ -9,6 +9,8 @@ import kotlinx.coroutines.ensureActive
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.reactive.TransactionalOperator
+import org.springframework.transaction.reactive.executeAndAwait
 import wasichai.core.audit.AuditOperation
 import wasichai.core.audit.AuditService
 import wasichai.core.common.Actions
@@ -71,6 +73,7 @@ data class RecordResponse(
     fun flattened(): Map<String, Map<String, Any?>> = sections
 }
 
+// [transactions]: resolved on first createAll, as in IdempotencyKeys. createAll opens one only when the caller has none (ADR-062)
 @Service
 class RecordService(
     private val metadata: MetadataService,
@@ -85,9 +88,12 @@ class RecordService(
     private val references: AppendOnlyReferences,
     private val readScopes: RecordReadScopes,
     private val tenants: TenantDirectory,
-    private val idempotency: IdempotencyKeys
+    private val idempotency: IdempotencyKeys,
+    transactions: () -> TransactionalOperator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    private val operator by lazy(transactions)
 
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
@@ -253,7 +259,8 @@ class RecordService(
         return OnceCreated(record, answer.status, answer.body, outcome.replayed)
     }
 
-    // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040)
+    // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040). the same steps as
+    // createAll, so a rule can never apply to one and not the other (issue 77)
     internal suspend fun create(
         objectName: String,
         request: RecordRequest,
@@ -261,30 +268,126 @@ class RecordService(
         viaApi: Boolean
     ): RecordResponse {
         val write = open(objectName, Actions.CREATE, reason, viaApi)
+        val fieldAccess = write.caller.fieldAccess(write.definition.obj.id)
+        val creation = creation(write.definition, fieldAccess, request)
+        val workflow = workflows.stateOf(write.caller.organizationId, write.definition.obj.id)
+        return write.created(creation, fieldAccess, workflow, checked = null)
+    }
+
+    /**
+     * Creates a record for each of [requests], in order, as [create] would (issue 77, ADR-062). The
+     * answers come back in request order, each one exactly what [create] answers for its request.
+     *
+     * The object, the permission, the caller's field access, the workflow and every distinct RELATION
+     * target are looked up once for the batch, not once per record. Guards, the store write, the audit
+     * row and the listeners still run for each record, in order.
+     *
+     * One transaction: the caller's when there is one (ADR-038), else one of its own. Every record is
+     * stored, audited and told, or none is. A failure throws what calling [create] for each request in
+     * order would throw first, and stores nothing. What it looked up is read at the start: a change its
+     * own listeners make to a found target's readability is not seen, where a create loop sees it. In-process only, as [create] (`apiOnly`
+     * objects take it); there is no [IdempotencyKeys] variant. [reason]: as for [create] (ADR-041),
+     * one for every record. An empty list answers an empty list and checks nothing.
+     */
+    suspend fun createAll(
+        objectName: String,
+        requests: List<RecordRequest>,
+        reason: String? = null
+    ): List<RecordResponse> {
+        if (requests.isEmpty()) return emptyList()
+        return if (inTransaction()) {
+            createEach(objectName, requests, reason)
+        } else {
+            operator.executeAndAwait { createEach(objectName, requests, reason) }
+        }
+    }
+
+    private suspend fun createEach(
+        objectName: String,
+        requests: List<RecordRequest>,
+        reason: String?
+    ): List<RecordResponse> {
+        val write = open(objectName, Actions.CREATE, reason, viaApi = false)
         val caller = write.caller
         val definition = write.definition
-        val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
+        // checked up front, thrown when the loop gets there: the first record to fail wins, as in a create loop
+        val creations =
+            requests.map { request ->
+                try {
+                    Result.success(creation(definition, fieldAccess, request))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            }
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
+        val checked = relationTargets(write, creations)
+        return creations.map { write.created(it.getOrThrow(), fieldAccess, workflow, checked) }
+    }
+
+    // what the guard would look up record by record, once: defaults included, only the records the loop reaches.
+    // best effort: a lookup that throws (an app's read scope, say) is left to the guard of the record that needs it,
+    // so the batch throws where a create loop would, after any earlier record's own refusal
+    private suspend fun relationTargets(
+        write: Write,
+        creations: List<Result<Creation>>
+    ): RelationTargets.Checked? {
+        val reached = creations.takeWhile { it.isSuccess }.map { it.getOrThrow().attributes }
+        return try {
+            guards.relationTargets(write.caller.organizationId, write.definition, reached, write.caller.user)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.debug("batch relation lookups failed, each record looks its own up: {}", e.message)
+            null
+        }
+    }
+
+    // a create's request, judged without the database: what the store writes, and with which definition
+    private class Creation(
+        val target: ObjectDefinition,
+        val attributes: Map<String, Any?>,
+        val sections: Map<String, Map<String, Any?>>
+    )
+
+    private fun creation(
+        definition: ObjectDefinition,
+        fieldAccess: FieldAccess,
+        request: RecordRequest
+    ): Creation {
+        val sections = installed(request.sections)
         // only what the caller sent is theirs to be refused; a default is the field's own value (issue 60)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         rejectUnwritableRequired(definition, fieldAccess)
         val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess), request.attributes, types)
-        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
+        return Creation(target, attributes, sections)
+    }
+
+    // one record of a create: guards, the store write, audit and listeners, the caller's answer.
+    // [checked]: a batch's relation lookups, null for a single create
+    private suspend fun Write.created(
+        creation: Creation,
+        fieldAccess: FieldAccess,
+        workflow: ObjectWorkflowState,
+        checked: RelationTargets.Checked?
+    ): RecordResponse {
         // a guard judges what the record will hold, defaults included: a RELATION default is checked like a sent value
-        write.guard(RecordChangeKind.CREATED, recordId = null, attributes = attributes, reader = caller.user)
+        guard(RecordChangeKind.CREATED, recordId = null, attributes = creation.attributes, reader = caller.user, checked = checked)
         val created =
             store.insert(
-                target,
+                creation.target,
                 caller.organizationId,
                 caller.userId,
-                attributes,
-                sections,
+                creation.attributes,
+                creation.sections,
                 workflow
             )
         // audit and listeners judge the record as stored, every field (ADR-0025): the port promises
         // nothing about what insert hands back, and a locked field left out would read as cleared
         val stored = storedRow(definition, caller.organizationId, created, workflow.attached)
-        write.recorded(RecordChangeKind.CREATED, created.id, after = stored.attributes, state = stored.state)
+        recorded(RecordChangeKind.CREATED, created.id, after = stored.attributes, state = stored.state)
         return created.onlyReadable(definition, fieldAccess).toResponse()
     }
 
@@ -516,8 +619,8 @@ class RecordService(
      * nothing here is ever sent back to the caller.
      *
      * The write's own RETURNING row wins when it already carries every field: it is atomic with the
-     * write. The re-read is non-transactional (this service opens no transaction), best-effort, and
-     * only used when RETURNING was projected: a concurrent write could land in between.
+     * write. The re-read is best-effort and only used when RETURNING was projected; outside a
+     * transaction a concurrent write could land in between.
      */
     private suspend fun storedRow(
         definition: ObjectDefinition,
@@ -568,13 +671,15 @@ class RecordService(
         return Write(caller, definition, changeReason)
     }
 
-    // [reader]: whose read scope the relation values must be in (D30). a delete sets none, so names nobody
+    // [reader]: whose read scope the relation values must be in (D30). a delete sets none, so names nobody.
+    // [checked]: a batch's relation lookups (issue 77)
     private suspend fun Write.guard(
         kind: RecordChangeKind,
         recordId: UUID?,
         before: Map<String, Any?>? = null,
         attributes: Map<String, Any?>? = null,
-        reader: AuthenticatedUser? = null
+        reader: AuthenticatedUser? = null,
+        checked: RelationTargets.Checked? = null
     ) {
         guards.beforeWrite(
             definition,
@@ -589,7 +694,8 @@ class RecordService(
                 attributes = attributes,
                 reason = reason
             ),
-            reader
+            reader,
+            checked
         )
     }
 

@@ -22,8 +22,8 @@ data class RecordChange(
     val causedBy: UUID? = null
 )
 
-// told of every record change, right after the write, in @Order. RecordService opens no
-// transaction of its own (ADR-0025) - a listener that needs atomicity opens its own.
+// told of every record change, right after the write, in @Order. it runs in the caller's transaction, or in
+// createAll's own (ADR-038, ADR-062); a plain create opens none (ADR-0025), so a listener that needs atomicity opens its own.
 // data never reaches into a module's tables itself.
 // a veto before the write is a RecordWriteGuard (ADR-040), not a listener.
 interface RecordChangeListener {
