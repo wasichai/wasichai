@@ -57,10 +57,12 @@ object, plus every action the object declares. Field access is not repeated here
 caller cannot read and mark the ones they cannot write `editable: false`.
 
 `capabilities` lists the built-in actions that are not tied to an object which the caller holds tenant-wide, that is
-granted with no object (`objectName: null`): `MANAGE_METADATA` (objects, fields, relationships, declared actions) and
-`MANAGE_ORGANIZATION` (users, roles, service accounts, units, the organization), always in that order. The key is
-always present, `[]` when the caller holds neither. The administrator holds both; a
-[service account](#service-accounts) never holds `MANAGE_ORGANIZATION`, whatever its roles. A grant on one object does
+granted with no object (`objectName: null`): `MANAGE_METADATA` (objects, fields, relationships, declared actions),
+`MANAGE_ORGANIZATION` (users, roles, service accounts, units, the organization's name) and `MANAGE_TENANTS` (creating
+and deleting tenants, see [Organizations](#organizations)), always in that order. The key is always present, `[]` when
+the caller holds none. The administrator holds the first two, and `MANAGE_TENANTS` unless
+`wasichai.organizations.separate-provisioning` is on; a [service account](#service-accounts) never holds
+`MANAGE_ORGANIZATION` or `MANAGE_TENANTS`, whatever its roles. A grant on one object does
 not count, and does not show in that object's array either: the arrays list record and declared actions only. It is
 the same check the endpoints enforce, so a client may show or hide its admin screens on it
 ([ADR-053](../adr/0053-the-caller-is-told-their-tenant-wide-capabilities.md)). wasichai-ui may read it; older clients
@@ -379,7 +381,8 @@ app can check them ([ADR-042](../adr/0042-app-declared-actions.md)):
 ```
 
 `name` is upper snake, `^[A-Z][A-Z0-9_]{1,48}$`, sent in any case and stored upper; one of the built-in actions
-(`READ`, `CREATE`, `UPDATE`, `DELETE`, `MANAGE_METADATA`, `MANAGE_ORGANIZATION`) or a bad shape is `400`, a name the
+(`READ`, `CREATE`, `UPDATE`, `DELETE`, `MANAGE_METADATA`, `MANAGE_ORGANIZATION`, `MANAGE_TENANTS`) or a bad shape is
+`400`, a name the
 object already declares is `409`. `label` defaults to the name. The response, and each entry of the list, is
 `{ name, label }`. Deleting an action the object does not declare is `404`.
 
@@ -409,12 +412,33 @@ DELETE /api/organizations/current      drop the tenant and every table it owns
 ```
 
 There is deliberately no list-all endpoint: a tenant must not be able to enumerate the others.
-Provisioning needs `MANAGE_ORGANIZATION` and creates the organization, an `ADMIN` role with every
-permission, and the administrator account:
+Provisioning needs `MANAGE_TENANTS` and creates the organization, an `ADMIN` role with every
+permission except `MANAGE_TENANTS`, and the administrator account:
 
 ```json
 { "name": "Municipalidad", "slug": "muni", "adminEmail": "admin@muni.pe", "adminPassword": "…" }
 ```
+
+Renaming needs `MANAGE_ORGANIZATION`; provisioning and deleting need `MANAGE_TENANTS`
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)). Who holds it depends on
+`wasichai.organizations.separate-provisioning`:
+
+| Switch | `MANAGE_TENANTS` is held by |
+|---|---|
+| `false` (default) | whoever holds `MANAGE_ORGANIZATION`, the administrator included, as before |
+| `true` | only a role granted `MANAGE_TENANTS` with no object; `ADMIN` and `MANAGE_ORGANIZATION` alone get `403` |
+
+A service account is refused (`403`) either way. The action is granted like any object-less one:
+
+```json
+{ "permissions": [ { "objectName": null, "action": "MANAGE_TENANTS" } ] }
+```
+
+with two rules of its own in `PUT /api/roles/{name}/permissions`: an entry naming an object is `400` naming
+`objectName`, and a request that adds, removes or changes a role's `MANAGE_TENANTS` entry is
+`403 Missing permission MANAGE_TENANTS` unless the caller's own roles hold the grant (being `ADMIN` is not enough),
+whatever the switch. A request that leaves the entry as it is needs `MANAGE_ORGANIZATION` only. The first holder is
+granted out of band: see [Build your app](../guides/build-your-app.md#operator-and-customer-tenants).
 
 ## Fields
 
@@ -505,6 +529,29 @@ Creating a relationship builds what it needs: a `RELATION` field with a real for
 (`MANY_TO_ONE`, `ONE_TO_ONE`, `ONE_TO_MANY`) or a join table (`MANY_TO_MANY`). Deleting it removes
 them again.
 
+`GET /api/objects/{object}/relationships` answers one entry per side the object stands on, ordered by the relationship's
+`label`:
+
+```json
+[
+  { "relationship": "unidad_jefe", "label": "Jefe", "type": "MANY_TO_ONE",
+    "objectName": "persona", "objectLabel": "Personas", "many": false },
+  { "relationship": "unidad_padre", "label": "Unidad padre", "type": "MANY_TO_ONE",
+    "objectName": "unidad", "objectLabel": "Unidades", "many": false, "direction": "forward" },
+  { "relationship": "unidad_padre", "label": "Subunidades", "type": "MANY_TO_ONE",
+    "objectName": "unidad", "objectLabel": "Unidades", "many": true, "direction": "inverse" }
+]
+```
+
+A relationship whose `source` and `target` are the same object (a parent unit, a previous version, a duplicate-of) is
+listed **twice**, forward first, each entry describing what that direction reads (see the table under Related records):
+`label` when the read stands on the source end, `inverseLabel` (or the object's plural label when there is none) when
+it stands on the target end, and `many` accordingly. Any
+other relationship is listed once, and its entry has no `direction` key at all. Pass `direction` to the related read
+below to walk the side an entry describes. A client that keys entries by `relationship` alone should key them by
+`relationship` and `direction`, or keep the first (forward) entry of each name, which is the one it saw before
+(ADR-031 D42).
+
 ### Related records
 
 ```http
@@ -515,6 +562,31 @@ DELETE /api/objects/{object}/records/{id}/related/{relationship}/{otherId}
 
 The read works from **either** end: from a plot it returns its owner, from the owner it returns their
 plots. Link and unlink apply to `MANY_TO_MANY` only — for the others, set the field on the record.
+
+The read takes the record list's paging and filters (`page`, `size`, `sort`, `dir`, `q`, field filters, `count=false`,
+`after=`; see Records), plus `direction`. On a relationship from an object to itself the object is both ends, so
+`direction` says which end the record stands on:
+
+```http
+GET /api/objects/unidad/records/{child}/related/unidad_padre                      its parent (forward, the default)
+GET /api/objects/unidad/records/{parent}/related/unidad_padre?direction=inverse   its children
+```
+
+| Type | `forward` (the default) | `inverse` |
+|---|---|---|
+| `MANY_TO_ONE`, `ONE_TO_ONE` | the record its field points at (from the source end) | the records whose field points at it |
+| `ONE_TO_MANY` | the record its field points at (from the target end) | the records whose field points at it |
+| `MANY_TO_MANY` | the targets it was linked to (from the source end) | the sources linked to it |
+
+`forward` is the walk this read always made, so no default read changes: for a `ONE_TO_MANY` self-relationship it is
+the target end, which holds the key, and its forward entry in the listing says `inverseLabel` and `many: false`. On a
+relationship between two objects, `forward` or no `direction` reads from the object's own end, as always. `inverse` on a relationship between two
+different objects is a `400` naming `direction` (read it from the other object instead), and so is any value other than
+`forward` or `inverse` (case and surrounding spaces do not matter). On this route `direction` is that parameter, never
+a filter on a field of that name. Permissions, field permissions, own-records-only and the app's read scope apply to
+an inverse read exactly as to a forward one. Link and unlink take no `direction`: the record in the path is the
+source of a `MANY_TO_MANY` self-relationship and `otherId` its target.
+
 A link or unlink writes both records: `409` when either end is `appendOnly`, `403` when either end is `apiOnly`, `400`
 on `reason` when either end is `requiresReason` and no `X-Change-Reason` came. A reason sent is stored on both
 records' history.
@@ -947,7 +1019,7 @@ DELETE /api/objects/{object}/records/{id}
 ```
 
 `GET`, `POST`, `PUT` and `PATCH` of one record answer its `ETag`; `PUT`, `PATCH` and `DELETE` take `If-Match` (see
-"Concurrent edits" below).
+"Concurrent edits" below). `POST` takes `Idempotency-Key` (see "Retrying a create" below).
 
 A record:
 
@@ -1122,6 +1194,50 @@ If-Match: "2026-10-07T10:15:30.123456Z"
 - In-process: `RecordService.update(…, reason, expectedUpdatedAt)`, `delete(…, reason, expectedUpdatedAt)` and
   `patch(…, expectedUpdatedAt = …)` take the `updatedAt` you read and throw `PreconditionFailedException` (412) when
   stale, inside your transaction too.
+
+### Retrying a create: Idempotency-Key
+
+A client that timed out or got a `5xx` cannot tell whether its create landed. Sending a key makes the retry safe
+([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)):
+
+```http
+POST /api/objects/caso/records
+Idempotency-Key: 0b8e6a1c-5f3e-4c1e-9d1a-2f4e8c7b6a50
+
+{ "attributes": { "codigo": "C-1" } }
+→ 201, ETag: "2026-10-07T10:15:30.123456Z"                 the record, as without the key
+
+(the same request again, same key)
+→ 201, Idempotent-Replayed: true, ETag: "2026-10-07T10:15:30.123456Z"   the same body, nothing created
+```
+
+- Only on `POST /api/objects/{object}/records`. The key is 1 to 128 printable ASCII characters (a UUID is a good
+  one); anything else is a `400` on `Idempotency-Key`. Without the header nothing changes.
+- A key belongs to the caller (a person or a service account) in their organization: another caller's same key is
+  another key, and nobody learns that someone else used it.
+- First request: processed as usual, and its status and body are stored with the key in the record's own transaction.
+  The answer is those stored bytes.
+- Same key, same method, path and body (key order and spacing do not count): the stored `201` and body, byte for byte,
+  with `Idempotent-Replayed: true` and the `ETag` the record had then. Nothing is written, audited or told to
+  automations, and no permission is checked again. `X-Correlation-Id` is the retry's own.
+- Same key, another body or another object: `422`, nothing written:
+
+```json
+{ "type": "https://wasichai.dev/problems/422", "title": "Unprocessable Content", "status": 422,
+  "detail": "This Idempotency-Key was already used for another request",
+  "errors": [{ "field": "Idempotency-Key", "message": "was sent before with another method, path or body; use a new key" }] }
+```
+
+- Same key while the first request is still running: `409` with `Retry-After: 1` and `errors[]` naming
+  `Idempotency-Key`. Send it again; it then gets the replay, or creates when the first one failed.
+- A request that fails (`4xx` or `5xx`) stores nothing: fix the body and retry with the same key. With a key the create
+  is one transaction: an automation or listener that fails after the write leaves no record either.
+- A key lives `wasichai.idempotency.ttl` (24 hours by default). After that it is gone and the same key creates again.
+- `X-Change-Reason` is not part of what makes two requests the same.
+- CORS exposes `Idempotent-Replayed` and `Retry-After` to browser clients.
+- In-process: `RecordService.create(objectName, request, reason, idempotencyKey)` joins your transaction (or opens
+  one), returns the stored record on a replay (values as its JSON holds them), and throws
+  `UnprocessableContentException` (422) or `RetryLaterException` (409).
 
 ### Partial update (PATCH)
 
@@ -1643,7 +1759,7 @@ Module: wasichai-agent.
 
 ```http
 GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-4-5" }
-POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated }
+POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated, usage? }
 ```
 
 ```json
@@ -1653,9 +1769,12 @@ POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated 
     { "tool": "list_objects", "input": {}, "summary": "3 objects" },
     { "tool": "query_records", "input": { "object": "predio", "uso": "COMERCIAL" }, "summary": "3 records" }
   ],
-  "truncated": false
+  "truncated": false,
+  "usage": { "model": "claude-haiku-4-5", "inputTokens": 5120, "outputTokens": 214 }
 }
 ```
+
+`usage` is what the question cost, summed over the run's model calls; it is left out when the provider reported none.
 
 The assistant has no database access: it calls the same services a person's requests go through, as
 the person asking, so permissions, tenancy and field visibility apply unchanged (ADR-014). Its tools
@@ -1664,6 +1783,12 @@ its step limit and stopped, so the answer may be incomplete.
 
 Without `ANTHROPIC_API_KEY` the status reports `enabled: false` and asking answers `503` with a
 problem+json explaining what is missing. Nothing else in the platform depends on it.
+
+An app can switch the assistant off per caller (`AgentAccessPolicy`): the status then reports `enabled: false` for
+that caller, and asking answers `403` with the app's reason before anything is sent. An app's result filters
+(`AgentResultFilter`) shape what the model and `steps[].summary` see; a filter that fails makes asking answer `500`
+("nothing was sent") unless it raised an error of its own. See [agent.md](../modules/agent.md#extension-points) and
+ADR-056.
 
 ## Errors
 
@@ -1687,4 +1812,6 @@ RFC 7807 `application/problem+json`:
 | 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
 | 404 | unknown object or record |
 | 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile |
+| 409 | an `Idempotency-Key` whose first request is still running, with `Retry-After` (`errors[]` names `Idempotency-Key`) |
 | 412 | `If-Match` no longer matches the record: someone wrote it since it was read (`errors[]` names `If-Match`) |
+| 422 | an `Idempotency-Key` sent before with another body or object (`errors[]` names `Idempotency-Key`) |

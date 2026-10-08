@@ -160,7 +160,9 @@ class RecordServiceDefaultsTest {
             ),
             RecordWriteGuards(emptyList(), targets),
             AppendOnlyReferencesFixtures.none(),
-            RecordReadScopesFixtures.none()
+            RecordReadScopesFixtures.none(),
+            TenantDirectoryFixtures.none(),
+            IdempotencyKeysFixtures.none()
         )
     }
 

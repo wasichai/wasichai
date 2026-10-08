@@ -300,6 +300,72 @@ These are the only intended differences. Anything else that behaves differently 
   default, existing records are not touched, and the column gets no SQL `DEFAULT`. Tested by `FieldDefaultsTest`,
   `RecordServiceDefaultsTest`, `FieldDefaultValueApiTest` and `AutomationOnlyApiTest`.
 
+**Because one deployment serves several customer organizations**
+
+- **D41. Creating and deleting tenants takes `MANAGE_TENANTS`.** The original guarded `POST /api/organizations` and
+  `DELETE /api/organizations/current` with `MANAGE_ORGANIZATION`, which `ADMIN` always passes, so a customer's
+  administrator could create and delete tenants. Now both check `MANAGE_TENANTS`, a new object-less built-in action
+  ([ADR-055](0055-tenant-provisioning-apart-from-tenant-administration.md)). With
+  `wasichai.organizations.separate-provisioning=false`, the default, it means `MANAGE_ORGANIZATION` and both routes
+  behave as before. With `true`, only a role's `MANAGE_TENANTS` grant counts: `ADMIN` and `MANAGE_ORGANIZATION` get
+  `403`, and a service account is refused either way. Observable changes, also by default: the action is accepted by
+  `PUT /api/roles/{name}/permissions`, where the original answered `400`, but only from a caller whose roles hold it
+  (`403` otherwise) and only with no object (`400` naming `objectName` otherwise); an object may not declare an action
+  of that name; `capabilities` in `GET /api/auth/me/permissions` lists it third, so the administrator's list is
+  `MANAGE_METADATA`, `MANAGE_ORGANIZATION`, `MANAGE_TENANTS` by default. `PUT /api/organizations/current` and the
+  `ADMIN` role created by provisioning are unchanged. The `V15` constraints are known schema-parity deviations. Tested
+  by `CurrentUserTest`, `CallerPermissionsServiceTest`, `WasichaiAutoConfigurationTest`, `ObjectActionNameTest`,
+  `SeparateProvisioningApiTest`, `OrganizationApiTest` and `PermissionEnforcementTest`.
+
+**Because a relationship may join an object to itself**
+
+- **D42. A self-relationship is read from either end.** The original accepted a relationship whose source and target
+  are the same object, then decided the end of every read from the object alone, which is both: `GET
+  …/records/{id}/related/{relationship}` always walked one end (so a parent's children, or the sources linked to a
+  record, could not be read), and `GET /api/objects/{object}/relationships` listed one side. Now the related read takes
+  `direction`: `forward` (the default) is exactly the walk the read always made, from the source end and, for
+  `ONE_TO_MANY`, from the target end that holds the key (the record's parent); `inverse` walks the other end. Both keep
+  the read's paging, `count=false` and `after=` unchanged and the same permissions, field permissions, own-records-only and
+  read scope (D30). `inverse` on any other relationship, and any value other than the two, is a `400` naming
+  `direction`; on this route `direction` is no longer read as a filter on a field of that name. The listing answers a
+  self-relationship twice, forward then inverse, each with `direction` and the `label` and `many` of what that direction
+  reads (`label` from the source end, `inverseLabel` or the plural label from the target end); any other entry is
+  unchanged and has no `direction` key. No default read changes. The listing's one entry for a `ONE_TO_MANY`
+  self-relationship used to say `label` and `many: true` while the read returned the parent; its forward entry now says
+  `inverseLabel` and `many: false`, what the read returns. Link, unlink and a generated page's one related tab per relationship are
+  unchanged; the agent's `list_relationships` reports `direction` and `related_records` takes it. Tested by
+  `SelfRelationshipApiTest`, `RelationshipSideTest`, `RecordReadScopeApiTest`, `PageServiceTest` and
+  `AgentToolCatalogTest`.
+
+**Because an organization decides what reaches a model provider**
+
+- **D43. The assistant reports its token usage, and an app can switch it off per caller.** The original's answer to
+  `POST /api/agent/ask` was `answer`, `steps` and `truncated`. It gains `usage` (`model`, `inputTokens`,
+  `outputTokens`), summed over the run's model calls, whenever the provider reported them, which a real one does; the
+  key is left out when none were reported, so with the scripted test models the JSON is unchanged. With an app's
+  `AgentAccessPolicy` that denies a caller, `GET /api/agent/status` answers `enabled: false` for them although a key is
+  configured, and `ask` answers `403` with the policy's reason before the model is called (the original had no such
+  answer). With an app's `AgentResultFilter` the tool results and `steps[].summary` are what the filter returned, and a
+  filter that throws makes `ask` answer `500` "could not prepare the data for the model; nothing was sent" (or the
+  filter's own error status). With no such bean, status and every error are as before
+  ([ADR-056](0056-what-reaches-the-model-is-the-apps-to-shape.md)). Tested by `AgentExtensionsTest`,
+  `WasichaiAgentAutoConfigurationTest`, `AgentAccessPolicyApiTest` and `AgentEmbabelTest`.
+
+**Because a client may send a create again**
+
+- **D45. A record create takes an `Idempotency-Key`.** The original had no idempotency: a `POST
+  /api/objects/{object}/records` sent twice, after a timeout or a `5xx`, created two records. Now the request may carry
+  `Idempotency-Key` (1 to 128 printable ASCII characters, a `400` on the header otherwise), kept per organization and
+  caller for `wasichai.idempotency.ttl` (24 hours) in the new core table `idempotency_keys`, written in the record's
+  transaction ([ADR-058](0058-idempotency-key-on-record-creation.md)). The first request answers as before, from the
+  stored bytes. The same key with the same method, path and body answers the stored `201` and body again with
+  `Idempotent-Replayed: true` and the stored record's `ETag`, and writes, audits and announces nothing; with another
+  body or object it is a `422` naming `Idempotency-Key`; while the first is still running it is a `409` with
+  `Retry-After: 1`. A failed first request stores nothing. With the key, a listener that fails after the write rolls
+  the record back too. Another caller's same key is independent. CORS exposes `Idempotent-Replayed` and `Retry-After`.
+  Without the header nothing changes. The table is a known schema-parity deviation. Tested by `IdempotencyKeysTest`,
+  `WasichaiAutoConfigurationTest` and `RecordIdempotencyApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

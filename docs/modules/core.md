@@ -39,15 +39,24 @@ An app overrides any core bean by declaring its own bean of the same type — se
 - Identity: login and the signed-in user, under `/api/auth` (`POST /api/auth/login`, `GET /api/auth/me`,
   `GET /api/auth/me/permissions` for caller permissions per object and tenant-wide `capabilities`, ADR-053), and
   `POST /api/auth/token` for service accounts.
-- Organizations: the tenant itself, under `/api/organizations`.
+- Organizations: the tenant itself, under `/api/organizations`. Renaming it is `MANAGE_ORGANIZATION`; creating and
+  deleting tenants is `MANAGE_TENANTS`, which by default every `MANAGE_ORGANIZATION` holder has and, with
+  `wasichai.organizations.separate-provisioning`, only a role granted it
+  ([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)).
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
-- Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`.
+- Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`. A
+  relationship from an object to itself is read from either end with `direction=forward|inverse`, and listed once per
+  direction (`RelatedSide.direction`, ADR-031 D42).
 - Dynamic records and related records: `/api/objects/{object}/records`. A record answer carries its `ETag`
   (`"<updatedAt>"`); `PUT`, the partial `PATCH` and `DELETE` take `If-Match` and compare it in the write's own
-  statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)).
+  statement, `412` when stale ([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)). A create
+  may carry `Idempotency-Key`: one record per caller and key for `wasichai.idempotency.ttl`, a retry gets the stored
+  answer with `Idempotent-Replayed: true`, another body under the key is a `422`, one still running a `409` with
+  `Retry-After`; in process `RecordService.create(objectName, request, reason, idempotencyKey)`
+  ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
@@ -75,7 +84,13 @@ An app overrides any core bean by declaring its own bean of the same type — se
   `asPlatform(organizationId, source = "job:retention") { }` for the app's own label), and the `ClusterLock` bean
   (`tryLock`, `withXactLock`) over PostgreSQL advisory locks
   ([ADR-039](../adr/0039-background-work-runs-as-the-platform-with-a-cluster-lock.md)). Work that runs per tenant
-  walks `OrganizationRepository.ids()`, every organization's id (there is still no REST list of organizations). A
+  asks the `TenantDirectory` bean (`wasichai.core.platform`): `organizations()` and `organizationsWithObject(name)`
+  answer `TenantRef(id, slug)` lists ordered by id, and throw `IllegalStateException` inside a request, with a token or
+  without, like `asPlatform`; no controller takes it, and there is still no REST list of organizations.
+  `RecordService.forEachOrganization(objectName = null, source = "platform") { organizationId -> }` runs a block per
+  tenant inside `asPlatform`, logging one tenant's failure and going on
+  ([ADR-057](../adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md)). The startup index
+  reconciliation and the notifications loop walk the same directory. A
   connection that holds session state (an advisory lock, a `LISTEN`) comes from
   `wasichai.core.platform.Connections.unpooled(factory)`, the factory under the R2DBC pool, so it never goes back to
   the pool with that state; `ClusterLock` takes its lease the same way.
@@ -133,6 +148,9 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
 | `wasichai.audit.purge-role` | *(none)* | the database role whose own login may purge `audit_log` (ADR-054); read by the migration |
+| `wasichai.organizations.separate-provisioning` | `false` | `true`: creating and deleting tenants needs a `MANAGE_TENANTS` grant, not `ADMIN` (ADR-055) |
+| `wasichai.idempotency.ttl` | `24h` | how long an `Idempotency-Key` replays its create; past it the key is gone (ADR-058) |
+| `wasichai.idempotency.purge-interval` | `1h` | how often one replica deletes expired keys (`ClusterLock`); `0s` keeps the purge off |
 
 The index reconciliation runs in the `ApplicationReadyEvent` listener, so it holds readiness while it builds. On the
 first start after an upgrade that adds relation indexes to existing tables, a large table can take a while: give a
@@ -218,7 +236,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
   `currentUser`, `accessPolicy`, `userRepository`, `jwtService`, `authService`, `authController`,
   `myOrgUnitsController`.
 - Metadata (`WasichaiMetadataAutoConfiguration`): `fieldTypeRegistry`, `customObjectRepository`,
-  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `metadataService`, `relationshipService`,
+  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `tenantDirectory`, `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
 - Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditLogOwnershipCheck`, `adminAudit`, `auditQueryService`,
@@ -250,6 +268,14 @@ character classes and the index `audit_log_correlation_idx (organization_id, cor
 ([ADR-050](../adr/0050-correlation-id-and-change-source-on-audit-rows.md)).
 `V12__audit_user_index.sql` adds the index `audit_log_user_time_idx (organization_id, user_id, occurred_at DESC)` for
 the audit list by user and period ([ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
+`V15__manage_tenants.sql` adds `MANAGE_TENANTS` to the built-in actions of `permissions_action_valid` and
+`object_actions_not_builtin`, and `permissions_tenants_no_object` keeps its grants object-less
+([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)). An object that declared an action
+of that name stops the migration; rename it first. Core has no `V13` or `V14` of its own yet.
+`V16__idempotency_keys.sql` adds `idempotency_keys` (organization, caller, key, request hash, stored status and body,
+`created_at`), unique per `(organization_id, user_id, key)` `NULLS NOT DISTINCT` (a null `user_id` is the platform),
+cascading from the organization and the user, with an index on `created_at` for the purge
+([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes
@@ -381,6 +407,12 @@ Core is always installed.
   purge by the configured role; two functions and two triggers on the table (ADR-054).
 - D40: a field's `defaultValue` fills what a create leaves out, even a field the caller may not write; it is checked
   when set (`400` on `defaultValue`) and `PUT …/fields/{field}` takes it; updates never apply it.
+- D42: a self-relationship is read from either end with `direction=forward|inverse` on the related read, and listed
+  once per direction by `GET /api/objects/{object}/relationships`, each entry labelled for what its direction reads;
+  forward is the walk the read always made.
+- D45: `Idempotency-Key` on `POST …/records`: a replay answers the stored `201` and body with `Idempotent-Replayed:
+  true`, another body is a `422`, a key still in flight a `409` with `Retry-After`; the `idempotency_keys` table
+  (ADR-058).
 
 ## Known limitations
 

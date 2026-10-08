@@ -70,6 +70,11 @@ source, `inverseLabel` from the target, which is what the related lists show on 
 Foreign keys are real (`ON DELETE SET NULL` for fields, `ON DELETE CASCADE` inside join tables), so
 the database keeps the graph honest.
 
+A relationship may have the same object as source and target (a parent unit, a previous version). Its object then
+stands on both ends: the related read takes `direction=forward` (the default, the walk it always made: the "Read from
+source" column, but "Read from target" for `ONE_TO_MANY`) or `direction=inverse` (the other column), and the
+object's relationship list shows it once per direction (ADR-031 D42, [rest.md](../api/rest.md) "Related records").
+
 ## Pages
 
 Provided by wasichai-pages ([pages module](../modules/pages.md)).

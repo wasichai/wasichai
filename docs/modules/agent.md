@@ -57,12 +57,12 @@ Frontend routes and slots:
 Env form: `WASICHAI_AGENT_ENABLED`, `WASICHAI_AGENT_API_KEY`, `WASICHAI_AGENT_MODEL`, `WASICHAI_AGENT_MAX_TOKENS`,
 `WASICHAI_AGENT_MAX_ITERATIONS`.
 
-The assistant is `available` (as reported by `GET /api/agent/status`) only when the module is enabled and an API
-key is present. `EmbabelGate` also binds `wasichai.agent.api-key` to `${ANTHROPIC_API_KEY:}` by default, so the key
-usually arrives as the `ANTHROPIC_API_KEY` environment variable rather than as `wasichai.agent.api-key` directly; the
-gate also accepts `embabel.agent.platform.models.anthropic.api-key`, Embabel's own property. Without a key, or with
-the module disabled, `EmbabelGate` keeps every Embabel auto-configuration out of the context so the app still
-boots.
+The assistant is `available` (as reported by `GET /api/agent/status`) only when the module is enabled, an API
+key is present and the app's `AgentAccessPolicy` allows the caller (see below). `EmbabelGate` also binds
+`wasichai.agent.api-key` to `${ANTHROPIC_API_KEY:}` by default, so the key usually arrives as the `ANTHROPIC_API_KEY`
+environment variable rather than as `wasichai.agent.api-key` directly; the gate also accepts
+`embabel.agent.platform.models.anthropic.api-key`, Embabel's own property. Without a key, or with the module disabled,
+`EmbabelGate` keeps every Embabel auto-configuration out of the context so the app still boots.
 
 ## Extension points
 
@@ -71,7 +71,53 @@ boots.
 classpath and its `WorkflowService` bean exists; otherwise `NoRecordTransitions` answers an empty list, the same
 answer "no workflow" has always given.
 
-**Overridable beans:** `agentTools`, `wasichaiAgent`, `agentService`, `agentController`
+**Defines, for what leaves the platform** ([ADR-056](../adr/0056-what-reaches-the-model-is-the-apps-to-shape.md)).
+Each has a no-op default; with none declared the assistant is the one it always was.
+
+| Bean | Called | Default |
+|---|---|---|
+| `AgentResultFilter` — `filter(caller, tool, input, resultJson)` | on each tool result and step `summary` | none |
+| `AgentAnswerFilter` — `restore(caller, answer)` | on the final text, not on a truncated run | none |
+| `AgentAccessPolicy` — `check(caller)`: `Allowed` or `Denied(reason)` | by `status` and `ask`, before anything is sent | `ALLOW_ALL` |
+| `AgentRunListener` — `onRun(caller, question, answer, usage, error)` | once per question that reached the run | none |
+
+Filters and listeners: every bean, in `@Order`. The policy: one bean, `@ConditionalOnMissingBean`.
+
+- **Result filters** run as the asking caller, in the same reactive context as the tools. A filter gets both the JSON
+  for the model and the one-line summary the UI shows: one that parses JSON must hand other text back unchanged. To
+  pseudonymize reversibly, replace a value with a token in the filter and the token with the value in an
+  `AgentAnswerFilter`.
+- **A filter that throws fails the run closed**: the result is not handed to the model, the tool loop is asked to stop
+  before its next model call, later tool calls and retried actions stop at once, and `ask` answers with the filter's
+  own `WasichaiException` or a `500` (`AgentFilterException`, "nothing was sent").
+- **The policy** is asked only when the server has a model (enabled and a key). Denied: `status` says
+  `enabled: false` for that caller, and `ask` answers `403` with the reason (`AgentDeniedException`). It is asked after
+  the permission and question checks.
+- **Listeners** get `answer` null and `error` set on a failure, and `usage` (`AgentUsage(model, inputTokens,
+  outputTokens)`) whenever Embabel recorded model calls on the run, failures and truncated runs included, summed over
+  every call (the tool loop's and a retried action's). A question refused before the run (permission, policy, no
+  model, blank question) is not reported. A listener that throws fails the request.
+
+```kotlin
+@Bean
+fun agentAccessPolicy(features: MyFeatures) =
+    AgentAccessPolicy { caller ->
+        if (features.assistantOn(caller.organizationId)) AgentAccess.Allowed
+        else AgentAccess.Denied("The AI assistant is not enabled for your organization")
+    }
+
+@Bean
+fun pseudonyms(vault: MyPseudonyms) = AgentResultFilter { caller, _, _, text -> vault.pseudonymize(caller, text) }
+
+@Bean
+fun restore(vault: MyPseudonyms) = AgentAnswerFilter { caller, text -> vault.restore(caller, text) }
+
+@Bean
+fun aiLog(log: MyAiLog) =
+    AgentRunListener { caller, question, answer, usage, error -> log.record(caller, question, answer, usage, error) }
+```
+
+**Overridable beans:** `agentTools`, `wasichaiAgent`, `agentAccessPolicy`, `agentService`, `agentController`
 (`WasichaiAgentAutoConfiguration`) and `workflowRecordTransitions` (`WasichaiAgentWorkflowAutoConfiguration`) — all
 `@ConditionalOnMissingBean`, so an app can replace any of them.
 
@@ -97,6 +143,9 @@ No assistant screen and no nav entry. `GET /api/agent/status` and `POST /api/age
 ([ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D1).
 
 ## Behaviour differences
+
+[ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D43: an answer carries `usage` when the provider
+reported token counts, and an app's policy, filters and listeners can change what status, ask and the steps say.
 
 [ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D7: the original app built Anthropic in.
 `wasichai-agent` is provider-neutral — it depends only on `embabel-agent-starter` — and

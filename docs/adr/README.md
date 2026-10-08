@@ -78,3 +78,11 @@ supersedes it and says so in its status line.
   too](0053-the-caller-is-told-their-tenant-wide-capabilities.md)
 - [ADR-054: The audit log is append-only in the database, with a purge only a configured login can
   run](0054-audit-log-is-append-only-in-the-database.md)
+- [ADR-055: Creating and deleting tenants can be kept apart from administering
+  one](0055-tenant-provisioning-apart-from-tenant-administration.md)
+- [ADR-056: What reaches the model is the app's to shape, per caller, and every run is
+  reported](0056-what-reaches-the-model-is-the-apps-to-shape.md)
+- [ADR-057: Background work finds the tenants through a tenant
+  directory](0057-background-work-finds-the-tenants-through-a-tenant-directory.md)
+- [ADR-058: A record create takes an Idempotency-Key, held by an advisory lock and stored with the
+  record](0058-idempotency-key-on-record-creation.md)

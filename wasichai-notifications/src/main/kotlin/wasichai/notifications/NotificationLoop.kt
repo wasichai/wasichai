@@ -11,8 +11,8 @@ import reactor.core.Disposable
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import wasichai.core.data.RecordService
-import wasichai.core.organization.OrganizationRepository
 import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.TenantDirectory
 import wasichai.notifications.autoconfigure.NotificationsProperties
 import java.time.Clock
 import java.time.Duration
@@ -114,7 +114,7 @@ class NotificationLoop internal constructor(
         extras: List<LoopWork>,
         clusterLock: ClusterLock,
         records: RecordService,
-        organizations: OrganizationRepository,
+        tenants: TenantDirectory,
         preparer: NotificationPreparer,
         writer: NotificationWriter,
         repository: NotificationRepository,
@@ -125,7 +125,7 @@ class NotificationLoop internal constructor(
         sources.map { SourceWork(it, records, preparer, writer) } + extras,
         runs,
         LoopLock { key, block -> clusterLock.tryLock(key)?.use { block() } != null },
-        organizations::ids,
+        { tenants.organizations().map { it.id } },
         repository::purge,
         properties,
         clock

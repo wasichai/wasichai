@@ -28,6 +28,9 @@ import wasichai.core.admin.ServiceAccountService
 import wasichai.core.audit.AuditLogAdminAudit
 import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditPage
+import wasichai.core.common.Actions
+import wasichai.core.data.IdempotencyKeyPurge
+import wasichai.core.data.IdempotencyKeys
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.ObjectDefinitionFixtures
 import wasichai.core.data.ObjectWorkflowState
@@ -38,6 +41,8 @@ import wasichai.core.data.RecordService
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.RoleQueries
 import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
@@ -53,6 +58,7 @@ import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiMigrations
+import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 import javax.crypto.SecretKey
@@ -103,6 +109,9 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context).hasSingleBean(RecordService::class.java)
             assertThat(context).hasSingleBean(ClusterLock::class.java)
+            // issue 63 (ADR-058): keyed creates and the purge of expired keys
+            assertThat(context).hasSingleBean(IdempotencyKeys::class.java)
+            assertThat(context).hasSingleBean(IdempotencyKeyPurge::class.java)
             assertThat(context).hasSingleBean(RecordReadScopes::class.java)
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountService::class.java)
@@ -150,14 +159,19 @@ class WasichaiAutoConfigurationTest {
         }
     }
 
-    // issue 52 (ADR-052): a browser on another origin can read the audit list's next-page cursor, and a
-    // record's ETag (ADR-051)
+    // issue 52 (ADR-052): a browser on another origin can read the audit list's next-page cursor, a
+    // record's ETag (ADR-051), and whether a create was replayed and when to retry one in flight (ADR-058)
     @Test
     fun `cors exposes the audit list's next cursor`() {
         runner.run { context ->
             val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/audit"))
             val config = context.getBean(CorsConfigurationSource::class.java).getCorsConfiguration(exchange)
-            assertThat(config!!.exposedHeaders).containsExactly(HttpHeaders.ETAG, AuditPage.NEXT_CURSOR_HEADER)
+            assertThat(config!!.exposedHeaders).containsExactly(
+                HttpHeaders.ETAG,
+                AuditPage.NEXT_CURSOR_HEADER,
+                IdempotencyKeys.REPLAYED,
+                HttpHeaders.RETRY_AFTER
+            )
         }
     }
 
@@ -252,6 +266,20 @@ class WasichaiAutoConfigurationTest {
         }
     }
 
+    // issue 63 (ADR-058): a key that never lives is no key; a zero purge interval keeps the purge off
+    @Test
+    fun `a wasichai idempotency ttl that is not positive fails at boot and names the property`() {
+        runner.withPropertyValues("wasichai.idempotency.ttl=0s").run { context ->
+            assertThat(context).hasFailed()
+            assertThat(generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }.joinToString(" | "))
+                .contains("wasichai.idempotency.ttl")
+        }
+        runner.withPropertyValues("wasichai.idempotency.ttl=10m", "wasichai.idempotency.purge-interval=0s").run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(IdempotencyKeyPurge::class.java).isRunning).isFalse()
+        }
+    }
+
     // issue 58 (ADR-054): a purge role that is not a plain role name never reaches the migration
     @Test
     fun `an unsafe wasichai audit purge-role fails at boot and names the property`() {
@@ -269,6 +297,32 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasNotFailed()
             assertThat(context.getBean(ClusterLock::class.java)).isSameAs(mine)
         }
+    }
+
+    // issue 56 (ADR-055): off by default, so ADMIN still provisions; on, CurrentUser asks for a grant
+    @Test
+    fun `separate provisioning is off by default and reaches CurrentUser when on`() {
+        val admin = AuthenticatedUser(UUID.randomUUID(), UUID.randomUUID(), "ana@example.com", listOf(AuthenticatedUser.ADMIN_ROLE))
+        runner.run { context ->
+            assertThat(context.getBean(WasichaiOrganizationsProperties::class.java).separateProvisioning).isFalse()
+            assertThat(runBlocking { context.getBean(CurrentUser::class.java).hasPermission(admin, Actions.MANAGE_TENANTS) }).isTrue()
+        }
+        val noGrants =
+            object : RoleQueries(mock(DatabaseClient::class.java), WasichaiSchemas("wasichai", "app_data")) {
+                override suspend fun hasPermission(
+                    roleNames: List<String>,
+                    organizationId: UUID,
+                    action: String,
+                    objectId: UUID?
+                ) = false
+            }
+        runner
+            .withPropertyValues("wasichai.organizations.separate-provisioning=true")
+            .withBean(RoleQueries::class.java, { noGrants })
+            .run { context ->
+                assertThat(context.getBean(WasichaiOrganizationsProperties::class.java).separateProvisioning).isTrue()
+                assertThat(runBlocking { context.getBean(CurrentUser::class.java).hasPermission(admin, Actions.MANAGE_TENANTS) }).isFalse()
+            }
     }
 
     @Test

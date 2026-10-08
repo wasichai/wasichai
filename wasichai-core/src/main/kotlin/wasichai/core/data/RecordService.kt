@@ -3,6 +3,11 @@ package wasichai.core.data
 import com.fasterxml.jackson.annotation.JsonAnyGetter
 import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import wasichai.core.audit.AuditOperation
 import wasichai.core.audit.AuditService
@@ -23,7 +28,9 @@ import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.readableBy
 import wasichai.core.metadata.readableNames
 import wasichai.core.metadata.writableBy
+import wasichai.core.platform.Background
 import wasichai.core.platform.ChangeOrigin
+import wasichai.core.platform.TenantDirectory
 import java.time.Instant
 import java.util.UUID
 
@@ -76,8 +83,12 @@ class RecordService(
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
     private val references: AppendOnlyReferences,
-    private val readScopes: RecordReadScopes
+    private val readScopes: RecordReadScopes,
+    private val tenants: TenantDirectory,
+    private val idempotency: IdempotencyKeys
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
      * acts in that organization, with no user. No permission or field rule applies, as for ADMIN; the
@@ -105,6 +116,37 @@ class RecordService(
         source: String,
         block: suspend () -> T
     ): T = PlatformCaller.run(organizationId, source, block)
+
+    /**
+     * Runs [block] once per organization of the [TenantDirectory] (ADR-057), each inside
+     * [asPlatform] for that organization with [source] on its audit rows. With [objectName], only the
+     * organizations that define that object. In id order, one at a time.
+     *
+     * One organization's failure is logged and the loop goes on; the block handles what must not be
+     * lost. Background work only: inside a request it throws before any block runs, as [asPlatform]
+     * does. A bad [source] throws `IllegalArgumentException` before anything runs.
+     */
+    suspend fun forEachOrganization(
+        objectName: String? = null,
+        source: String = ChangeOrigin.PLATFORM,
+        block: suspend (organizationId: UUID) -> Unit
+    ) {
+        // before the directory: a replaced one may lack the tripwire, and asPlatform's own throw would be swallowed below
+        Background.require("RecordService.forEachOrganization", "never becomes the platform")
+        ChangeOrigin.requireValidSource(source)
+        val organizations = if (objectName == null) tenants.organizations() else tenants.organizationsWithObject(objectName)
+        organizations.forEach { tenant ->
+            try {
+                asPlatform(tenant.id, source) { block(tenant.id) }
+            } catch (e: CancellationException) {
+                // our own cancellation stops the loop; a block's own timeout is a failure like any other
+                currentCoroutineContext().ensureActive()
+                log.warn("{} failed for organization {} ({}): {}", source, tenant.slug, tenant.id, e.message, e)
+            } catch (e: Exception) {
+                log.warn("{} failed for organization {} ({}): {}", source, tenant.slug, tenant.id, e.message, e)
+            }
+        }
+    }
 
     suspend fun list(
         objectName: String,
@@ -155,6 +197,61 @@ class RecordService(
         request: RecordRequest,
         reason: String?
     ): RecordResponse = create(objectName, request, reason, viaApi = false)
+
+    /**
+     * [create] at most once per [idempotencyKey] (ADR-058), for an app's own commands that may be retried.
+     * The first call creates and stores its answer with the key, in one transaction: the caller's when there
+     * is one (ADR-038), else one of its own. The same key again, from the same caller and organization, with
+     * the same object and request, returns that answer and writes, audits and tells nothing: the record as
+     * its json held it then (a date is its ISO string, a decimal a BigDecimal). Another request under the key
+     * is an [wasichai.core.common.UnprocessableContentException] (422), one while the first is still running a
+     * [wasichai.core.common.RetryLaterException] (409). A key lives `wasichai.idempotency.ttl`. A failed call
+     * stores nothing, so the key can be used again. null: [create] as above. An overload, not a default:
+     * code compiled against the three-argument call keeps working.
+     */
+    suspend fun create(
+        objectName: String,
+        request: RecordRequest,
+        reason: String?,
+        idempotencyKey: String?
+    ): RecordResponse =
+        if (idempotencyKey == null) {
+            create(objectName, request, reason, viaApi = false)
+        } else {
+            createOnce(objectName, request, reason, viaApi = false, idempotencyKey = idempotencyKey).record
+        }
+
+    // what a keyed create answers: the record, and the status and json stored for the key
+    internal class OnceCreated(
+        val record: RecordResponse,
+        val status: Int,
+        val body: String,
+        val replayed: Boolean
+    )
+
+    // the key is the caller's, in its organization: nobody else can replay it or learn it is taken (ADR-058)
+    internal suspend fun createOnce(
+        objectName: String,
+        request: RecordRequest,
+        reason: String?,
+        viaApi: Boolean,
+        idempotencyKey: String
+    ): OnceCreated {
+        IdempotencyKeys.requireValid(idempotencyKey)
+        val caller = caller()
+        // the body as the api reads it: attributes and every section, installed or not
+        val hash = idempotency.requestHash("POST", "/api/objects/$objectName/records", request.sections + ("attributes" to request.attributes))
+        var created: RecordResponse? = null
+        val outcome =
+            idempotency.once(caller.organizationId, caller.userId, idempotencyKey, hash) {
+                val record = create(objectName, request, reason, viaApi)
+                created = record
+                IdempotencyKeys.Answer(HttpStatus.CREATED.value(), idempotency.write(record))
+            }
+        val answer = outcome.answer
+        val record = created ?: idempotency.readRecord(answer.body)
+        return OnceCreated(record, answer.status, answer.body, outcome.replayed)
+    }
 
     // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040)
     internal suspend fun create(

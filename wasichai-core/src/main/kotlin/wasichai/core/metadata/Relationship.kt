@@ -41,6 +41,32 @@ enum class RelationshipType {
     }
 }
 
+// which way a relationship is walked. only a relationship from an object to itself has two ways from
+// one record, so only there does inverse mean something; elsewhere the object already says which end.
+enum class RelationshipDirection {
+    FORWARD,
+    INVERSE;
+
+    // how the api spells it
+    val wire: String get() = name.lowercase()
+
+    // on a self-relationship: does this direction stand on the source end? forward is the end the
+    // read always walked (#61 keeps it): the source, but the target for ONE_TO_MANY (its key sits there)
+    fun fromSource(type: RelationshipType): Boolean = (this == FORWARD) == (type != RelationshipType.ONE_TO_MANY)
+
+    companion object {
+        const val PARAMETER = "direction"
+
+        // strict, like count: a typo must not quietly walk the other way. null is the default, forward.
+        fun parse(raw: String?): RelationshipDirection =
+            when (raw?.trim()?.lowercase()) {
+                null, "forward" -> FORWARD
+                "inverse" -> INVERSE
+                else -> throw ValidationException("Invalid direction '$raw'", PARAMETER, "must be forward or inverse")
+            }
+    }
+}
+
 data class Relationship(
     val id: UUID,
     val organizationId: UUID,
@@ -52,7 +78,10 @@ data class Relationship(
     val targetObjectId: UUID,
     val relationFieldId: UUID?,
     val joinTable: String?
-)
+) {
+    // source and target are one object: a parent unit, a previous version, a duplicate-of
+    val selfReferencing: Boolean get() = sourceObjectId == targetObjectId
+}
 
 private const val RELATIONSHIP_COLUMNS =
     "id, organization_id, name, label, inverse_label, type, source_object_id, target_object_id, " +

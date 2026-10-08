@@ -75,12 +75,10 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "constraint object_actions.object_actions_label_not_null NOT NULL label",
                 "constraint object_actions.object_actions_name_not_null NOT NULL name",
                 "constraint object_actions.object_actions_name_valid CHECK ((name ~ '^[A-Z][A-Z0-9_]{1,48}\$'::text))",
-                "constraint object_actions.object_actions_not_builtin CHECK ((name <> ALL ($BUILT_IN_ACTIONS)))",
                 "constraint object_actions.object_actions_object_id_fkey FOREIGN KEY (object_id) " +
                     "REFERENCES META.custom_objects(id) ON DELETE CASCADE",
                 "constraint object_actions.object_actions_object_id_not_null NOT NULL object_id",
                 "constraint object_actions.object_actions_pkey PRIMARY KEY (object_id, name)",
-                "constraint permissions.permissions_action_valid CHECK (((action = ANY ($BUILT_IN_ACTIONS)) OR (object_id IS NOT NULL)))",
                 "constraint permissions.permissions_declared_action_fkey FOREIGN KEY (declared_object_id, action) " +
                     "REFERENCES META.object_actions(object_id, name) ON DELETE CASCADE",
                 "index object_actions.object_actions_pkey CREATE UNIQUE INDEX object_actions_pkey ON META.object_actions USING btree (object_id, name)",
@@ -287,6 +285,13 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "btree (organization_id, correlation_id)",
                 "column automation_runs.correlation_id #17 text"
             ).associateWith { "ADR-031 D35: correlation id and change source" } +
+            // MANAGE_TENANTS joins the built-in actions, object-less only (ADR-031 D41, ADR-055). the declared_object_id
+            // expression above keeps the six: an object-less row is null there either way
+            listOf(
+                "constraint object_actions.object_actions_not_builtin CHECK ((name <> ALL ($BUILT_IN_ACTIONS_V15)))",
+                "constraint permissions.permissions_action_valid CHECK (((action = ANY ($BUILT_IN_ACTIONS_V15)) OR (object_id IS NOT NULL)))",
+                "constraint permissions.permissions_tenants_no_object CHECK (((action <> 'MANAGE_TENANTS'::text) OR (object_id IS NULL)))"
+            ).associateWith { "ADR-031 D41: MANAGE_TENANTS" } +
             // the audit list by user and period (ADR-031 D37, ADR-052)
             mapOf(
                 "index audit_log.audit_log_user_time_idx CREATE INDEX audit_log_user_time_idx ON META.audit_log USING btree " +
@@ -301,7 +306,33 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "FOR EACH ROW EXECUTE FUNCTION META.audit_log_guard()",
                 "trigger audit_log.audit_log_no_truncate CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON META.audit_log " +
                     "FOR EACH STATEMENT EXECUTE FUNCTION META.audit_log_guard()"
-            ).associateWith { "ADR-031 D39: audit_log is append-only in the database" }
+            ).associateWith { "ADR-031 D39: audit_log is append-only in the database" } +
+            // Idempotency-Key on record creation (ADR-031 D45, ADR-058): a new core table
+            listOf(
+                "column idempotency_keys.created_at #7 timestamp with time zone NOT NULL DEFAULT now()",
+                "column idempotency_keys.key #3 text NOT NULL",
+                "column idempotency_keys.organization_id #1 uuid NOT NULL",
+                "column idempotency_keys.request_hash #4 text NOT NULL",
+                "column idempotency_keys.response_body #6 text NOT NULL",
+                "column idempotency_keys.response_status #5 integer NOT NULL",
+                "column idempotency_keys.user_id #2 uuid",
+                "constraint idempotency_keys.idempotency_keys_created_at_not_null NOT NULL created_at",
+                "constraint idempotency_keys.idempotency_keys_key_not_null NOT NULL key",
+                "constraint idempotency_keys.idempotency_keys_key_valid CHECK (((length(key) >= 1) AND (length(key) <= 128)))",
+                "constraint idempotency_keys.idempotency_keys_organization_id_fkey FOREIGN KEY (organization_id) " +
+                    "REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint idempotency_keys.idempotency_keys_organization_id_not_null NOT NULL organization_id",
+                "constraint idempotency_keys.idempotency_keys_request_hash_not_null NOT NULL request_hash",
+                "constraint idempotency_keys.idempotency_keys_response_body_not_null NOT NULL response_body",
+                "constraint idempotency_keys.idempotency_keys_response_status_not_null NOT NULL response_status",
+                "constraint idempotency_keys.idempotency_keys_unique UNIQUE NULLS NOT DISTINCT (organization_id, user_id, key)",
+                "constraint idempotency_keys.idempotency_keys_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "index idempotency_keys.idempotency_keys_created_idx CREATE INDEX idempotency_keys_created_idx ON META.idempotency_keys " +
+                    "USING btree (created_at)",
+                "index idempotency_keys.idempotency_keys_unique CREATE UNIQUE INDEX idempotency_keys_unique ON META.idempotency_keys " +
+                    "USING btree (organization_id, user_id, key) NULLS NOT DISTINCT",
+                "table idempotency_keys"
+            ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" }
 
     @Test
     fun `the fixture is the original's whole schema`() {
@@ -364,5 +395,10 @@ class SchemaParityTest : FullAppIntegrationTest() {
         // how the catalog spells the built-in action list
         const val BUILT_IN_ACTIONS =
             "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, 'MANAGE_ORGANIZATION'::text]"
+
+        // and since core's V15, MANAGE_TENANTS too
+        const val BUILT_IN_ACTIONS_V15 =
+            "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, " +
+                "'MANAGE_ORGANIZATION'::text, 'MANAGE_TENANTS'::text]"
     }
 }

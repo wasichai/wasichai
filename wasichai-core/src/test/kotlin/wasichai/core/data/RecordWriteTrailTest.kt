@@ -181,7 +181,9 @@ class RecordWriteTrailTest {
             listOf(listener),
             RecordWriteGuards(listOf(guard), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
-            RecordReadScopesFixtures.none()
+            RecordReadScopesFixtures.none(),
+            TenantDirectoryFixtures.none(),
+            IdempotencyKeysFixtures.none()
         )
     }
 

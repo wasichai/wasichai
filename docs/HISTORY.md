@@ -2,24 +2,165 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
-## 2026-10-08 — Security floors for the open Dependabot alerts
+## 2026-10-08 — The app shapes what the assistant sends out, per caller, and hears about every run
 
-The 21 open Dependabot alerts came from five transitive dependencies that Spring Boot 4.1.1 (the latest 4.1 release)
-or the build tools still pin to a vulnerable version. `gradle/libs.versions.toml` now sets a floor for each, and Gradle
-resolves the highest version, so each floor can go once the Boot BOM or the tool reaches it:
+The assistant read only what its user may read (ADR-014), but handed each tool result to the model as it was, was on
+or off for the whole deployment, and said nothing about what a question cost, so an app could not pseudonymize what
+leaves, enable it per organization or log every interaction with its tokens
+([#59](https://github.com/wasichai/wasichai/issues/59)). `wasichai-agent` now defines four beans, each with a no-op
+default ([ADR-056](adr/0056-what-reaches-the-model-is-the-apps-to-shape.md), amends ADR-014; ADR-031 D43):
+`AgentResultFilter` (every bean, in `@Order`, on each tool's JSON for the model and on the step's `summary`, run as
+the caller inside the run's bridge), `AgentAnswerFilter` (on the final text, to restore a reversible pseudonym),
+`AgentAccessPolicy` (`Allowed` or `Denied(reason)`, default `ALLOW_ALL`: a denied caller's `GET /api/agent/status`
+says `enabled: false` and `POST /api/agent/ask` is a `403` with the reason, before the run) and `AgentRunListener`
+(once per question that reached the run: answer, truncated run or failure, with `AgentUsage(model, inputTokens,
+outputTokens)` summed over the `LlmInvocation`s Embabel recorded on the run's process, `null` when none). A filter
+that throws fails the run closed: the result is not sent, Embabel's tool loop is asked to stop before its next model
+call (`terminateAction`), every later tool call and retried action stops (`AgentRun.requireOpen`), and `ask` answers
+with the filter's own `WasichaiException` or `AgentFilterException` (`500`, "nothing was sent"). A listener that
+throws fails the request. `AgentAnswer` and the `ask` response gain `usage`, left out when null, so with no beans
+and a model that reports no tokens the JSON is unchanged; a real provider's answers now carry it. In code:
+`AgentExtensions.kt`, `AgentRun` takes the caller's `AuthenticatedUser` and the filters and holds the process and
+the first failure, `AgentService` takes the policy, filters and listeners (the auto-configuration passes every bean
+in order) and `status()` is now `suspend`, `WasichaiAgent` attaches the process to the run. No route, property or
+migration. New tests: `AgentExtensionsTest` (Embabel's in-memory platform with a recording scripted model: the model
+gets the pseudonym, never the value; summaries filtered; answer restored; filters in order and as the caller; a
+throwing filter fails closed and the model is called once; a filter's own refusal keeps its status; a denied caller
+sees `enabled: false` and is refused with the model never called; one listener call with usage for an answer, a
+truncated run and a model failure; a throwing listener fails the request; with nothing declared the response has
+only `answer`, `steps`, `truncated`), cases in `WasichaiAgentAutoConfigurationTest`, the integration test
+`AgentAccessPolicyApiTest` (status, `403` with the reason, the model never hears it) and a case in `AgentEmbabelTest`
+(no `usage` key over HTTP). Docs: [agent.md](modules/agent.md#extension-points), [rest.md](api/rest.md) "AI
+assistant", [build-your-app.md](guides/build-your-app.md) "The AI assistant and what it sends out".
 
-- Jackson 3 `tools.jackson` 3.1.5 → 3.1.7 and Jackson 2 `com.fasterxml.jackson` 2.21.5 → 2.21.7 (jackson-core ReDoS
-  and unbounded error token, jackson-databind DoS, `Path` scheme allowlist, `Comparable` base type), as
-  `api(platform(...jackson-bom))` in `wasichai.kotlin-library` and in `wasichai-bom`, so apps that import the BOM get
-  them too.
-- OnGres SCRAM 3.2 → 3.3 (silent channel-binding downgrade, GHSA-p9jg-fcr6-3mhf), pulled by `r2dbc-postgresql`, as a
-  constraint in the same two places.
-- logback 1.3.15 → 1.5.38 on the `ktlint` configuration only (ktlint 1.7.1 brings 1.3.15); never on a library's
-  classpath, never published.
-- kotlin-gradle-plugin 2.4.10 → 2.4.20 on `build-logic`'s buildscript classpath, where `kotlin-dsl` puts it
-  (GHSA-r937-wjx7-w2jp, build cache deserialization). Gradle 9.8.1 still embeds 2.4.10.
+## 2026-10-08 — A record create takes an Idempotency-Key
 
-No behaviour change; patch releases only.
+`POST /api/objects/{object}/records` was not idempotent: a client that timed out or got a `5xx` and sent the create
+again got a second record, which the append-only trail then keeps for good
+([#63](https://github.com/wasichai/wasichai/issues/63)). The create now takes an optional `Idempotency-Key` header (1
+to 128 printable ASCII characters, a `400` on the header otherwise), kept per organization and caller (a person, a
+service account, or the platform in process). The first request is processed as before and its `201` and JSON body are
+stored with the key in the new core table `idempotency_keys` (`V16__idempotency_keys.sql`), in the record's own
+transaction, and answered from those bytes. The same key with the same method, path and body (keys sorted, so order and
+spacing do not count) answers the stored status and body again with `Idempotent-Replayed: true` and the stored record's
+`ETag`, and writes, audits and announces nothing; with another body or object it is a `422` naming the header; while
+the first is still running, a `409` with `Retry-After: 1`. The in-flight marker is a transaction advisory lock taken
+without waiting, so a request never holds a connection waiting for another and a crash leaves no key behind; a row
+means committed, and the issue's `status` column is left out. A failed request stores nothing, so the key can be retried
+with a corrected body; with a key, a listener that fails after the write rolls the record back too. Keys live
+`wasichai.idempotency.ttl` (default `24h`; an expired key never replays) and `IdempotencyKeyPurge` deletes them every
+`wasichai.idempotency.purge-interval` (default `1h`, `0s` off) on one replica under `ClusterLock`. In process:
+`RecordService.create(objectName, request, reason, idempotencyKey)`, an overload; a replay returns the record as its
+stored JSON holds it. New in code: `IdempotencyKeys`, `IdempotencyKeyPurge`, `WasichaiIdempotencyProperties`, and in
+`common` `RetryLaterException` (a `409` with `Retry-After`) and `UnprocessableContentException` (`422`). The keyed
+create is its own handler method (`headers = "Idempotency-Key"`), so a request without the header runs exactly the
+code it ran before. CORS exposes `Idempotent-Replayed` and `Retry-After`. `RecordService` takes `IdempotencyKeys` as
+its last constructor argument. `POST /api/organizations` and links are a follow-up
+([ADR-058](adr/0058-idempotency-key-on-record-creation.md), ADR-031 D45; the table is a known schema-parity
+deviation). New tests: `IdempotencyKeysTest`, two cases in `WasichaiAutoConfigurationTest` (beans, CORS headers, the ttl
+property) and the integration test `RecordIdempotencyApiTest` (replay, one audit row and one listener call, `422`, two
+callers, concurrent senders, in flight `409`, a failed request retried, a failing listener, malformed keys, no header,
+expiry with and without the purge, in process and in the caller's transaction). Docs: [rest.md](api/rest.md) "Retrying
+a create", [core.md](modules/core.md).
+
+## 2026-10-08 — The security floors reach apps that import only the BOM
+
+The floors over the Spring Boot BOM (below) sit in `wasichai.spring-module`, so a Gradle app gets them through the
+modules' published metadata, but a Maven app that imports `wasichai-bom` did not: Maven never inherits a dependency's
+`dependencyManagement`, only an imported BOM's. `wasichai-bom` now imports the Jackson 2 (`2.21.7`) and Jackson 3
+(`3.1.7`) BOMs ahead of Boot's, since in Maven the first import that manages an artifact wins, and constrains
+`com.ongres.scram` to `3.3`, from the same catalog entries, so each floor still goes in one place once Boot catches
+up. No behaviour change, no new artifact.
+
+## 2026-10-08 — Security floors over the Spring Boot BOM
+
+Clears the open Dependabot alerts. Spring Boot 4.1.1, the newest release, still manages vulnerable patch versions, so
+`gradle/libs.versions.toml` gains floors the convention plugins apply: `wasichai.spring-module` imports the Jackson 2
+(`2.21.7`) and Jackson 3 (`3.1.7`) BOMs next to Boot's and constrains `com.ongres.scram` (pgjdbc and r2dbc-postgresql)
+to `3.3`, all as `api` so apps on the modules get them too; `wasichai.kotlin-library` lifts the `ktlint*` tool
+classpath from logback `1.3.15` to `1.5.38`; build-logic constrains its buildscript classpath so `kotlin-dsl` uses
+kotlin-gradle-plugin `2.4.20` instead of Gradle's embedded `2.4.10`. Fixed: jackson-core ReDoS in `NumberInput` and
+unbounded `_reportInvalidToken`; jackson-databind `Duration`/`XMLGregorianCalendar` parse DoS, forward-reference
+completion, unknown type ID retention, `Comparable` base type, `Path` scheme allowlist; SCRAM channel-binding
+downgrade; four logback-core advisories; Kotlin build cache deserialization. Each floor goes once Boot manages a
+version at least as new.
+
+## 2026-10-08 — Background work finds the tenants through a tenant directory
+
+A job that runs per tenant had no supported way to find the tenants: there is no REST list on purpose, and the only
+iteration was internal (`CustomObjectRepository.findAllOrganizations()`, which an app called anyway, and
+`OrganizationRepository.ids()`) ([#62](https://github.com/wasichai/wasichai/issues/62)). Core now declares
+`TenantDirectory` (`wasichai.core.platform`, bean `tenantDirectory`, `@ConditionalOnMissingBean`):
+`organizations()` and `organizationsWithObject(name)` answer `TenantRef(id, slug)` lists ordered by id, read by
+`DatabaseTenantDirectory` from `organizations` and `custom_objects`. Like `asPlatform`, both throw
+`IllegalStateException` inside a request, with a token or anonymous; the check moved from `PlatformCaller` to one
+internal `platform.Background` that both use. `RecordService.forEachOrganization(objectName = null, source =
+"platform") { organizationId -> }` runs a block per tenant inside `asPlatform`, logs one tenant's failure and goes on,
+and refuses a request before asking the directory. `DeclaredIndexReconciler` and the notifications loop walk the
+directory; `OrganizationRepository.ids()` is gone and `findAllOrganizations()` is deprecated. `RecordService` takes the
+directory as its last constructor argument. No REST change, no migration
+([ADR-057](adr/0057-background-work-finds-the-tenants-through-a-tenant-directory.md), follows up ADR-039). New tests:
+`TenantDirectoryTest`, five `forEachOrganization` cases in `RecordServicePlatformTest`, `TenantDirectoryBoundaryTest`
+(no controller of core or a module takes the directory) and the integration test `TenantDirectoryApiTest`; the
+`OrganizationRepository.ids()` case left `OrgUnitDirectoryTest`. Docs: [core.md](modules/core.md),
+[notifications.md](modules/notifications.md), [build-your-app.md](guides/build-your-app.md) "Background work".
+
+## 2026-10-08 — A self-relationship is read from either end
+
+A relationship may join an object to itself (a parent unit, a previous version, a duplicate-of), but the related read
+and the object's relationship list decided the end from the object alone, which is both, so a parent's children or the
+sources linked to a record could not be read through the relationship
+([#61](https://github.com/wasichai/wasichai/issues/61)). `GET /api/objects/{object}/records/{id}/related/{relationship}`
+now takes `direction=forward|inverse`: `forward`, the default, is exactly the walk the read made before (from the source
+end, but for `ONE_TO_MANY` from the target end, which holds the key: the record's parent); `inverse` walks the other end
+(the records whose relation field points at this one, the `ONE_TO_MANY` children, or for `MANY_TO_MANY` the join
+table's `source_id` side), with paging, `count=false` and `after=` and the same permissions, field permissions,
+own-records-only and read scope. `inverse` on a relationship between two objects, or any other value, is a `400` naming
+`direction`. `GET /api/objects/{object}/relationships` lists a self-relationship twice, forward then inverse, each
+entry with `direction` and the label and `many` of what that direction reads (for a `ONE_TO_MANY` self-relationship,
+forward is the parent, so `inverseLabel` and `many: false`, where the one entry used to say `label` and `many: true`);
+other entries are unchanged, with no `direction` key, so a client keying by `relationship` alone keeps working if it
+keeps the first entry of a name (ADR-031 D42). No default read changes. In code: `RelationshipDirection` (`parse`, `wire`, `fromSource(type)`), a
+`Relationship.selfReferencing` flag, `RelatedSide.direction` and `fromSource`, a `direction` argument on
+`RelationshipService.side` and on `RelatedRecordService.relatedRecords` and `relatedRows` (defaulting to forward), and
+`direction` on `RelatedSideResponse` (left out when null). Link and unlink are unchanged. A generated page keeps one
+`RELATED_LIST` per relationship (the forward one), since a component names no direction yet. The agent's
+`list_relationships` reports `direction` and `related_records` takes an optional `direction`. No migration. New tests:
+`RelationshipSideTest`, the integration suite `SelfRelationshipApiTest` (each relationship type as a self-relationship,
+paging and keyset for the inverse read, the `400`s, the listing, own-records-only), and cases in
+`RecordReadScopeApiTest`, `PageServiceTest` and `AgentToolCatalogTest`. Docs: [rest.md](api/rest.md) "Relationships"
+and "Related records", [metadata-model.md](domain/metadata-model.md), [core.md](modules/core.md).
+
+## 2026-10-08 — Creating and deleting tenants can be kept apart from administering one
+
+`POST /api/organizations` and `DELETE /api/organizations/current` checked `MANAGE_ORGANIZATION`, which `ADMIN` always
+passes and the `ADMIN` role of every provisioned tenant holds, so a customer's administrator could create tenants and
+drop its own ([#56](https://github.com/wasichai/wasichai/issues/56)). Now both check a new object-less built-in action,
+`MANAGE_TENANTS` ([ADR-055](adr/0055-tenant-provisioning-apart-from-tenant-administration.md), ADR-031 D41; amends
+ADR-053). The new property `wasichai.organizations.separate-provisioning` (default `false`) decides who holds it: off,
+whoever passes the `MANAGE_ORGANIZATION` check, exactly as before; on, only a role granted it with no object, the one
+built-in action `ADMIN` does not short-circuit. A service account never holds it (ADR-043). `PUT
+/api/organizations/current` stays `MANAGE_ORGANIZATION`, and the `ADMIN` role created by provisioning keeps its six
+actions, so it never holds `MANAGE_TENANTS`. In `PUT /api/roles/{name}/permissions` the action is accepted with no
+object only (`400` naming `objectName` otherwise), and adding, removing or changing a role's `MANAGE_TENANTS` entry takes
+a caller whose own roles hold the grant (`403` otherwise, `ADMIN` included), whatever the switch, so no tenant grants
+it to itself; the first holder is one row written by the operator, as the build-your-app guide shows.
+`GET /api/auth/me/permissions` lists it third in `capabilities`, through the same check, so by default the
+administrator's list gains `MANAGE_TENANTS`; with the switch on, `ADMIN` gets it only with a grant. Declared actions
+(ADR-042) may not use the name. The admin audit of provisioning and deletion is unchanged. `CurrentUser` takes the
+switch (`CurrentUser(roleQueries, separateProvisioning)`, default `false`) and gains `holdsTenantsGrant`; the property
+binds to `WasichaiOrganizationsProperties`. `V15__manage_tenants.sql` extends `permissions_action_valid` and
+`object_actions_not_builtin` and adds `permissions_tenants_no_object`; `SchemaParityTest` lists the three as D41
+deviations. New tests: `CurrentUserTest`, three cases in `CallerPermissionsServiceTest`, `separate provisioning is off by
+default and reaches CurrentUser when on` in `WasichaiAutoConfigurationTest`, one case each in `ObjectActionNameTest`
+and `CoreMigrationSqlTest`, the integration suite
+`SeparateProvisioningApiTest` (switch on: `ADMIN` and `MANAGE_ORGANIZATION` refused, a `MANAGE_TENANTS` role creates
+and deletes, a provisioned tenant's `ADMIN` lacks it, granting through the roles API by a holder only, a service account
+refused) and `by default MANAGE_TENANTS is the administrator's, but only a holder of the grant hands it on` in
+`OrganizationApiTest`; the administrator's expected `capabilities` gain the third entry in `CallerPermissionsServiceTest`
+and `PermissionEnforcementTest`. Docs: [rest.md](api/rest.md) "Organizations" and "Auth",
+[authentication.md](security/authentication.md), [core.md](modules/core.md),
+[build-your-app.md](guides/build-your-app.md) "Operator and customer tenants".
 
 ## 2026-10-08 — A field's default is applied on create
 

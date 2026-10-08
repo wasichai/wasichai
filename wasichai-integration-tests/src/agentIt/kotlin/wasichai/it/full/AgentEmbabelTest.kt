@@ -214,9 +214,35 @@ class AgentEmbabelTest : FullAppIntegrationTest() {
 
     @Test
     fun `the assistant reports itself enabled when a key is configured`() {
-        val status = agent.status()
+        val status = asCaller(admin) { agent.status() }
         assertThat(status.enabled).isTrue()
         assertThat(status.model).isEqualTo("claude-haiku-4-5")
+    }
+
+    // no extension declared and no token count from the model: the answer reads as it always did
+    @Test
+    fun `over HTTP the answer is the answer, the steps and the truncated flag, nothing more`() {
+        scripted
+            .callTool(AgentToolCatalog.COUNT_RECORDS, """{"object": "$objectName"}""")
+            .returnObject("There is 1 $objectName.")
+
+        client
+            .post()
+            .uri("/api/agent/ask")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("question" to "How many $objectName are there?"))
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.answer")
+            .isEqualTo("There is 1 $objectName.")
+            .jsonPath("$.truncated")
+            .isEqualTo(false)
+            .jsonPath("$.steps[0].tool")
+            .isEqualTo(AgentToolCatalog.COUNT_RECORDS)
+            .jsonPath("$.usage")
+            .doesNotExist()
     }
 
     // ------------------------------------------------------------------ helpers
@@ -224,10 +250,15 @@ class AgentEmbabelTest : FullAppIntegrationTest() {
     private fun ask(
         token: String,
         question: String
-    ): AgentAnswer {
+    ): AgentAnswer = asCaller(token) { agent.ask(question) }
+
+    private fun <T> asCaller(
+        token: String,
+        block: suspend () -> T
+    ): T {
         val jwt = jwtDecoder.decode(token.removePrefix("Bearer ")).block()!!
         val context = ReactiveSecurityContextHolder.withAuthentication(JwtAuthenticationToken(jwt))
-        return runBlocking(context.asCoroutineContext()) { agent.ask(question) }
+        return runBlocking(context.asCoroutineContext()) { block() }
     }
 
     private fun createObject(name: String) {

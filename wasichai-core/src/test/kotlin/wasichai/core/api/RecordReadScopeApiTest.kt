@@ -177,6 +177,44 @@ class RecordReadScopeApiTest : WasichaiIntegrationTest() {
         assertThat(related(bob, persona, beto, vinculo).total).isEqualTo(0)
     }
 
+    // issue 61: a self-relationship walked backwards is scoped on both sides, exactly like forward
+    @Test
+    fun `an inverse read of a self-relationship is scoped like a forward one`() {
+        val mentor = uniqueName("rel").take(30)
+        client
+            .post()
+            .uri("/api/relationships")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to mentor,
+                    "label" to "Mentor",
+                    "inverseLabel" to "Mentees",
+                    "type" to "MANY_TO_ONE",
+                    "source" to persona,
+                    "target" to persona,
+                    "fieldName" to "mentor"
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        val carla = createRecord(admin, persona, mapOf("nombre" to "Carla", "project_id" to "A", "mentor" to ana))
+        val dario = createRecord(admin, persona, mapOf("nombre" to "Dario", "project_id" to "B", "mentor" to ana))
+
+        assertThat(related(admin, persona, ana, mentor, "?direction=inverse").total).isEqualTo(2)
+        // alice reads Ana, and of Ana's mentees only the one in project A
+        related(alice, persona, ana, mentor, "?direction=inverse").let {
+            assertThat(it.total).isEqualTo(1)
+            assertThat(it.names).containsExactly("Carla")
+        }
+        // Ana is out of bob's scope: the walk from her is a 404, either way
+        relatedCall(bob, persona, ana, mentor, "?direction=inverse").expectStatus().isNotFound
+        relatedCall(bob, persona, ana, mentor).expectStatus().isNotFound
+        // forward from Dario: his mentor is out of bob's scope, so nothing
+        assertThat(related(bob, persona, dario, mentor).total).isEqualTo(0)
+        assertThat(related(alice, persona, carla, mentor).names).containsExactly("Ana")
+    }
+
     @Test
     fun `a link or unlink naming a record out of scope is a 404 on either end`() {
         link(alice, a1, beto).expectStatus().isNotFound
@@ -458,11 +496,12 @@ class RecordReadScopeApiTest : WasichaiIntegrationTest() {
         token: String,
         name: String,
         id: String,
-        relationship: String
+        relationship: String,
+        query: String = ""
     ): WebTestClient.ResponseSpec =
         client
             .get()
-            .uri("/api/objects/$name/records/$id/related/$relationship")
+            .uri("/api/objects/$name/records/$id/related/$relationship$query")
             .header(HttpHeaders.AUTHORIZATION, token)
             .exchange()
 
@@ -470,8 +509,9 @@ class RecordReadScopeApiTest : WasichaiIntegrationTest() {
         token: String,
         name: String,
         id: String,
-        relationship: String
-    ): Page = relatedCall(token, name, id, relationship).expectStatus().isOk.page()
+        relationship: String,
+        query: String = ""
+    ): Page = relatedCall(token, name, id, relationship, query).expectStatus().isOk.page()
 
     private fun link(
         token: String,

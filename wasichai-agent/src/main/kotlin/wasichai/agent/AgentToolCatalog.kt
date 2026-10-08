@@ -94,5 +94,9 @@ object AgentToolCatalog {
 
     const val RELATIONSHIP_ARGUMENT = "Technical name of the relationship, from $LIST_RELATIONSHIPS."
 
+    const val RELATED_DIRECTION_ARGUMENT =
+        "Only for a relationship from an object to itself: 'forward' (the default) or 'inverse', as $LIST_RELATIONSHIPS " +
+            "returns it. Leave it out for any other relationship."
+
     const val BBOX_ARGUMENT = "Spatial filter as minX,minY,maxX,maxY in EPSG:4326."
 }

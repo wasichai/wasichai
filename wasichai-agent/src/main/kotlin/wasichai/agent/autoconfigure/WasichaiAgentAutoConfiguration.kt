@@ -8,8 +8,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import tools.jackson.databind.json.JsonMapper
+import wasichai.agent.AgentAccessPolicy
+import wasichai.agent.AgentAnswerFilter
 import wasichai.agent.AgentController
 import wasichai.agent.AgentProperties
+import wasichai.agent.AgentResultFilter
+import wasichai.agent.AgentRunListener
 import wasichai.agent.AgentService
 import wasichai.agent.AgentTools
 import wasichai.agent.NoRecordTransitions
@@ -65,14 +69,33 @@ class WasichaiAgentAutoConfiguration {
         tools: AgentTools
     ): WasichaiAgent = WasichaiAgent(properties, tools)
 
-    // the platform is absent whenever EmbabelGate kept embabel out (no key, or switched off)
+    // everyone may ask, as before. an app replaces it to switch the assistant on per organization.
+    @Bean
+    @ConditionalOnMissingBean
+    fun agentAccessPolicy(): AgentAccessPolicy = AgentAccessPolicy.ALLOW_ALL
+
+    // the platform is absent whenever EmbabelGate kept embabel out (no key, or switched off).
+    // filters and listeners: every bean the app declares, in @Order; none is the old behaviour.
     @Bean
     @ConditionalOnMissingBean
     fun agentService(
         properties: AgentProperties,
         currentUser: CurrentUser,
-        platform: ObjectProvider<AgentPlatform>
-    ): AgentService = AgentService(properties, currentUser, platform)
+        platform: ObjectProvider<AgentPlatform>,
+        policy: AgentAccessPolicy,
+        resultFilters: ObjectProvider<AgentResultFilter>,
+        answerFilters: ObjectProvider<AgentAnswerFilter>,
+        listeners: ObjectProvider<AgentRunListener>
+    ): AgentService =
+        AgentService(
+            properties,
+            currentUser,
+            platform,
+            policy,
+            resultFilters.orderedStream().toList(),
+            answerFilters.orderedStream().toList(),
+            listeners.orderedStream().toList()
+        )
 
     @Bean
     @ConditionalOnMissingBean

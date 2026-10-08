@@ -1,5 +1,4 @@
-// kotlin-dsl brings kotlin-gradle-plugin 2.4.10 onto this build's classpath: GHSA-r937-wjx7-w2jp
-// (build cache deserialization), fixed in 2.4.20. pin it to the catalog kotlin.
+// kotlin-dsl pulls gradle's embedded kotlin plugin (2.4.10, vulnerable build cache). lift it to ours
 buildscript {
     dependencies {
         constraints {

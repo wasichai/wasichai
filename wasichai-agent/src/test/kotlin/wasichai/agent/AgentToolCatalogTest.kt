@@ -4,6 +4,7 @@ import com.embabel.agent.api.tool.Tool
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import wasichai.core.identity.AuthenticatedUser
 import kotlin.coroutines.EmptyCoroutineContext
 
 // What the model is actually handed. Embabel derives the tool definitions by reflecting over the
@@ -16,7 +17,7 @@ class AgentToolCatalogTest {
             .fromInstance(
                 AgentToolbox(
                     tools = mock(AgentTools::class.java),
-                    run = AgentRun("does not matter", EmptyCoroutineContext)
+                    run = AgentRun("does not matter", EmptyCoroutineContext, mock(AuthenticatedUser::class.java))
                 )
             ).map { it.definition }
 
@@ -87,6 +88,15 @@ class AgentToolCatalogTest {
         // everything but the object is optional, or the model cannot ask a plain question
         assertThat(requiredOf(AgentToolCatalog.QUERY_RECORDS)).containsExactly("object")
         assertThat(definitionOf(AgentToolCatalog.QUERY_RECORDS).description).contains(MAX_TOOL_LIMIT.toString())
+    }
+
+    // #61: a self-relationship can be walked both ways; the direction is optional, forward by default
+    @Test
+    fun `related_records takes an optional direction`() {
+        assertThat(argumentsOf(AgentToolCatalog.RELATED_RECORDS).map { it.name })
+            .containsExactlyInAnyOrder("object", "id", "relationship", "limit", "direction")
+        assertThat(requiredOf(AgentToolCatalog.RELATED_RECORDS)).containsExactlyInAnyOrder("object", "id", "relationship")
+        assertThat(argumentsOf(AgentToolCatalog.RELATED_RECORDS).first { it.name == "direction" }.description).contains("inverse")
     }
 
     @Test

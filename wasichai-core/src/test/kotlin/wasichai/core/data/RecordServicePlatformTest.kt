@@ -26,6 +26,8 @@ import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.ChangeOrigin
+import wasichai.core.platform.TenantDirectory
+import wasichai.core.platform.TenantRef
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Instant
 import java.util.UUID
@@ -143,11 +145,12 @@ class RecordServicePlatformTest {
         }
 
     // no user anywhere: CurrentUser says so, and AccessPolicy is never consulted (an unstubbed mock answers null)
-    private suspend fun service(): RecordService {
+    private suspend fun service(tenants: TenantDirectory = TenantDirectoryFixtures.none()): RecordService {
         val currentUser = mock(CurrentUser::class.java)
         val metadata = mock(MetadataService::class.java)
         doThrow(UnauthorizedException("Authentication required")).`when`(currentUser).require()
         doReturn(definition).`when`(metadata).loadDefinition(organizationId, "predio")
+        tenants.organizations().forEach { doReturn(definition).`when`(metadata).loadDefinition(it.id, "predio") }
         return RecordService(
             metadata,
             store,
@@ -165,7 +168,9 @@ class RecordServicePlatformTest {
             ),
             RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
-            RecordReadScopesFixtures.none()
+            RecordReadScopesFixtures.none(),
+            tenants,
+            IdempotencyKeysFixtures.none()
         )
     }
 
@@ -275,5 +280,94 @@ class RecordServicePlatformTest {
             assertThat(refused.exceptionOrNull()).isInstanceOf(IllegalStateException::class.java)
             assertThat(writes).isEmpty()
             assertThat(audited).isEmpty()
+        }
+
+    // ADR-057: forEachOrganization = the directory's tenants, each inside asPlatform
+    private val tenantA = TenantRef(UUID.fromString("00000000-0000-0000-0000-00000000000a"), "a")
+    private val tenantB = TenantRef(UUID.fromString("00000000-0000-0000-0000-00000000000b"), "b")
+    private val tenantC = TenantRef(UUID.fromString("00000000-0000-0000-0000-00000000000c"), "c")
+    private val three = TenantDirectoryFixtures.of(listOf(tenantA, tenantB, tenantC)) { if (it == "predio") listOf(tenantB) else emptyList() }
+
+    @Test
+    fun `forEachOrganization runs the block once per organization, in order, as the platform of each`() =
+        runTest {
+            val records = service(three)
+            val seen = mutableListOf<UUID>()
+
+            records.forEachOrganization { organizationId ->
+                seen += organizationId
+                records.create("predio", RecordRequest(mapOf("codigo" to "P-$organizationId")))
+            }
+
+            assertThat(seen).containsExactly(tenantA.id, tenantB.id, tenantC.id)
+            assertThat(writes).containsExactly(
+                Write("insert", tenantA.id, null),
+                Write("insert", tenantB.id, null),
+                Write("insert", tenantC.id, null)
+            )
+            assertThat(audited.map { it.organizationId to it.userId }).containsExactly(tenantA.id to null, tenantB.id to null, tenantC.id to null)
+            assertThat(audited.map { it.source }).containsOnly(ChangeOrigin.PLATFORM)
+        }
+
+    @Test
+    fun `forEachOrganization with an object visits only the organizations that define it`() =
+        runTest {
+            val records = service(three)
+            val seen = mutableListOf<UUID>()
+
+            records.forEachOrganization("predio") { seen += it }
+            records.forEachOrganization("nobody-has-it") { seen += it }
+
+            assertThat(seen).containsExactly(tenantB.id)
+        }
+
+    @Test
+    fun `one organization's failure is logged and the others still run`() =
+        runTest {
+            val records = service(three)
+            val seen = mutableListOf<UUID>()
+
+            records.forEachOrganization { organizationId ->
+                seen += organizationId
+                if (organizationId == tenantA.id) error("tenant a is broken")
+                records.create("predio", RecordRequest(mapOf("codigo" to "OK")))
+            }
+
+            assertThat(seen).containsExactly(tenantA.id, tenantB.id, tenantC.id)
+            assertThat(writes.map { it.organizationId }).containsExactly(tenantB.id, tenantC.id)
+        }
+
+    @Test
+    fun `forEachOrganization labels its audit rows with the given source, and refuses a bad one before anything runs`() =
+        runTest {
+            val records = service(three)
+            var ran = 0
+
+            records.forEachOrganization("predio", source = "job:retention") { records.create("predio", RecordRequest(mapOf("codigo" to "J"))) }
+            val refused = runCatching { records.forEachOrganization(source = "job retention") { ran++ } }
+
+            assertThat(audited.map { it.source }).containsExactly("job:retention")
+            assertThat(refused.exceptionOrNull()).isInstanceOf(IllegalArgumentException::class.java)
+            assertThat(ran).isZero()
+        }
+
+    @Test
+    fun `forEachOrganization inside a request throws before any block runs, with a token or anonymous`() =
+        runTest {
+            // the fixture directory has no tripwire of its own: forEachOrganization must not rely on it
+            val records = service(three)
+            var ran = 0
+            val user = ReactiveSecurityContextHolder.withAuthentication(TestingAuthenticationToken("someone", "n/a", "ROLE_ADMIN"))
+            val anonymous = ReactiveSecurityContextHolder.withSecurityContext(Mono.empty<SecurityContext>())
+
+            listOf(user, anonymous).forEach { request ->
+                val refused = withContext(request.asCoroutineContext()) { runCatching { records.forEachOrganization { ran++ } } }
+
+                assertThat(refused.exceptionOrNull())
+                    .isInstanceOf(IllegalStateException::class.java)
+                    .hasMessageContaining("never becomes the platform")
+            }
+            assertThat(ran).isZero()
+            assertThat(writes).isEmpty()
         }
 }

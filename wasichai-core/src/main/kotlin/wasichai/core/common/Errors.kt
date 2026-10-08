@@ -1,6 +1,7 @@
 package wasichai.core.common
 
 import org.springframework.http.HttpStatus
+import java.time.Duration
 
 data class FieldViolation(
     val field: String,
@@ -29,6 +30,19 @@ class PreconditionFailedException(
     message: String,
     violations: List<FieldViolation> = emptyList()
 ) : WasichaiException(HttpStatus.PRECONDITION_FAILED, message, violations)
+
+// a conflict that passes: the caller may send the same again after [retryAfter] (Retry-After, RFC 9110 10.2.3)
+class RetryLaterException(
+    message: String,
+    val retryAfter: Duration,
+    violations: List<FieldViolation> = emptyList()
+) : WasichaiException(HttpStatus.CONFLICT, message, violations)
+
+// well-formed, understood, and still refused as sent: RFC 9110's 422 (an Idempotency-Key reused for another body, ADR-058)
+class UnprocessableContentException(
+    message: String,
+    violations: List<FieldViolation> = emptyList()
+) : WasichaiException(HttpStatus.UNPROCESSABLE_CONTENT, message, violations)
 
 class ForbiddenException(
     message: String

@@ -6,8 +6,10 @@ import kotlinx.coroutines.reactor.mono
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.DuplicateKeyException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.bind.support.WebExchangeBindException
@@ -28,6 +30,16 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(WasichaiException::class)
     fun handleWasichai(ex: WasichaiException): ProblemDetail = problem(ex.status, ex.message, ex.violations)
+
+    // the problem, plus when to try again. seconds, rounded up: 0 would invite a busy loop
+    @ExceptionHandler(RetryLaterException::class)
+    fun handleRetryLater(ex: RetryLaterException): ResponseEntity<ProblemDetail> {
+        val seconds = maxOf(1, (ex.retryAfter.toMillis() + 999) / 1000)
+        return ResponseEntity
+            .status(ex.status)
+            .header(HttpHeaders.RETRY_AFTER, seconds.toString())
+            .body(problem(ex.status, ex.message, ex.violations))
+    }
 
     @ExceptionHandler(WebExchangeBindException::class)
     fun handleBinding(ex: WebExchangeBindException): ProblemDetail =
