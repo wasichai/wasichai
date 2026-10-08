@@ -332,7 +332,9 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "index idempotency_keys.idempotency_keys_unique CREATE UNIQUE INDEX idempotency_keys_unique ON META.idempotency_keys " +
                     "USING btree (organization_id, user_id, key) NULLS NOT DISTINCT",
                 "table idempotency_keys"
-            ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" }
+            ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" } +
+            // token revocation marker (ADR-031 D44, ADR-059)
+            mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation")
 
     @Test
     fun `the fixture is the original's whole schema`() {

@@ -23,14 +23,21 @@ import wasichai.core.data.IdempotencyKeys
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthController
 import wasichai.core.identity.AuthService
+import wasichai.core.identity.ConfiguredPasswordPolicy
 import wasichai.core.identity.CurrentUser
+import wasichai.core.identity.InMemoryLoginAttemptStore
 import wasichai.core.identity.JwtService
+import wasichai.core.identity.LoginAttemptStore
+import wasichai.core.identity.LoginThrottle
 import wasichai.core.identity.MyOrgUnitsController
 import wasichai.core.identity.OrgUnitDirectory
+import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.RevocationCheckingJwtDecoder
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.RoleQueries
 import wasichai.core.identity.ServiceAccountTokenController
 import wasichai.core.identity.ServiceAccountTokenService
+import wasichai.core.identity.TokenRevocation
 import wasichai.core.identity.UserDirectory
 import wasichai.core.identity.UserPreferencesController
 import wasichai.core.identity.UserPreferencesRepository
@@ -38,7 +45,9 @@ import wasichai.core.identity.UserPreferencesService
 import wasichai.core.identity.UserRepository
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.platform.JwtProperties
+import wasichai.core.platform.WasichaiLoginProperties
 import wasichai.core.platform.WasichaiOrganizationsProperties
+import wasichai.core.platform.WasichaiPasswordProperties
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.WasichaiWebProperties
 import javax.crypto.spec.SecretKeySpec
@@ -68,10 +77,43 @@ class WasichaiSecurityAutoConfiguration {
         return WasichaiJwtKey(SecretKeySpec(bytes, "HmacSHA256"))
     }
 
+    // with wasichai.security.jwt.revocation, a token issued before its user's marker is refused (ADR-059).
+    // an app's own decoder bean replaces this one, the check included
     @Bean
     @ConditionalOnMissingBean
-    fun jwtDecoder(wasichaiJwtKey: WasichaiJwtKey): ReactiveJwtDecoder =
-        NimbusReactiveJwtDecoder.withSecretKey(wasichaiJwtKey.key).macAlgorithm(MacAlgorithm.HS256).build()
+    fun jwtDecoder(
+        wasichaiJwtKey: WasichaiJwtKey,
+        properties: JwtProperties,
+        tokenRevocation: TokenRevocation
+    ): ReactiveJwtDecoder {
+        val decoder = NimbusReactiveJwtDecoder.withSecretKey(wasichaiJwtKey.key).macAlgorithm(MacAlgorithm.HS256).build()
+        return if (properties.revocation) RevocationCheckingJwtDecoder(decoder, tokenRevocation) else decoder
+    }
+
+    // the marker is written whatever the switch; read only with it on
+    @Bean
+    @ConditionalOnMissingBean
+    fun tokenRevocation(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        properties: JwtProperties
+    ): TokenRevocation = TokenRevocation(db, schemas, properties.revocation, properties.revocationCache)
+
+    // in memory: one node's count. a cluster declares its own store (ADR-059)
+    @Bean
+    @ConditionalOnMissingBean
+    fun loginAttemptStore(): LoginAttemptStore = InMemoryLoginAttemptStore()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun loginThrottle(
+        properties: WasichaiLoginProperties,
+        store: LoginAttemptStore
+    ): LoginThrottle = LoginThrottle(properties, store)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun passwordPolicy(properties: WasichaiPasswordProperties): PasswordPolicy = ConfiguredPasswordPolicy(properties)
 
     @Bean
     @ConditionalOnMissingBean
@@ -183,8 +225,10 @@ class WasichaiSecurityAutoConfiguration {
         users: UserRepository,
         roleQueries: RoleQueries,
         passwordEncoder: PasswordEncoder,
-        jwtService: JwtService
-    ): AuthService = AuthService(users, roleQueries, passwordEncoder, jwtService)
+        jwtService: JwtService,
+        throttle: LoginThrottle,
+        revocation: TokenRevocation
+    ): AuthService = AuthService(users, roleQueries, passwordEncoder, jwtService, throttle, revocation)
 
     @Bean
     @ConditionalOnMissingBean
@@ -225,8 +269,9 @@ class WasichaiSecurityAutoConfiguration {
         schemas: WasichaiSchemas,
         roleQueries: RoleQueries,
         passwordEncoder: PasswordEncoder,
-        jwtService: JwtService
-    ): ServiceAccountTokenService = ServiceAccountTokenService(db, schemas, roleQueries, passwordEncoder, jwtService)
+        jwtService: JwtService,
+        throttle: LoginThrottle
+    ): ServiceAccountTokenService = ServiceAccountTokenService(db, schemas, roleQueries, passwordEncoder, jwtService, throttle)
 
     @Bean
     @ConditionalOnMissingBean

@@ -60,20 +60,28 @@ class ServiceAccountTokenService(
     private val schemas: WasichaiSchemas,
     private val roleQueries: RoleQueries,
     private val passwordEncoder: PasswordEncoder,
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
+    private val throttle: LoginThrottle
 ) {
     private class Credentials(
         val id: UUID,
         val organizationId: UUID,
         val name: String,
         val secretHash: String,
-        val enabled: Boolean
+        val enabled: Boolean,
+        val tokensValidAfter: Instant?
     )
 
     // hashed once, at startup, with the same encoder: an unknown id pays what a wrong secret pays, the first one too
     private val decoyHash: String = passwordEncoder.encode(ServiceAccountSecrets.generate()) as String
 
+    // attempt limits per client id when wasichai.security.login.enabled (ADR-059)
     suspend fun token(
+        clientId: String,
+        clientSecret: String
+    ): ServiceTokenResponse = throttle.token(clientId) { issue(clientId, clientSecret) }
+
+    private suspend fun issue(
         clientId: String,
         clientSecret: String
     ): ServiceTokenResponse {
@@ -82,7 +90,15 @@ class ServiceAccountTokenService(
         val matches = secretMatches(clientSecret, account?.secretHash ?: decoyHash)
         if (account == null || !account.enabled || !matches) throw invalidCredentials()
         val roles = roleQueries.roleNamesOf(account.id)
-        val issued = jwtService.issueForServiceAccount(account.id, account.organizationId, ServiceAccountSecrets.backingEmail(account.id), account.name, roles)
+        val issued =
+            jwtService.issueForServiceAccount(
+                account.id,
+                account.organizationId,
+                ServiceAccountSecrets.backingEmail(account.id),
+                account.name,
+                roles,
+                account.tokensValidAfter
+            )
         return ServiceTokenResponse(
             token = issued.token,
             expiresAt = issued.expiresAt,
@@ -100,15 +116,22 @@ class ServiceAccountTokenService(
     // no tenant to filter by yet: the client id is the account's own id, unique across tenants
     private suspend fun find(id: UUID): Credentials? =
         db
-            .sql("SELECT id, organization_id, name, secret_hash, enabled FROM ${schemas.metadata}.service_accounts WHERE id = :id")
-            .bind("id", id)
+            .sql(
+                """
+                SELECT sa.id, sa.organization_id, sa.name, sa.secret_hash, sa.enabled, u.tokens_valid_after
+                FROM ${schemas.metadata}.service_accounts sa
+                JOIN ${schemas.metadata}.users u ON u.id = sa.id
+                WHERE sa.id = :id
+                """.trimIndent()
+            ).bind("id", id)
             .map { row, _ ->
                 Credentials(
                     id = Rows.uuid(row, "id"),
                     organizationId = Rows.uuid(row, "organization_id"),
                     name = Rows.string(row, "name"),
                     secretHash = Rows.string(row, "secret_hash"),
-                    enabled = Rows.bool(row, "enabled")
+                    enabled = Rows.bool(row, "enabled"),
+                    tokensValidAfter = Rows.instantOrNull(row, "tokens_valid_after")
                 )
             }.one()
             .awaitFirstOrNull()

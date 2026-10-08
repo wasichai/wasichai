@@ -21,18 +21,37 @@ data class UserSummary(
     val roles: List<String>
 )
 
+// throttle: attempt limits when wasichai.security.login.enabled (ADR-059); a pass-through otherwise.
+// revocation: the caller's own marker, for logout.
 @Service
 class AuthService(
     private val users: UserRepository,
     private val roleQueries: RoleQueries,
     private val passwordEncoder: PasswordEncoder,
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
+    private val throttle: LoginThrottle,
+    private val revocation: TokenRevocation
 ) {
+    // clientAddress: the request's remote address, the key of the per-client limit
     suspend fun login(
+        email: String,
+        password: String,
+        clientAddress: String? = null
+    ): LoginResponse {
+        val normalized = email.trim().lowercase()
+        return throttle.login(normalized, clientAddress) { authenticate(normalized, password) }
+    }
+
+    // every token the caller holds stops working, with revocation on. the marker moves either way
+    suspend fun logout(caller: AuthenticatedUser) {
+        revocation.revoke(caller.organizationId, caller.userId)
+    }
+
+    private suspend fun authenticate(
         email: String,
         password: String
     ): LoginResponse {
-        val user = users.findByEmail(email.trim().lowercase()) ?: throw invalidCredentials()
+        val user = users.findByEmail(email) ?: throw invalidCredentials()
         // bcrypt is slow on purpose: off the event loop, or a burst of logins stalls every request
         if (!user.enabled || !withContext(Dispatchers.Default) { passwordEncoder.matches(password, user.passwordHash) }) {
             throw invalidCredentials()

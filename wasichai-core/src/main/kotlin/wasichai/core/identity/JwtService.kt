@@ -28,7 +28,7 @@ class JwtService(
     fun issue(
         user: User,
         roles: List<String>
-    ): IssuedToken = sign(user.id, user.organizationId, user.email, roles, properties.ttl, null)
+    ): IssuedToken = sign(user.id, user.organizationId, user.email, roles, properties.ttl, null, user.tokensValidAfter)
 
     // same token shape as a person's, plus the account name: the app binds its caller to it (ADR-043)
     fun issueForServiceAccount(
@@ -36,8 +36,9 @@ class JwtService(
         organizationId: UUID,
         email: String,
         name: String,
-        roles: List<String>
-    ): IssuedToken = sign(id, organizationId, email, roles, properties.serviceAccountTtl, name)
+        roles: List<String>,
+        tokensValidAfter: Instant? = null
+    ): IssuedToken = sign(id, organizationId, email, roles, properties.serviceAccountTtl, name, tokensValidAfter)
 
     private fun sign(
         subject: UUID,
@@ -45,14 +46,20 @@ class JwtService(
         email: String,
         roles: List<String>,
         ttl: Duration,
-        serviceAccount: String?
+        serviceAccount: String?,
+        tokensValidAfter: Instant?
     ): IssuedToken {
-        val issuedAt = Instant.now()
+        // never before the user's revocation marker: in the second after a change, iat = the marker, so a token
+        // issued after the change is not taken for one issued before it (ADR-059)
+        val now = Instant.now()
+        val issuedAt = if (tokensValidAfter != null && tokensValidAfter.isAfter(now)) tokensValidAfter else now
         val expiresAt = issuedAt.plus(ttl)
         val builder =
             JWTClaimsSet
                 .Builder()
                 .subject(subject.toString())
+                // names the token, for logs and an app's own deny list. revocation itself goes by iat (ADR-059)
+                .jwtID(UUID.randomUUID().toString())
                 .issuer(properties.issuer)
                 .issueTime(Date.from(issuedAt))
                 .expirationTime(Date.from(expiresAt))
