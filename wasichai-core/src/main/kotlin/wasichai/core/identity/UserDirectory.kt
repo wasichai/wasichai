@@ -50,6 +50,17 @@ class UserDirectory(
             .toSet()
     }
 
+    // every enabled person of the tenant: what an "everyone" audience reaches when it must be named one by one
+    suspend fun enabledIds(organizationId: UUID): Set<UUID> =
+        db
+            .sql("SELECT id FROM ${schemas.metadata}.users WHERE organization_id = :organizationId AND enabled")
+            .bind("organizationId", organizationId)
+            .map { row, _ -> Rows.uuid(row, "id") }
+            .all()
+            .asFlow()
+            .toList()
+            .toSet()
+
     // emails as stored, to show who an alert names. disabled users too: they are still who it named
     suspend fun emailsById(
         organizationId: UUID,

@@ -55,6 +55,39 @@ class OrgUnitDirectory(
             .toList()
             .toSet()
 
+    // the enabled people sitting in any of unitIds or in a unit below one: closureOf the other way round.
+    // UNION ends a cycle, should one ever exist.
+    suspend fun memberIdsWithin(
+        organizationId: UUID,
+        unitIds: Collection<UUID>
+    ): Set<UUID> {
+        if (unitIds.isEmpty()) return emptySet()
+        return db
+            .sql(
+                """
+                WITH RECURSIVE subtree (id) AS (
+                    SELECT u.id FROM ${schemas.metadata}.org_units u
+                    WHERE u.organization_id = :organizationId AND u.id = ANY(:unitIds)
+                    UNION
+                    SELECT u.id FROM ${schemas.metadata}.org_units u
+                    JOIN subtree s ON u.parent_id = s.id
+                    WHERE u.organization_id = :organizationId
+                )
+                SELECT DISTINCT p.id
+                FROM subtree s
+                JOIN ${schemas.metadata}.user_org_units m ON m.unit_id = s.id
+                JOIN ${schemas.metadata}.users p ON p.id = m.user_id
+                WHERE p.organization_id = :organizationId AND p.enabled
+                """.trimIndent()
+            ).bind("organizationId", organizationId)
+            .bind("unitIds", unitIds.distinct().toTypedArray())
+            .map { row, _ -> Rows.uuid(row, "id") }
+            .all()
+            .asFlow()
+            .toList()
+            .toSet()
+    }
+
     // key = the normalised code. an unknown code is simply missing from the map
     suspend fun idsByCode(
         organizationId: UUID,
