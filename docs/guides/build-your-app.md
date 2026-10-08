@@ -191,6 +191,7 @@ below).
 | documents | `wasichai-spring-boot-starter-documents` | `@wasichai/documents` | Implements `DocumentIssuer` | [documents.md](../modules/documents.md) |
 | gis | `wasichai-spring-boot-starter-gis` | `@wasichai/gis` | PostGIS database; web needs `maplibre-gl`, a `workerUrl` | [gis.md](../modules/gis.md) |
 | notifications | `wasichai-spring-boot-starter-notifications` | `@wasichai/notifications` (planned) | None | [notifications.md](../modules/notifications.md) |
+| files | `wasichai-spring-boot-starter-files` | (planned) | S3 store needs `software.amazon.awssdk:s3` | [files.md](../modules/files.md) |
 | agent | `wasichai-spring-boot-starter-agent` | `@wasichai/agent` | Needs `ANTHROPIC_API_KEY` (or another provider) | [agent.md](../modules/agent.md) |
 
 `documents` and `automation` connect through `DocumentIssuer`: `automation`'s `GENERATE_DOCUMENT` action calls it,
@@ -218,6 +219,7 @@ dependencies {
     implementation("wasichai:wasichai-spring-boot-starter-gis")
     implementation("wasichai:wasichai-spring-boot-starter-agent")
     implementation("wasichai:wasichai-spring-boot-starter-notifications")
+    implementation("wasichai:wasichai-spring-boot-starter-files")
 }
 ```
 
@@ -267,6 +269,7 @@ The settings apps change most, each under `wasichai.*` (environment `WASICHAI_*`
 | Sign-in hardening | `wasichai.security.jwt.revocation`, `…login.*`, `…password.*` | [authentication.md](../security/authentication.md) |
 | Module enabled flags | `wasichai.<module>.enabled` (default `true`) | each module's doc |
 | GeoServer URL | `wasichai.gis.geoserver.url` | [gis.md](../modules/gis.md) |
+| File store, size cap, cleanup | `wasichai.files.store`, `…local.path`, `…s3.*`, `…max-bytes`, `…cleanup.*` | [files.md](../modules/files.md) |
 | Model provider key | `wasichai.agent.api-key` (defaults to `ANTHROPIC_API_KEY`) | [agent.md](../modules/agent.md) |
 | Notification loop, stream, date rule zone | `wasichai.notifications.tick`, `stream-refresh`, `zone` | [notifications.md](../modules/notifications.md) |
 

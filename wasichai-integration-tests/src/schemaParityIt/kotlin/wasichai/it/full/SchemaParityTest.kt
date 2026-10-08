@@ -392,7 +392,51 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "notification_preferences_pkey ON META.notification_preferences USING btree (user_id, channel)",
                 "table notification_deliveries",
                 "table notification_preferences"
-            ).associateWith { "ADR-031 D46: notification delivery channels and preferences" }
+            ).associateWith { "ADR-031 D46: notification delivery channels and preferences" } +
+            // the files module (ADR-031 D47, ADR-061): its table, its descriptor function, two field settings, and
+            // FILE and IMAGE appended to the type list. the body hash changes when V1's function does
+            listOf(
+                "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
+                    "$FIELD_TYPES])))",
+                "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
+                    "$FIELD_TYPES, 'FILE'::text, 'IMAGE'::text])))",
+                "column custom_fields.file_max_bytes #23 bigint",
+                "column custom_fields.file_content_types #24 text",
+                "constraint custom_fields.custom_fields_file_max_bytes_valid CHECK (((file_max_bytes IS NULL) OR (file_max_bytes > 0)))",
+                "column stored_files.id #1 uuid NOT NULL",
+                "column stored_files.organization_id #2 uuid NOT NULL",
+                "column stored_files.object_id #3 uuid NOT NULL",
+                "column stored_files.field_name #4 text NOT NULL",
+                "column stored_files.object_key #5 text NOT NULL",
+                "column stored_files.file_name #6 text NOT NULL",
+                "column stored_files.content_type #7 text NOT NULL",
+                "column stored_files.size_bytes #8 bigint NOT NULL",
+                "column stored_files.sha256 #9 text NOT NULL",
+                "column stored_files.created_by #10 uuid",
+                "column stored_files.created_at #11 timestamp with time zone NOT NULL DEFAULT now()",
+                "constraint stored_files.stored_files_created_by_fkey FOREIGN KEY (created_by) REFERENCES META.users(id) ON DELETE SET NULL",
+                "constraint stored_files.stored_files_object_key_unique UNIQUE (object_key)",
+                "constraint stored_files.stored_files_pkey PRIMARY KEY (id)",
+                "constraint stored_files.stored_files_sha256_valid CHECK ((sha256 ~ '^[0-9a-f]{64}\$'::text))",
+                "constraint stored_files.stored_files_size_valid CHECK ((size_bytes >= 0))",
+                "constraint stored_files.stored_files_id_not_null NOT NULL id",
+                "constraint stored_files.stored_files_organization_id_not_null NOT NULL organization_id",
+                "constraint stored_files.stored_files_object_id_not_null NOT NULL object_id",
+                "constraint stored_files.stored_files_field_name_not_null NOT NULL field_name",
+                "constraint stored_files.stored_files_object_key_not_null NOT NULL object_key",
+                "constraint stored_files.stored_files_file_name_not_null NOT NULL file_name",
+                "constraint stored_files.stored_files_content_type_not_null NOT NULL content_type",
+                "constraint stored_files.stored_files_size_bytes_not_null NOT NULL size_bytes",
+                "constraint stored_files.stored_files_sha256_not_null NOT NULL sha256",
+                "constraint stored_files.stored_files_created_at_not_null NOT NULL created_at",
+                "function stored_file_descriptor(file_id uuid, org uuid) returns text body 7e0b910eb55899284f8b561c77b50634",
+                "index stored_files.stored_files_object_key_unique CREATE UNIQUE INDEX stored_files_object_key_unique ON META.stored_files " +
+                    "USING btree (object_key)",
+                "index stored_files.stored_files_org_created_idx CREATE INDEX stored_files_org_created_idx ON META.stored_files " +
+                    "USING btree (organization_id, created_at)",
+                "index stored_files.stored_files_pkey CREATE UNIQUE INDEX stored_files_pkey ON META.stored_files USING btree (id)",
+                "table stored_files"
+            ).associateWith { "ADR-031 D47: FILE and IMAGE field types" }
 
     @Test
     fun `the fixture is the original's whole schema`() {
@@ -457,6 +501,11 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, 'MANAGE_ORGANIZATION'::text]"
 
         // and since core's V15, MANAGE_TENANTS too
+        // the original's field type list, GEOMETRY last
+        const val FIELD_TYPES =
+            "'TEXT'::text, 'LONG_TEXT'::text, 'INTEGER'::text, 'DECIMAL'::text, 'BOOLEAN'::text, 'DATE'::text, 'DATETIME'::text, " +
+                "'ENUM'::text, 'EMAIL'::text, 'URL'::text, 'UUID'::text, 'RELATION'::text, 'GEOMETRY'::text"
+
         const val BUILT_IN_ACTIONS_V15 =
             "ARRAY['READ'::text, 'CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'MANAGE_METADATA'::text, " +
                 "'MANAGE_ORGANIZATION'::text, 'MANAGE_TENANTS'::text]"

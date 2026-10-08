@@ -12,6 +12,7 @@ wasichai-automation
 wasichai-bom
 wasichai-core
 wasichai-documents
+wasichai-files
 wasichai-forms
 wasichai-gis
 wasichai-notifications
@@ -20,6 +21,7 @@ wasichai-spring-boot-starter
 wasichai-spring-boot-starter-agent
 wasichai-spring-boot-starter-automation
 wasichai-spring-boot-starter-documents
+wasichai-spring-boot-starter-files
 wasichai-spring-boot-starter-forms
 wasichai-spring-boot-starter-gis
 wasichai-spring-boot-starter-notifications

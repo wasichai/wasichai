@@ -9,7 +9,7 @@ plugins {
 // classpath that really lacks the other modules (an optional adapter switches on by class presence).
 description = "Wasichai integration tests: the original's api tests against assembled test apps"
 
-val wasichaiModules = listOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications")
+val wasichaiModules = listOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications", "files")
 
 dependencies {
     // P2's wiring tests: every module in one context runner, no database
@@ -51,7 +51,8 @@ val sliceSuites: Map<String, List<String>> =
         "documentsOnly" to listOf("documents"),
         "gisOnly" to listOf("gis"),
         "agentOnly" to listOf("agent"),
-        "notificationsOnly" to listOf("notifications")
+        "notificationsOnly" to listOf("notifications"),
+        "filesOnly" to listOf("files")
     )
 
 val postgisSuites = fullAppSuites.toSet() + "gisOnly"

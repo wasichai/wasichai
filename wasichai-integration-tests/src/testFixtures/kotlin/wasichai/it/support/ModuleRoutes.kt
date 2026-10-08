@@ -107,6 +107,12 @@ object ModuleRoutes {
                 listOf(
                     "GET /api/agent/status",
                     "POST /api/agent/ask"
+                ),
+            "files" to
+                listOf(
+                    "POST /api/objects/{object}/files/{field}",
+                    "GET /api/objects/{object}/records/{id}/files/{field}",
+                    "POST /api/objects/{object}/records/{id}/files/{field}"
                 )
         )
 
@@ -129,6 +135,7 @@ object ModuleRoutes {
                 .replace("{kind}", "record-detail")
                 .replace("{type}", "probe")
                 .replace("{geometry}", "geom")
+                .replace("{field}", "probe")
         return HttpMethod.valueOf(verb) to uri
     }
 }

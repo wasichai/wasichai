@@ -8,6 +8,8 @@ postgresqlJdbc = "42.7.13"
 flyway = "13.8.1"
 testcontainers = "2.0.5"
 embabel = "1.5.2"
+# wasichai-files' S3-compatible store: optional, an app that uses it adds the s3 artifact itself
+awsSdk = "2.55.0"
 # security floors over the spring boot bom: boot 4.1.1 ships vulnerable patch versions. drop each once boot catches up.
 jackson2 = "2.21.7"
 jackson3 = "3.1.7"
@@ -47,6 +49,8 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 
 embabel-agent-starter = { module = "com.embabel.agent:embabel-agent-starter", version.ref = "embabel" }
 embabel-agent-starter-anthropic = { module = "com.embabel.agent:embabel-agent-starter-anthropic", version.ref = "embabel" }
+
+aws-sdk-s3 = { module = "software.amazon.awssdk:s3", version.ref = "awsSdk" }
 
 reactor-test = { module = "io.projectreactor:reactor-test" }
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
