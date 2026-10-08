@@ -17,6 +17,7 @@ import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
+import wasichai.core.platform.WasichaiIdempotencyProperties
 import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiSchemas
@@ -29,6 +30,7 @@ import wasichai.core.platform.WasichaiWebProperties
     JwtProperties::class,
     WasichaiWebProperties::class,
     WasichaiAuditProperties::class,
+    WasichaiIdempotencyProperties::class,
     WasichaiOrganizationsProperties::class
 )
 class WasichaiPlatformAutoConfiguration {

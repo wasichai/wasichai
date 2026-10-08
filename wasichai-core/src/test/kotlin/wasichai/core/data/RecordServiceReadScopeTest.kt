@@ -140,7 +140,8 @@ class RecordServiceReadScopeTest {
             RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
             RecordReadScopes(scopes.toList(), mock(RecordStore::class.java)),
-            TenantDirectoryFixtures.none()
+            TenantDirectoryFixtures.none(),
+            IdempotencyKeysFixtures.none()
         )
     }
 

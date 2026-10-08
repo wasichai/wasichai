@@ -306,7 +306,33 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "FOR EACH ROW EXECUTE FUNCTION META.audit_log_guard()",
                 "trigger audit_log.audit_log_no_truncate CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON META.audit_log " +
                     "FOR EACH STATEMENT EXECUTE FUNCTION META.audit_log_guard()"
-            ).associateWith { "ADR-031 D39: audit_log is append-only in the database" }
+            ).associateWith { "ADR-031 D39: audit_log is append-only in the database" } +
+            // Idempotency-Key on record creation (ADR-031 D45, ADR-058): a new core table
+            listOf(
+                "column idempotency_keys.created_at #7 timestamp with time zone NOT NULL DEFAULT now()",
+                "column idempotency_keys.key #3 text NOT NULL",
+                "column idempotency_keys.organization_id #1 uuid NOT NULL",
+                "column idempotency_keys.request_hash #4 text NOT NULL",
+                "column idempotency_keys.response_body #6 text NOT NULL",
+                "column idempotency_keys.response_status #5 integer NOT NULL",
+                "column idempotency_keys.user_id #2 uuid",
+                "constraint idempotency_keys.idempotency_keys_created_at_not_null NOT NULL created_at",
+                "constraint idempotency_keys.idempotency_keys_key_not_null NOT NULL key",
+                "constraint idempotency_keys.idempotency_keys_key_valid CHECK (((length(key) >= 1) AND (length(key) <= 128)))",
+                "constraint idempotency_keys.idempotency_keys_organization_id_fkey FOREIGN KEY (organization_id) " +
+                    "REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint idempotency_keys.idempotency_keys_organization_id_not_null NOT NULL organization_id",
+                "constraint idempotency_keys.idempotency_keys_request_hash_not_null NOT NULL request_hash",
+                "constraint idempotency_keys.idempotency_keys_response_body_not_null NOT NULL response_body",
+                "constraint idempotency_keys.idempotency_keys_response_status_not_null NOT NULL response_status",
+                "constraint idempotency_keys.idempotency_keys_unique UNIQUE NULLS NOT DISTINCT (organization_id, user_id, key)",
+                "constraint idempotency_keys.idempotency_keys_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "index idempotency_keys.idempotency_keys_created_idx CREATE INDEX idempotency_keys_created_idx ON META.idempotency_keys " +
+                    "USING btree (created_at)",
+                "index idempotency_keys.idempotency_keys_unique CREATE UNIQUE INDEX idempotency_keys_unique ON META.idempotency_keys " +
+                    "USING btree (organization_id, user_id, key) NULLS NOT DISTINCT",
+                "table idempotency_keys"
+            ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

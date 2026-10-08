@@ -169,7 +169,8 @@ class RecordServicePlatformTest {
             RecordWriteGuards(emptyList(), RelationTargetsFixtures.none()),
             AppendOnlyReferencesFixtures.none(),
             RecordReadScopesFixtures.none(),
-            tenants
+            tenants,
+            IdempotencyKeysFixtures.none()
         )
     }
 

@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import wasichai.core.audit.AuditOperation
 import wasichai.core.audit.AuditService
@@ -83,7 +84,8 @@ class RecordService(
     private val guards: RecordWriteGuards,
     private val references: AppendOnlyReferences,
     private val readScopes: RecordReadScopes,
-    private val tenants: TenantDirectory
+    private val tenants: TenantDirectory,
+    private val idempotency: IdempotencyKeys
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -195,6 +197,61 @@ class RecordService(
         request: RecordRequest,
         reason: String?
     ): RecordResponse = create(objectName, request, reason, viaApi = false)
+
+    /**
+     * [create] at most once per [idempotencyKey] (ADR-058), for an app's own commands that may be retried.
+     * The first call creates and stores its answer with the key, in one transaction: the caller's when there
+     * is one (ADR-038), else one of its own. The same key again, from the same caller and organization, with
+     * the same object and request, returns that answer and writes, audits and tells nothing: the record as
+     * its json held it then (a date is its ISO string, a decimal a BigDecimal). Another request under the key
+     * is an [wasichai.core.common.UnprocessableContentException] (422), one while the first is still running a
+     * [wasichai.core.common.RetryLaterException] (409). A key lives `wasichai.idempotency.ttl`. A failed call
+     * stores nothing, so the key can be used again. null: [create] as above. An overload, not a default:
+     * code compiled against the three-argument call keeps working.
+     */
+    suspend fun create(
+        objectName: String,
+        request: RecordRequest,
+        reason: String?,
+        idempotencyKey: String?
+    ): RecordResponse =
+        if (idempotencyKey == null) {
+            create(objectName, request, reason, viaApi = false)
+        } else {
+            createOnce(objectName, request, reason, viaApi = false, idempotencyKey = idempotencyKey).record
+        }
+
+    // what a keyed create answers: the record, and the status and json stored for the key
+    internal class OnceCreated(
+        val record: RecordResponse,
+        val status: Int,
+        val body: String,
+        val replayed: Boolean
+    )
+
+    // the key is the caller's, in its organization: nobody else can replay it or learn it is taken (ADR-058)
+    internal suspend fun createOnce(
+        objectName: String,
+        request: RecordRequest,
+        reason: String?,
+        viaApi: Boolean,
+        idempotencyKey: String
+    ): OnceCreated {
+        IdempotencyKeys.requireValid(idempotencyKey)
+        val caller = caller()
+        // the body as the api reads it: attributes and every section, installed or not
+        val hash = idempotency.requestHash("POST", "/api/objects/$objectName/records", request.sections + ("attributes" to request.attributes))
+        var created: RecordResponse? = null
+        val outcome =
+            idempotency.once(caller.organizationId, caller.userId, idempotencyKey, hash) {
+                val record = create(objectName, request, reason, viaApi)
+                created = record
+                IdempotencyKeys.Answer(HttpStatus.CREATED.value(), idempotency.write(record))
+            }
+        val answer = outcome.answer
+        val record = created ?: idempotency.readRecord(answer.body)
+        return OnceCreated(record, answer.status, answer.body, outcome.replayed)
+    }
 
     // viaApi: the generic record api calls, which an apiOnly object refuses (ADR-040)
     internal suspend fun create(

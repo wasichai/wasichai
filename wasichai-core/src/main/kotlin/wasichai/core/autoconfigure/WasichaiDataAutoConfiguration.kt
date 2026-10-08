@@ -14,6 +14,8 @@ import wasichai.core.audit.AuditLogOwnershipCheck
 import wasichai.core.audit.AuditQueryService
 import wasichai.core.audit.AuditService
 import wasichai.core.data.AppendOnlyReferences
+import wasichai.core.data.IdempotencyKeyPurge
+import wasichai.core.data.IdempotencyKeys
 import wasichai.core.data.NoWorkflowStates
 import wasichai.core.data.PhysicalTableRecordStore
 import wasichai.core.data.RecordChangeListener
@@ -42,6 +44,7 @@ import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.TenantDirectory
+import wasichai.core.platform.WasichaiIdempotencyProperties
 import wasichai.core.platform.WasichaiSchemas
 
 // records, audit and related records. a module that gives records a state, or stores them another
@@ -160,9 +163,44 @@ class WasichaiDataAutoConfiguration {
         guards: RecordWriteGuards,
         references: AppendOnlyReferences,
         readScopes: RecordReadScopes,
-        tenants: TenantDirectory
+        tenants: TenantDirectory,
+        idempotency: IdempotencyKeys
     ): RecordService =
-        RecordService(metadata, store, audit, currentUser, access, workflows, types, changes.orderedStream().toList(), guards, references, readScopes, tenants)
+        RecordService(
+            metadata,
+            store,
+            audit,
+            currentUser,
+            access,
+            workflows,
+            types,
+            changes.orderedStream().toList(),
+            guards,
+            references,
+            readScopes,
+            tenants,
+            idempotency
+        )
+
+    // Idempotency-Key on record creation (ADR-058). the transaction manager is looked up on first use, as for ClusterLock
+    @Bean
+    @ConditionalOnMissingBean
+    fun idempotencyKeys(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        objectMapper: JsonMapper,
+        properties: WasichaiIdempotencyProperties,
+        transactionManager: ObjectProvider<ReactiveTransactionManager>
+    ): IdempotencyKeys = IdempotencyKeys(db, schemas, objectMapper, properties) { TransactionalOperator.create(transactionManager.getObject()) }
+
+    // deletes expired keys on one replica (ADR-039). starts after every singleton, migrations included
+    @Bean
+    @ConditionalOnMissingBean
+    fun idempotencyKeyPurge(
+        keys: IdempotencyKeys,
+        clusterLock: ClusterLock,
+        properties: WasichaiIdempotencyProperties
+    ): IdempotencyKeyPurge = IdempotencyKeyPurge(keys, clusterLock, properties.purgeInterval)
 
     @Bean
     @ConditionalOnMissingBean

@@ -144,7 +144,8 @@ class RecordServiceTest {
             RecordWriteGuards(emptyList(), relationTargets),
             AppendOnlyReferencesFixtures.none(),
             RecordReadScopesFixtures.none(),
-            TenantDirectoryFixtures.none()
+            TenantDirectoryFixtures.none(),
+            IdempotencyKeysFixtures.none()
         )
     }
 
