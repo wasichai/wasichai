@@ -416,6 +416,23 @@ records.update("recibo", id, RecordRequest(mapOf("monto" to 120)), reason = "cor
 records.asPlatform(organizationId) { records.create("cierre", RecordRequest(values), reason = "cierre nocturno") }
 ```
 
+## Two people edit the same record
+
+A record answer carries its version as `ETag` (`"<updatedAt>"`). Send it back as `If-Match` on `PUT`, `PATCH` or
+`DELETE` and the write lands only if nobody wrote the record in between; otherwise it is a `412` and nothing changed,
+so the screen re-reads and asks again. `PATCH` writes only the attributes sent, so a form that knows some fields never
+blanks the others. Your own commands get the same check, in one statement, inside your transaction
+([ADR-051](../adr/0051-optimistic-locking-and-partial-update-of-records.md)):
+
+```kotlin
+val read = records.get("caso", id)
+records.patch("caso", id, RecordRequest(mapOf("estado" to "CERRADO")), reason = null, expectedUpdatedAt = read.updatedAt)
+records.update("caso", id, RecordRequest(values), reason = null, expectedUpdatedAt = read.updatedAt)
+```
+
+`PreconditionFailedException` (412) means stale. Without `If-Match`, or with `*`, a write is last-writer-wins as
+before.
+
 ## Tell people what needs doing
 
 Staff should not have to open the right screen to learn that a turno is still open or a licence expires on Friday.

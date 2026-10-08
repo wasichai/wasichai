@@ -70,3 +70,5 @@ supersedes it and says so in its status line.
   log](0049-admin-changes-in-the-audit-log.md)
 - [ADR-050: Every audit row carries a correlation id and the source of the
   change](0050-correlation-id-and-change-source-on-audit-rows.md)
+- [ADR-051: Records answer an ETag, honour If-Match in the write itself, and take a partial
+  PATCH](0051-optimistic-locking-and-partial-update-of-records.md)
