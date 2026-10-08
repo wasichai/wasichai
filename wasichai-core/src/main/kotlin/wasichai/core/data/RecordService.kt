@@ -22,6 +22,7 @@ import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.readableBy
 import wasichai.core.metadata.readableNames
 import wasichai.core.metadata.writableBy
+import wasichai.core.platform.ChangeOrigin
 import java.time.Instant
 import java.util.UUID
 
@@ -84,11 +85,25 @@ class RecordService(
      *
      * Background work only. Inside a request, with a token or without one, it throws: nothing a
      * request carries can become the platform.
+     *
+     * Its audit rows say `platform` (ADR-050); the overload below names the work instead.
      */
     suspend fun <T> asPlatform(
         organizationId: UUID,
         block: suspend () -> T
-    ): T = PlatformCaller.run(organizationId, block)
+    ): T = PlatformCaller.run(organizationId, ChangeOrigin.PLATFORM, block)
+
+    /**
+     * [asPlatform], with the app's own label on the block's audit rows instead of `platform`
+     * (ADR-050): `job:retention`, `import:42`. It must match `^[A-Za-z0-9._:-]{1,64}$`, or the call
+     * throws `IllegalArgumentException` before anything runs. An overload, not a default: code
+     * compiled against the two-argument call keeps working.
+     */
+    suspend fun <T> asPlatform(
+        organizationId: UUID,
+        source: String,
+        block: suspend () -> T
+    ): T = PlatformCaller.run(organizationId, source, block)
 
     suspend fun list(
         objectName: String,

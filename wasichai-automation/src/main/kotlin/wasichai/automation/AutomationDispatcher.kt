@@ -3,6 +3,7 @@ package wasichai.automation
 import org.springframework.stereotype.Service
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeListener
+import wasichai.core.platform.ChangeOrigin
 import java.util.UUID
 
 // matching happens here, inside the caller's transaction: the snapshot is what the change was.
@@ -23,6 +24,8 @@ class AutomationDispatcher(
         if (watching.isEmpty()) return
 
         val payload = RunPayload(change.objectId, change.before, change.after, change.state, change.transition)
+        // the request's id, or the run's own when one automation's write triggers the next (ADR-050)
+        val correlationId = ChangeOrigin.correlationId()
         watching.forEach { automation ->
             // a skipped run is still a row: "why did nothing happen" must have an answer
             val skip =
@@ -43,7 +46,8 @@ class AutomationDispatcher(
                     depth = change.depth,
                     payload = payload,
                     error = skip,
-                    userId = change.userId
+                    userId = change.userId,
+                    correlationId = correlationId
                 )
             )
         }

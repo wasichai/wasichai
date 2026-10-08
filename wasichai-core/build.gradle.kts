@@ -15,6 +15,8 @@ dependencies {
     api(libs.spring.boot.starter.validation)
     api(libs.jackson.module.kotlin)
     api(libs.kotlinx.coroutines.reactor)
+    // carries the correlation id from the Reactor context into the MDC (ADR-050). version from the boot bom.
+    implementation(libs.micrometer.context.propagation)
     // flyway runs over jdbc at startup (ADR-008). drivers come with the starter (P2).
     implementation(libs.flyway.core)
     // read only for the constraint a unique violation names (ADR-037). the app brings the driver (the starter does).

@@ -2,6 +2,40 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-08 — A correlation id and the source of every change on the audit row
+
+`audit_log` could not tie a row to the request that wrote it, nor say what wrote it: a person through the API, an app's
+own job, the platform, an automation or an import all looked alike, and core had no correlation id at all
+([#50](https://github.com/wasichai/wasichai/issues/50)). Now a core `WebFilter`, `CorrelationIdWebFilter` (bean
+`correlationIdWebFilter`, first of all filters, ahead of Spring Security's), keeps a request's `X-Correlation-Id` when
+it is one value matching `^[A-Za-z0-9._-]{1,64}$`, generates a UUID otherwise (a malformed or oversized value is
+replaced, never echoed), sets it on every response right before commit, a `401` from the security chain included, and
+puts it in the Reactor context with the source `api`
+([ADR-050](adr/0050-correlation-id-and-change-source-on-audit-rows.md), ADR-031 D35). `AuditService.record` reads both
+from there, so no signature changed. `V10__audit_origin.sql` adds `audit_log.correlation_id` and `audit_log.source`,
+nullable, with `NOT VALID` `CHECK`s on their character classes and the index
+`audit_log_correlation_idx (organization_id, correlation_id)`. The source is set by code only
+(`wasichai.core.platform.ChangeOrigin`, under a private context key): `api` for any write while serving a request (admin
+rows of ADR-049 included), `platform` for `RecordService.asPlatform`, the app's label for the new overload
+`asPlatform(organizationId, source = "job:retention") { }` (`^[A-Za-z0-9._:-]{1,64}$`, else `IllegalArgumentException`
+before the block runs), `automation:<rule>` for a rule's actions, `app` for an in-process write nothing labelled.
+Automations run later, from the queue, so the dispatcher stores the id on the run (`automation_runs.correlation_id`,
+automation's `V2__run_correlation_id.sql`) and the runner runs the actions inside
+`ChangeOrigin.within("automation:<rule>", id)`: their rows, an issued document's and the runs they queue keep the
+request's id; the audit `user_id` stays null as before. `AuditEntry` gains `correlationId` and `source`, left out when
+null (every older row), and `GET /api/audit` takes `correlationId=` and `source=` (exact, blank is none), under the same
+read rules. The id also reaches the MDC as `correlationId`: core registers a context-propagation accessor (new
+dependency `io.micrometer:context-propagation`, Boot-managed) and defaults `spring.reactor.context-propagation=auto`; an
+app may set `limited`. New tests: `CorrelationIdWebFilterTest`, `ChangeOriginTest`, `AutomationDispatcherTest`, cases in
+`RecordServicePlatformTest`, `CoreMigrationSqlTest`, `AutomationMigrationSqlTest`,
+`WasichaiEnvironmentPostProcessorTest` and `WasichaiAutoConfigurationTest`, the integration test `AuditOriginApiTest`
+(header kept, generated, replaced, on a `401`; api, platform, labelled and app rows; filters; old rows; field
+permissions and admin rows under the filter) and two cases in `AutomationOnlyApiTest`; `SchemaParityTest` lists the new
+columns as D35 deviations. Docs: [rest.md](api/rest.md) "Correlation id" and "Audit and history",
+[core.md](modules/core.md), [automation.md](modules/automation.md), [build-your-app.md](guides/build-your-app.md)
+"Background work", [authentication.md](security/authentication.md).
+Plan: [2026-10-08-audit-origin.md](superpowers/plans/2026-10-08-audit-origin.md).
+
 ## 2026-10-07 — Admin changes in the audit log: who granted, who dropped, who switched it off
 
 `audit_log` only knew record writes, so nobody could answer "who granted this role `DELETE`?", "who turned off

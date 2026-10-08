@@ -30,6 +30,8 @@ data class AutomationRun(
     val createdAt: Instant? = null,
     val startedAt: Instant? = null,
     val finishedAt: Instant? = null,
+    // the request that caused the change, so the run's writes carry it too (ADR-050). null when none did
+    val correlationId: String? = null,
     // filled by the log query only. not a column of the run.
     val automationName: String? = null
 )

@@ -16,4 +16,15 @@ class AutomationMigrationSqlTest {
             .contains("CREATE INDEX automation_runs_pending_idx ON \${metadataSchema}.automation_runs (created_at) WHERE status = 'PENDING';")
             .doesNotContainIgnoringCase("sapgis")
     }
+
+    // ADR-050: additive and nullable, so runs queued before it drain as they always did
+    @Test
+    fun `a run keeps the correlation id of the change that queued it`() {
+        val v2 = javaClass.getResource("/db/wasichai/automation/V2__run_correlation_id.sql")!!.readText()
+
+        assertThat(v2)
+            .contains("ALTER TABLE \${metadataSchema}.automation_runs")
+            .contains("ADD COLUMN correlation_id text;")
+            .doesNotContain("NOT NULL")
+    }
 }

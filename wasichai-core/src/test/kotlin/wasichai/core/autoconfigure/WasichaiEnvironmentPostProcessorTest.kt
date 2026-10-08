@@ -28,6 +28,14 @@ class WasichaiEnvironmentPostProcessorTest {
         assertThat(env.getProperty("spring.r2dbc.url")).isEqualTo("r2dbc:postgresql://elsewhere/x")
     }
 
+    // ADR-050: the correlation id reaches the MDC on every thread; an app may turn it back to limited
+    @Test
+    fun `reactor context propagation is on unless the app says otherwise`() {
+        assertThat(environment(emptyMap()).getProperty("spring.reactor.context-propagation")).isEqualTo("auto")
+        assertThat(environment(mapOf("spring.reactor.context-propagation" to "limited")).getProperty("spring.reactor.context-propagation"))
+            .isEqualTo("limited")
+    }
+
     @Test
     fun `no jwt secret unless the app gives one`() {
         assertThat(environment(emptyMap()).getProperty("wasichai.security.jwt.secret")).isEmpty()

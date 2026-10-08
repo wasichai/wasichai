@@ -15,8 +15,11 @@ class AuditController(
         @RequestParam(required = false) objectName: String?,
         @RequestParam(required = false) recordId: UUID?,
         @RequestParam(required = false) operation: String?,
-        @RequestParam(required = false) limit: Int?
-    ): List<AuditEntry> = audit.list(objectName, recordId, operation, limit)
+        @RequestParam(required = false) limit: Int?,
+        // one request's rows, or one source's (ADR-050)
+        @RequestParam(required = false) correlationId: String?,
+        @RequestParam(required = false) source: String?
+    ): List<AuditEntry> = audit.list(objectName, recordId, operation, limit, AuditFilter(correlationId, source))
 
     // history of one record. lives in audit, the path belongs to the record it describes.
     @GetMapping("/api/objects/{object}/records/{id}/history")

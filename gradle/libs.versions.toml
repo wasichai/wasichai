@@ -25,6 +25,7 @@ spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-te
 jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
 kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor" }
+micrometer-context-propagation = { module = "io.micrometer:context-propagation" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test" }
 
 r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql" }

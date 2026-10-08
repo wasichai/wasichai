@@ -68,3 +68,5 @@ supersedes it and says so in its status line.
   object](0048-a-read-scope-narrows-what-a-caller-reads.md)
 - [ADR-049: Changes to users, roles, permissions and the model are in the audit
   log](0049-admin-changes-in-the-audit-log.md)
+- [ADR-050: Every audit row carries a correlation id and the source of the
+  change](0050-correlation-id-and-change-source-on-audit-rows.md)

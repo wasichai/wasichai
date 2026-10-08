@@ -32,7 +32,9 @@ class WasichaiEnvironmentPostProcessor : EnvironmentPostProcessor {
                 "spring.r2dbc.pool.enabled" to "true",
                 "spring.r2dbc.pool.initial-size" to "5",
                 "spring.r2dbc.pool.max-size" to "20",
-                "spring.webflux.problemdetails.enabled" to "true"
+                "spring.webflux.problemdetails.enabled" to "true",
+                // the correlation id follows the Reactor context into the MDC on every thread (ADR-050)
+                "spring.reactor.context-propagation" to "auto"
             )
     }
 }

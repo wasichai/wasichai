@@ -41,6 +41,7 @@ import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.ObjectActionService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.CorrelationIdWebFilter
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.SystemColumn
 import wasichai.core.platform.SystemColumnContributor
@@ -99,6 +100,8 @@ class WasichaiAutoConfigurationTest {
             assertThat(context).hasSingleBean(ObjectActionService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountService::class.java)
             assertThat(context).hasSingleBean(ServiceAccountTokenService::class.java)
+            // ADR-050: every request gets a correlation id, ahead of the security chain
+            assertThat(context).hasSingleBean(CorrelationIdWebFilter::class.java)
             // issue 49 (ADR-049): admin changes go to the audit log
             assertThat(context.getBean(AdminAudit::class.java)).isInstanceOf(AuditLogAdminAudit::class.java)
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(NoWorkflowStates::class.java)

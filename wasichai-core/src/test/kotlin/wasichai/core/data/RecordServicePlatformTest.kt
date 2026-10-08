@@ -25,6 +25,7 @@ import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.platform.ChangeOrigin
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Instant
 import java.util.UUID
@@ -116,7 +117,9 @@ class RecordServicePlatformTest {
     private data class Audited(
         val organizationId: UUID,
         val userId: UUID?,
-        val operation: AuditOperation
+        val operation: AuditOperation,
+        // what AuditService would store as the row's source (ADR-050)
+        val source: String?
     )
 
     private val audited = mutableListOf<Audited>()
@@ -135,7 +138,7 @@ class RecordServicePlatformTest {
                 documentId: UUID?,
                 reason: String?
             ) {
-                audited += Audited(organizationId, userId, operation)
+                audited += Audited(organizationId, userId, operation, ChangeOrigin.source())
             }
         }
 
@@ -190,6 +193,33 @@ class RecordServicePlatformTest {
                 assertThat(it.userId).isNull()
             }
             assertThat(changes).allSatisfy { assertThat(it.userId).isNull() }
+        }
+
+    // ADR-050: the audit row says who wrote it without a user: the platform, or the app's own label
+    @Test
+    fun `platform writes are labelled platform, or the app's own label`() =
+        runTest {
+            val records = service()
+
+            records.asPlatform(organizationId) { records.create("predio", RecordRequest(mapOf("codigo" to "P-1"))) }
+            records.asPlatform(organizationId, source = "job:retention") { records.create("predio", RecordRequest(mapOf("codigo" to "P-2"))) }
+
+            assertThat(audited.map { it.source }).containsExactly("platform", "job:retention")
+        }
+
+    @Test
+    fun `a malformed label is refused before anything is written`() =
+        runTest {
+            val records = service()
+
+            val refused =
+                runCatching {
+                    records.asPlatform(organizationId, source = "job retention") { records.create("predio", RecordRequest(mapOf("codigo" to "X"))) }
+                }
+
+            assertThat(refused.exceptionOrNull()).isInstanceOf(IllegalArgumentException::class.java)
+            assertThat(writes).isEmpty()
+            assertThat(audited).isEmpty()
         }
 
     @Test
