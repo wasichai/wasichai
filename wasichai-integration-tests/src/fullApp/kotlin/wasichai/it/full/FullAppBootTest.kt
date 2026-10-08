@@ -17,7 +17,7 @@ import java.sql.DriverManager
 // FullAppIntegrationTest: this one reuses the slice checks, so it cannot extend that class.
 @FullAppProperties
 class FullAppBootTest : SliceSmokeTest() {
-    override val installed = setOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications")
+    override val installed = setOf("views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications", "files")
 
     @Autowired
     private lateinit var environment: Environment

@@ -24,7 +24,7 @@ class CoreArchitectureTest {
         )
 
     private val coreReference = Regex("""\bwasichai\.core\.([a-z]+)\b""")
-    private val moduleReference = Regex("""\bwasichai[.:-](views|forms|pages|workflow|automation|documents|gis|agent|notifications)\b""")
+    private val moduleReference = Regex("""\bwasichai[.:-](views|forms|pages|workflow|automation|documents|gis|agent|notifications|files)\b""")
     private val geometryWords = Regex("""(?i)\b(postgis|geojson|geometry|geometries|bbox|wgs84)\b|\bST_[A-Za-z]+""")
 
     // SQL has no "wasichai." prefix to catch a module reference by, so a module table shows up
@@ -32,8 +32,8 @@ class CoreArchitectureTest {
     // prose mentioning "documents" in a comment must not trip this.
     private val moduleTableReference =
         Regex(
-            """\.(views|forms|pages|workflows|automations|documents|layers|notification\w*)\b""" +
-                """|\b(views|forms|pages|workflows|automations|documents|layers|notification\w*)\s*\("""
+            """\.(views|forms|pages|workflows|automations|documents|layers|notification\w*|stored_files)\b""" +
+                """|\b(views|forms|pages|workflows|automations|documents|layers|notification\w*|stored_files)\s*\("""
         )
 
     private fun sources(): List<File> =
@@ -84,7 +84,7 @@ class CoreArchitectureTest {
         assertThat(offenders(moduleReference)).isEmpty()
         assertThat(
             File("build.gradle.kts").readText()
-        ).doesNotContainPattern(""":wasichai-(views|forms|pages|workflow|automation|documents|gis|agent|notifications)""")
+        ).doesNotContainPattern(""":wasichai-(views|forms|pages|workflow|automation|documents|gis|agent|notifications|files)""")
     }
 
     @Test
