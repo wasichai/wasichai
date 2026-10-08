@@ -12,8 +12,9 @@ import com.embabel.agent.api.annotation.LlmTool
  * prompt runner inside the action. That is deliberate. A singleton would have to find the caller
  * from somewhere at call time, and "somewhere" is exactly how an agent ends up querying as nobody.
  *
- * Every method does the same three things: hop back into the caller's coroutine, delegate to
- * [AgentTools] (which only ever calls Wasichai services, never SQL), and write down the step.
+ * Every method does the same four things: hop back into the caller's coroutine, delegate to
+ * [AgentTools] (which only ever calls Wasichai services, never SQL), pass the result through the
+ * app's [AgentResultFilter]s, and write down the step.
  */
 class AgentToolbox(
     private val tools: AgentTools,
@@ -101,15 +102,17 @@ class AgentToolbox(
         @LlmTool.Param(description = AgentToolCatalog.ID_ARGUMENT) id: String
     ): String = call(AgentToolCatalog.AVAILABLE_TRANSITIONS, mapOf("object" to `object`, "id" to id))
 
-    // the whole security story of the AI phase is these three lines
+    // the whole security story of the AI phase is these lines: run as the caller, and nothing
+    // reaches the model or the step log that the app's filters did not see first (ADR-056)
     private fun call(
         name: String,
         input: Map<String, Any?>
     ): String {
         // an argument the model left out is not an argument: drop it so the defaults apply
         val arguments = input.filterValues { it != null }
-        val result = run.asCaller { tools.invoke(name, arguments) }
-        run.record(AgentStep(name, arguments, result.summary))
-        return result.json
+        run.requireOpen()
+        val (json, summary) = run.asCaller { run.screened(name, arguments, tools.invoke(name, arguments)) }
+        run.record(AgentStep(name, arguments, summary))
+        return json
     }
 }

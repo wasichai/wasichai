@@ -1759,7 +1759,7 @@ Module: wasichai-agent.
 
 ```http
 GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-4-5" }
-POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated }
+POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated, usage? }
 ```
 
 ```json
@@ -1769,9 +1769,12 @@ POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated 
     { "tool": "list_objects", "input": {}, "summary": "3 objects" },
     { "tool": "query_records", "input": { "object": "predio", "uso": "COMERCIAL" }, "summary": "3 records" }
   ],
-  "truncated": false
+  "truncated": false,
+  "usage": { "model": "claude-haiku-4-5", "inputTokens": 5120, "outputTokens": 214 }
 }
 ```
+
+`usage` is what the question cost, summed over the run's model calls; it is left out when the provider reported none.
 
 The assistant has no database access: it calls the same services a person's requests go through, as
 the person asking, so permissions, tenancy and field visibility apply unchanged (ADR-014). Its tools
@@ -1780,6 +1783,12 @@ its step limit and stopped, so the answer may be incomplete.
 
 Without `ANTHROPIC_API_KEY` the status reports `enabled: false` and asking answers `503` with a
 problem+json explaining what is missing. Nothing else in the platform depends on it.
+
+An app can switch the assistant off per caller (`AgentAccessPolicy`): the status then reports `enabled: false` for
+that caller, and asking answers `403` with the app's reason before anything is sent. An app's result filters
+(`AgentResultFilter`) shape what the model and `steps[].summary` see; a filter that fails makes asking answer `500`
+("nothing was sent") unless it raised an error of its own. See [agent.md](../modules/agent.md#extension-points) and
+ADR-056.
 
 ## Errors
 

@@ -1,5 +1,6 @@
 package wasichai.agent
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -20,7 +21,9 @@ data class AgentStepResponse(
 data class AgentAnswerResponse(
     val answer: String,
     val steps: List<AgentStepResponse>,
-    val truncated: Boolean
+    val truncated: Boolean,
+    // left out when the platform reported no model call, so that answer reads as it always did
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val usage: AgentUsage? = null
 )
 
 @RestController
@@ -33,14 +36,16 @@ class AgentController(
         @RequestBody request: AgentAskRequest
     ): AgentAnswerResponse = agent.ask(request.question).toResponse()
 
-    // the ui asks this before it renders the box, so a server without a key shows a notice
+    // the ui asks this before it renders the box, so a server without a key, or an organization
+    // the app's AgentAccessPolicy leaves out, shows a notice
     @GetMapping("/status")
-    fun status(): AgentStatus = agent.status()
+    suspend fun status(): AgentStatus = agent.status()
 }
 
 private fun AgentAnswer.toResponse(): AgentAnswerResponse =
     AgentAnswerResponse(
         answer = answer,
         steps = steps.map { AgentStepResponse(it.tool, it.input, it.summary) },
-        truncated = truncated
+        truncated = truncated,
+        usage = usage
     )
