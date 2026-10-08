@@ -38,6 +38,7 @@ A route of a module that is not installed answers `404` to an authenticated call
 ```http
 POST /api/auth/login        { "email": "...", "password": "..." }  →  { token, expiresAt, user }
 POST /api/auth/token        { "clientId": "...", "clientSecret": "..." }  →  { token, expiresAt, serviceAccount }
+POST /api/auth/logout       → 204, every token the caller holds stops working (with revocation on)
 GET  /api/auth/me
 GET  /api/auth/me/permissions   what the caller may do with each object they can read
 GET  /api/auth/me/org-units     the caller's own organizational units (see below)
@@ -45,6 +46,29 @@ GET  /api/auth/me/notifications  the caller's notifications, with wasichai-notif
 GET  /api/auth/me/preferences   → { "theme": "system", "locale": null }
 PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  →  the stored preferences
 ```
+
+Signing in and out ([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)):
+
+- **Logout.** `POST /api/auth/logout` takes the caller's token and answers `204`. With
+  `wasichai.security.jwt.revocation=true` every token the caller was issued until then is refused from that moment
+  (`401`); a new sign-in works at once. With revocation off (the default) it answers the same and the token keeps
+  working until `exp`, so a client can call it unconditionally on sign-out.
+- **Revoked tokens.** With revocation on, a token issued before an administrator disabled its user, changed their
+  password or roles, or deleted them, or before a service account was disabled, given new roles, rotated or deleted,
+  is `401`, like an expired one: at once on the node that made the change, within `revocation-cache` (5 s) on others.
+- **Too many attempts.** With `wasichai.security.login.enabled=true`, the `max-attempts`-th failed sign-in (5) for an
+  email from one client address, or the `account-max-attempts`-th (20) for an email from anywhere, is
+  `429 Too Many Requests` with `Retry-After` (seconds) and `detail` `Too many sign-in attempts, try again later`; so is
+  every attempt until the `window` (15 minutes) that the first one opened closes, the right password included. A
+  known and an unknown email get the same answers. `POST /api/auth/token` is limited the same way per client id. A
+  success forgets the count.
+- **Password policy.** `POST /api/users`, a `password` in `PUT /api/users/{id}` and `POST /api/organizations` check
+  the new password against the `PasswordPolicy`: `400` with one `errors` entry per broken rule on `password`
+  (`adminPassword` for provisioning). By default the one rule is 8 characters, answered as always:
+  `detail` `Password too short`, `must be at least 8 characters`. Several broken rules, or any other one, say
+  `Password does not meet the password policy`.
+
+Tokens carry a `jti` claim, a random id per token.
 
 ```json
 { "admin": false, "capabilities": ["MANAGE_METADATA"], "objects": { "predio": ["READ", "CREATE", "UPDATE"] } }
@@ -113,7 +137,8 @@ account never administers the tenant, and a service account's token is refused (
 organization and `service_account: "<name>"`, for `wasichai.security.jwt.service-account-ttl` (15 minutes by
 default); the client asks again when it runs out. Anything else, an unknown or malformed id, a wrong secret, a
 disabled or deleted account, is `401` with the same `detail`, `Invalid client credentials`. Disabling, rotating or
-deleting stops new tokens at once; a token already issued lives until it expires.
+deleting stops new tokens at once; a token already issued lives until it expires, unless
+`wasichai.security.jwt.revocation` is on, when it is refused too (so is one issued before new roles).
 
 The account is backed by a user row with the same id, so its writes are recorded under that id like anyone's:
 `created_by`, `updated_by` and the audit log. That user is not listed by `GET /api/users`, cannot sign in, and is

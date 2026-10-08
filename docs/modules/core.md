@@ -144,6 +144,15 @@ groups: `data` (order 10), `builder` (30, filled by other modules), `automation`
 | `wasichai.database.migrate` | `true` | `false` when the app runs migrations another way |
 | `wasichai.metadata.reconcile-indexes` | `true` | at startup, build the declared and relation indexes data tables lack (ADR-036) |
 | `wasichai.security.jwt.secret` | *(none)* | HS256 signing key, at least 32 bytes; required, a library must not ship one that works |
+| `wasichai.security.jwt.revocation` | `false` | `true`: a token issued before its user's revocation marker is `401` (ADR-059); recommended |
+| `wasichai.security.jwt.revocation-cache` | `5s` | how long a node trusts a user's marker; the longest a revocation takes on another node |
+| `wasichai.security.login.enabled` | `false` | `true`: sign-in attempt limits on `/api/auth/login` and `/api/auth/token`, `429` past them (ADR-059) |
+| `wasichai.security.login.max-attempts` | `5` | attempts per (email, client address) and per client id within a window |
+| `wasichai.security.login.account-max-attempts` | `20` | attempts per email from any address within a window |
+| `wasichai.security.login.window` | `15m` | fixed window opened by the first attempt; the lockout lasts until it closes |
+| `wasichai.security.password.min-length` | `8` | the default `PasswordPolicy`'s minimum length |
+| `wasichai.security.password.require-uppercase`, `-lowercase`, `-digit`, `-symbol` | `false` | each `true` asks for one such character |
+| `wasichai.security.password.not-equal-email` | `false` | `true` refuses the user's own email as password |
 | `wasichai.web.problem-base-uri` | `https://wasichai.dev/problems` | RFC 7807 `type` base; the full type is this plus `/<status>` |
 | `wasichai.web.cors-allowed-origin-patterns` | `["http://localhost:*"]` | browser origins the API answers |
 | `wasichai.seed.dev` | `false` | `true` adds the dev seed migration (see "Database") |
@@ -185,6 +194,16 @@ The signing key is a `WasichaiJwtKey` bean, wrapping the raw `SecretKey` in its 
 different key declares its own `WasichaiJwtKey` bean instead of setting the property.
 
 `PasswordEncoder` is a `BCryptPasswordEncoder` bean, `@ConditionalOnMissingBean` like everything else here.
+
+Token revocation, sign-in attempt limits and the password policy
+([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)) are beans of their own:
+`TokenRevocation` (the per-user marker and its cache), `LoginAttemptStore` (in memory by default, one node's count:
+a cluster declares one backed by PostgreSQL or Redis), `LoginThrottle` and `PasswordPolicy` (default
+`ConfiguredPasswordPolicy`, from `wasichai.security.password.*`). With `wasichai.security.jwt.revocation=true` the
+`jwtDecoder` bean is wrapped in a `RevocationCheckingJwtDecoder`; an app that declares its own `ReactiveJwtDecoder`
+replaces the check with it. `POST /api/auth/logout` is always there. The client address that keys the attempt limit is
+the request's remote address; behind a proxy, set `server.forward-headers-strategy` so Spring takes it from the
+forwarded headers. A raw `X-Forwarded-For` is never read.
 
 See [../security/authentication.md](../security/authentication.md) for the full authentication, tenancy and
 authorization model.
@@ -276,6 +295,8 @@ of that name stops the migration; rename it first. Core has no `V13` or `V14` of
 `created_at`), unique per `(organization_id, user_id, key)` `NULLS NOT DISTINCT` (a null `user_id` is the platform),
 cascading from the organization and the user, with an index on `created_at` for the purge
 ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
+`V17__tokens_valid_after.sql` adds `users.tokens_valid_after`, nullable: the revocation marker, always a whole second
+([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes
@@ -410,6 +431,9 @@ Core is always installed.
 - D42: a self-relationship is read from either end with `direction=forward|inverse` on the related read, and listed
   once per direction by `GET /api/objects/{object}/relationships`, each entry labelled for what its direction reads;
   forward is the walk the read always made.
+- D44: tokens carry `jti`; `POST /api/auth/logout`; with the switches on, revoked tokens are `401` and too many
+  sign-in attempts `429` with `Retry-After`; a configured password policy answers `400` per broken rule; the column
+  `users.tokens_valid_after` (ADR-059).
 - D45: `Idempotency-Key` on `POST …/records`: a replay answers the stored `201` and body with `Idempotent-Replayed:
   true`, another body is a `422`, a key still in flight a `409` with `Retry-After`; the `idempotency_keys` table
   (ADR-058).
