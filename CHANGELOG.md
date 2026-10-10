@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.0](https://github.com/wasichai/wasichai/compare/v0.6.0...v1.0.0) (2026-10-10)
+
+
+### Features
+
+* **core:** field time zone in any case or as a fixed UTC offset ([#101](https://github.com/wasichai/wasichai/issues/101)) ([79e92ea](https://github.com/wasichai/wasichai/commit/79e92ea9e61fb5f5e31a0da97cfbf5d080871cc9))
+* **core:** optional time zone on DATETIME fields ([#92](https://github.com/wasichai/wasichai/issues/92)) ([3128897](https://github.com/wasichai/wasichai/commit/312889783befedad79ee194a96189c704bcd6ec4))
+* **files:** read policy for FILE descriptors, over a core read mask ([#102](https://github.com/wasichai/wasichai/issues/102)) ([bd8a6fb](https://github.com/wasichai/wasichai/commit/bd8a6fb9f606a7423591085f1f5b573d72331244))
+
 ## [0.6.0](https://github.com/wasichai/wasichai/compare/v0.5.0...v0.6.0) (2026-10-08)
 
 
