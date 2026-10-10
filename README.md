@@ -13,7 +13,7 @@ Origin: [wasichai was chawpi until 2026-09-26](docs/chawpi-origin.md).
 
 ```kotlin
 dependencies {
-    implementation(platform("wasichai:wasichai-bom:0.1.0"))
+    implementation(platform("wasichai:wasichai-bom:1.0.0"))
     implementation("wasichai:wasichai-spring-boot-starter")          // core
     implementation("wasichai:wasichai-spring-boot-starter-documents") // opt-in module
 }
