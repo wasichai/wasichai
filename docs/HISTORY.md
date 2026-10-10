@@ -2,6 +2,11 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-10 — v1.0.0 released
+
+release-please tagged `v1.0.0` and `publish.yml` publishes the libraries to GitHub Packages. The `"release-as": "1.0.0"`
+pin is gone, so the next version follows the commits.
+
 ## 2026-10-10 — Release 1.0.0 prepared
 
 `release-please-config.json` pins `"release-as": "1.0.0"`, so the next release PR bumps `gradle.properties` and
