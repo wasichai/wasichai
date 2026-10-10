@@ -80,6 +80,7 @@ class MetadataMapper(
             visible = field.visible,
             editable = field.editable,
             indexed = field.indexed,
+            timeZone = field.timeZone,
             extensions = types.fieldProperties(field)
         )
 }

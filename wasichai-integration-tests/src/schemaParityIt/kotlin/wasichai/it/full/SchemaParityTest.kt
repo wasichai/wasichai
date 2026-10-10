@@ -58,9 +58,12 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
-            "column custom_fields.geometry_type #20 text" to "ADR-031 D22: shifted by custom_fields.indexed",
-            "column custom_fields.srid #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
-            "column custom_fields.dimension #22 integer" to "ADR-031 D22: shifted by custom_fields.indexed"
+            // core's V18 adds time_zone too, so on a fresh database the gis columns sit two places later, and
+            // the files columns one place later than they would
+            "column custom_fields.time_zone #20 text" to "ADR-031 D48: a DATETIME field's time zone",
+            "column custom_fields.geometry_type #21 text" to "ADR-031 D22, D48: shifted by indexed and time_zone",
+            "column custom_fields.srid #22 integer" to "ADR-031 D22, D48: shifted by indexed and time_zone",
+            "column custom_fields.dimension #23 integer" to "ADR-031 D22, D48: shifted by indexed and time_zone"
         ) +
             // app-declared actions (ADR-031 D26): a new table, and permissions learns to point at it
             listOf(
@@ -400,8 +403,8 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "$FIELD_TYPES])))",
                 "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
                     "$FIELD_TYPES, 'FILE'::text, 'IMAGE'::text])))",
-                "column custom_fields.file_max_bytes #23 bigint",
-                "column custom_fields.file_content_types #24 text",
+                "column custom_fields.file_max_bytes #24 bigint",
+                "column custom_fields.file_content_types #25 text",
                 "constraint custom_fields.custom_fields_file_max_bytes_valid CHECK (((file_max_bytes IS NULL) OR (file_max_bytes > 0)))",
                 "column stored_files.id #1 uuid NOT NULL",
                 "column stored_files.organization_id #2 uuid NOT NULL",

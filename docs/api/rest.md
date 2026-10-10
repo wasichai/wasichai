@@ -472,7 +472,7 @@ granted out of band: see [Build your app](../guides/build-your-app.md#operator-a
 ```http
 GET    /api/metadata/objects/{object}/fields
 POST   /api/metadata/objects/{object}/fields          add a field (ALTER TABLE ADD COLUMN)
-PUT    /api/metadata/objects/{object}/fields/{field}  label, required, unique, enum options, default, visibility
+PUT    /api/metadata/objects/{object}/fields/{field}  label, required, unique, enum options, default, visibility, time zone
 DELETE /api/metadata/objects/{object}/fields/{field}  drop the field and its column
 ```
 
@@ -487,6 +487,18 @@ New `enumOptions` that leave the current default out are a `400` naming `enumOpt
 property never checks the stored default. A `GEOMETRY` field takes no default. The default fills a record's field on
 create only (see "Defaults" under Records); records that exist keep what they hold. The column has no SQL `DEFAULT`:
 an insert that bypasses the API gets `NULL` (ADR-031 D40).
+
+`timeZone` names the zone a `DATETIME` field's wall-clock time belongs to, as an IANA name: `"America/Lima"`. The
+value stays an instant, sent and answered in UTC; the API converts nothing, and a client shows and reads the field's
+wall time in that zone ahead of any zone of its own. Only a `DATETIME` field takes one: on any other type, or a name
+that is not an IANA zone (`"America/Limaa"`, a fixed offset such as `"+05:00"`, the wrong case), `POST` and `PUT` are
+a `400` naming `timeZone`. On `PUT`, leaving it out keeps it, a blank one clears it, and changing it moves no data.
+A field comes back with `timeZone` only when it has one
+([ADR-063](../adr/0063-a-datetime-field-may-name-its-time-zone.md)).
+
+```json
+{ "name": "ocurrido", "label": "Ocurrido", "type": "DATETIME", "timeZone": "America/Lima" }
+```
 
 `name` and `type` are immutable: views, forms and automation rules refer to a field by name, and a
 type change may lose data. Sending either is answered with `400` naming the field — add a new field
