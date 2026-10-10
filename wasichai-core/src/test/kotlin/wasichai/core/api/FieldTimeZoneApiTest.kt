@@ -76,9 +76,50 @@ class FieldTimeZoneApiTest : WasichaiIntegrationTest() {
             .doesNotExist()
     }
 
+    // issue 99: a region in any case and a fixed offset, both answered in one spelling
+    @Test
+    fun `a lowercase region and a fixed offset are stored and answered normalized`() {
+        client
+            .post()
+            .uri("/api/metadata/objects/$objectName/fields")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("name" to "contrato", "type" to "DATETIME", "timeZone" to "-0500"))
+            .exchange()
+            .expectStatus()
+            .isCreated
+            .expectBody()
+            .jsonPath("$.timeZone")
+            .isEqualTo("-05:00")
+        updateField("plazo", mapOf("timeZone" to "america/lima"))
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.timeZone")
+            .isEqualTo("America/Lima")
+        updateField("ocurrido", mapOf("timeZone" to "+05:00"))
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.timeZone")
+            .isEqualTo("+05:00")
+
+        definition()
+            .jsonPath("$.fields[?(@.name == 'contrato')].timeZone")
+            .isEqualTo("-05:00")
+            .jsonPath("$.fields[?(@.name == 'plazo')].timeZone")
+            .isEqualTo("America/Lima")
+            .jsonPath("$.fields[?(@.name == 'ocurrido')].timeZone")
+            .isEqualTo("+05:00")
+    }
+
     @Test
     fun `a zone on a TEXT field, or a name that is no zone, is a 400 on timeZone`() {
-        listOf("titulo" to "America/Lima", "plazo" to "America/Limaa").forEach { (field, zone) ->
+        listOf(
+            "titulo" to "America/Lima",
+            "plazo" to "America/Limaa",
+            "plazo" to "GMT+5",
+            "plazo" to "+05:00:30"
+        ).forEach { (field, zone) ->
             updateField(field, mapOf("timeZone" to zone))
                 .expectStatus()
                 .isBadRequest
