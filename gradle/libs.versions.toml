@@ -7,7 +7,7 @@ ktlintTool = "1.7.1"
 postgresqlJdbc = "42.7.13"
 flyway = "13.8.1"
 testcontainers = "2.0.5"
-embabel = "1.5.2"
+embabel = "1.5.3"
 # wasichai-files' S3-compatible store: optional, an app that uses it adds the s3 artifact itself
 awsSdk = "2.55.0"
 # security floors over the spring boot bom: boot 4.1.1 ships vulnerable patch versions. drop each once boot catches up.
