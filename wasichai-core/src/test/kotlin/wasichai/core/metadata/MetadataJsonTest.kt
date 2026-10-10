@@ -48,6 +48,13 @@ class MetadataJsonTest {
     }
 
     @Test
+    fun `a declared time zone is written, and only then`() {
+        val tree = mapper.readTree(mapper.writeValueAsString(response(emptyMap()).copy(type = "DATETIME", timeZone = "America/Lima")))
+
+        assertThat(tree.get("timeZone").asString()).isEqualTo("America/Lima")
+    }
+
+    @Test
     fun `module properties are flattened, and a null one is still written`() {
         val tree = mapper.readTree(mapper.writeValueAsString(response(mapOf("geometry" to null, "other" to mapOf("srid" to 32718)))))
 

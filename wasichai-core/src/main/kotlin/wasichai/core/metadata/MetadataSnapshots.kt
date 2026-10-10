@@ -57,7 +57,8 @@ internal class MetadataSnapshots(
                 "relationTarget" to relationTarget,
                 "visible" to field.visible,
                 "editable" to field.editable,
-                "indexed" to field.indexed
+                "indexed" to field.indexed,
+                "timeZone" to field.timeZone
             )
         // an installed field type's own columns, by column name
         if (field.attributes.isNotEmpty()) state["attributes"] = field.attributes

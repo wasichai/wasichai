@@ -172,7 +172,7 @@ class CustomObjectRepository(
 
 private const val FIELD_COLUMNS =
     "id, object_id, name, label, type, column_name, required, is_unique, default_value, " +
-        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed"
+        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed, time_zone"
 
 @Repository
 class CustomFieldRepository(
@@ -195,9 +195,9 @@ class CustomFieldRepository(
                     """
                     INSERT INTO $table
                         (id, object_id, name, label, type, column_name, required, is_unique, default_value,
-                         description, position, enum_options, relation_target_object_id, visible, editable, indexed$extraColumns)
+                         description, position, enum_options, relation_target_object_id, visible, editable, indexed, time_zone$extraColumns)
                     VALUES (:id, :objectId, :name, :label, :type, :columnName, :required, :unique, :defaultValue,
-                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed$extraValues)
+                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed, :timeZone$extraValues)
                     RETURNING $selectColumns
                     """.trimIndent()
                 ).bind("id", field.id)
@@ -216,6 +216,7 @@ class CustomFieldRepository(
                 .bind("visible", field.visible)
                 .bind("editable", field.editable)
                 .bind("indexed", field.indexed)
+                .bindNullable("timeZone", field.timeZone)
         attributeColumns.forEachIndexed { index, column ->
             val value = field.attributes[column]
             spec = spec.bindNullable("a$index", value, types.attributeColumns.getValue(column))
@@ -273,7 +274,8 @@ class CustomFieldRepository(
                 UPDATE $table
                 SET label = :label, required = :required, is_unique = :unique, description = :description,
                     position = :position, enum_options = CAST(:enumOptions AS jsonb), visible = :visible,
-                    editable = :editable, indexed = :indexed, default_value = :defaultValue, updated_at = now()
+                    editable = :editable, indexed = :indexed, time_zone = :timeZone, default_value = :defaultValue,
+                    updated_at = now()
                 WHERE id = :id
                 RETURNING $selectColumns
                 """.trimIndent()
@@ -287,6 +289,7 @@ class CustomFieldRepository(
             .bind("visible", field.visible)
             .bind("editable", field.editable)
             .bind("indexed", field.indexed)
+            .bindNullable("timeZone", field.timeZone)
             .bindNullable("defaultValue", field.defaultValue)
             .map(::mapField)
             .one()
@@ -344,6 +347,7 @@ class CustomFieldRepository(
             attributes = attributeColumns.associateWith { row.get(it) },
             visible = Rows.bool(row, "visible"),
             editable = Rows.bool(row, "editable"),
-            indexed = Rows.bool(row, "indexed")
+            indexed = Rows.bool(row, "indexed"),
+            timeZone = Rows.stringOrNull(row, "time_zone")
         )
 }
