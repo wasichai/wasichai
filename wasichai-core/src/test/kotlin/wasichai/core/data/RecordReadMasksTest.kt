@@ -10,7 +10,7 @@ import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
-// issue 90 (ADR-063): who is asked, what a mask decides on, what it may change, and what it costs
+// issue 90 (ADR-064): who is asked, what a mask decides on, what it may change, and what it costs
 class RecordReadMasksTest {
     private val organizationId = ObjectDefinitionFixtures.obj.organizationId
     private val nombre = ObjectDefinitionFixtures.field("nombre", FieldType.TEXT)

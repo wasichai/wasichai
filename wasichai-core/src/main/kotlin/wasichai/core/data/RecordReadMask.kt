@@ -7,7 +7,7 @@ import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
 /**
- * SPI: rewrites the values a caller reads of one record, below the field permissions (ADR-063). A field the
+ * SPI: rewrites the values a caller reads of one record, below the field permissions (ADR-064). A field the
  * caller reads may still carry something they must not see on some records: the files module hides a file's
  * original name on a classified record this way.
  *

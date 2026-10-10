@@ -124,7 +124,7 @@ class WasichaiDataAutoConfiguration {
         store: RecordStore
     ): RecordReadScopes = RecordReadScopes(scopes.orderedStream().toList(), store)
 
-    // no @ConditionalOnMissingBean: an app adds a RecordReadMask, it never swaps out another's (ADR-063)
+    // no @ConditionalOnMissingBean: an app adds a RecordReadMask, it never swaps out another's (ADR-064)
     @Bean
     fun recordReadMasks(
         masks: ObjectProvider<RecordReadMask>,

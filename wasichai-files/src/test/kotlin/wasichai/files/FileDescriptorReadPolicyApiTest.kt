@@ -17,7 +17,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.test.WasichaiIntegrationTest
 import java.util.UUID
 
-// issue 90's acceptance (ADR-063): with a policy that hides the name of a reserved record's files, a reader
+// issue 90's acceptance (ADR-064): with a policy that hides the name of a reserved record's files, a reader
 // without the right never gets the original name, from any route; ADMIN, whom the policy lets through, does
 @TestPropertySource(properties = ["wasichai.files.local.path=build/it-files-policy", "wasichai.files.cleanup.interval=0s"])
 @Import(FileDescriptorReadPolicyApiTest.ReservedNames::class)

@@ -19,7 +19,7 @@ import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 
-// issue 90 (ADR-063): history and /api/audit show each state as the app's masks leave it, decided on that state
+// issue 90 (ADR-064): history and /api/audit show each state as the app's masks leave it, decided on that state
 class AuditQueryServiceMaskTest {
     private val nombre = ObjectDefinitionFixtures.field("nombre", FieldType.TEXT)
     private val clasificacion = ObjectDefinitionFixtures.field("clasificacion", FieldType.TEXT)

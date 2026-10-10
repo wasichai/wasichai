@@ -18,7 +18,7 @@ data class FileRead(
 )
 
 /**
- * SPI: what a caller reads of a FILE or IMAGE value (ADR-063). A record's readers may differ in what they may
+ * SPI: what a caller reads of a FILE or IMAGE value (ADR-064). A record's readers may differ in what they may
  * know of its files: a classified record's file name often carries a person's name or id number.
  *
  * Answer the descriptor to expose: [FileRead.descriptor] unchanged, `name` replaced or left out, other metadata

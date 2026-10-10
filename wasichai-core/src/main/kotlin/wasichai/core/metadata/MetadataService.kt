@@ -237,6 +237,8 @@ class MetadataService(
                 visible = request.visible ?: existing.visible,
                 editable = request.editable ?: existing.editable,
                 indexed = request.indexed ?: existing.indexed,
+                // only how a wall time is read changes: the column keeps its instants (ADR-063)
+                timeZone = if (request.timeZone == null) existing.timeZone else FieldTimeZones.checked(existing.type, request.timeZone),
                 defaultValue = defaultValue
             )
 
@@ -472,7 +474,8 @@ class MetadataService(
                 attributes = attributes,
                 visible = request.visible,
                 editable = request.editable,
-                indexed = request.indexed
+                indexed = request.indexed,
+                timeZone = FieldTimeZones.checked(type, request.timeZone)
             )
         if (field.indexed) FieldSets.requireIndexable(field, "indexed", types)
         // a default every later create would trip over is refused now, once (issue 60)

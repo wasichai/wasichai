@@ -43,7 +43,7 @@ No frontend package yet (planned). Runs on plain PostgreSQL.
 ## Who reads what of a file
 
 A `FileDescriptorReadPolicy` bean decides what a caller reads of a descriptor, per record
-([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `FileRead` carries the caller, the
+([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `FileRead` carries the caller, the
 object, the field, the record as stored (every field; `null` for a staged upload) and the descriptor, and the policy
 answers the descriptor to expose, `name` replaced or left out, other keys left out. `id` always stays. The module turns
 every policy into one core `RecordReadMask` (`FileDescriptorReadPolicies`), so it applies wherever a record reaches a

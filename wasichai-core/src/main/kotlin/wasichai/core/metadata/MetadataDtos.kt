@@ -22,6 +22,8 @@ data class FieldRequest(
     val editable: Boolean = true,
     // a single-column index on the field's column (ADR-036)
     val indexed: Boolean = false,
+    // a DATETIME field's IANA zone, e.g. "America/Lima" (ADR-063). blank or left out is none
+    val timeZone: String? = null,
     // properties only a module's field type reads. core keeps them for it. a constructor
     // parameter, not a body property, so copy()/equals/hashCode carry it like every other field.
     @get:JsonIgnore @param:JsonAnySetter val extensions: Map<String, Any?> = emptyMap()
@@ -58,6 +60,8 @@ data class UpdateFieldRequest(
     val editable: Boolean? = null,
     val position: Int? = null,
     val indexed: Boolean? = null,
+    // null leaves it, blank clears it, a name sets it (ADR-063)
+    val timeZone: String? = null,
     // checked as the type parses it; blank clears it (issue 60)
     val defaultValue: String? = null
 )
@@ -97,6 +101,8 @@ data class FieldResponse(
     val editable: Boolean,
     // only written when true, so a field that declares nothing reads exactly as before (ADR-036)
     @get:JsonInclude(JsonInclude.Include.NON_DEFAULT) val indexed: Boolean = false,
+    // same rule: only written when the field declares one (ADR-063)
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val timeZone: String? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

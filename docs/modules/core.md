@@ -264,7 +264,7 @@ authorization model.
   `400`). Never asked for `ADMIN`, the platform or automations.
 - `RecordReadMask` — an app's or a module's rewrite of the values a caller reads of one record, decided on the record
   as stored (so on a field the caller cannot read), such as the files module's hidden file names
-  ([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every
+  ([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every
   bean in `@Order` wherever a record's `attributes` leave core for a person or a service account, `ADMIN` included:
   get, lists, `rows`, write answers, related records, the workflow transition's answer, and each audit `before` and
   `after` (through the `AuditStateMask` port). A mask answers the keys it was given; a key added is dropped. A
@@ -280,7 +280,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 `RecordWriteGuards`: `appendOnly` holds for everyone, so an app adds a `RecordWriteGuard` instead
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)); and `RecordReadScopes`: an app adds a
 `RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)),
-and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
+and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `correlationIdWebFilter`, `healthController`.
@@ -331,6 +331,8 @@ cascading from the organization and the user, with an index on `created_at` for 
 ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)).
 `V17__tokens_valid_after.sql` adds `users.tokens_valid_after`, nullable: the revocation marker, always a whole second
 ([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)).
+`V18__field_time_zone.sql` adds `custom_fields.time_zone`, nullable text: a `DATETIME` field's IANA zone, checked by
+`MetadataService`, never by the database ([ADR-063](../adr/0063-a-datetime-field-may-name-its-time-zone.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes

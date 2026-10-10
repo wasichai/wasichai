@@ -160,7 +160,8 @@ class FieldTypeRegistry(
                 "relationTarget",
                 "visible",
                 "editable",
-                "indexed"
+                "indexed",
+                "timeZone"
             )
 
         // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`.
