@@ -94,5 +94,7 @@ supersedes it and says so in its status line.
   writes](0061-file-and-image-fields-with-a-storage-spi.md)
 - [ADR-062: RecordService.createAll, a batch create that looks things up once](0062-batch-record-creation.md)
 - [ADR-063: A DATETIME field may name its time zone](0063-a-datetime-field-may-name-its-time-zone.md)
-- [ADR-064: A read mask rewrites what a caller reads of a record; files hide a file's name through
-  it](0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)
+- [ADR-064: A field's time zone may be a region in any case or a fixed UTC
+  offset](0064-field-time-zone-in-any-case-or-a-fixed-offset.md)
+- [ADR-065: A read mask rewrites what a caller reads of a record; files hide a file's name through
+  it](0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)

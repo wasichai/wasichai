@@ -488,13 +488,16 @@ property never checks the stored default. A `GEOMETRY` field takes no default. T
 create only (see "Defaults" under Records); records that exist keep what they hold. The column has no SQL `DEFAULT`:
 an insert that bypasses the API gets `NULL` (ADR-031 D40).
 
-`timeZone` names the zone a `DATETIME` field's wall-clock time belongs to, as an IANA name: `"America/Lima"`. The
-value stays an instant, sent and answered in UTC; the API converts nothing, and a client shows and reads the field's
-wall time in that zone ahead of any zone of its own. Only a `DATETIME` field takes one: on any other type, or a name
-that is not an IANA zone (`"America/Limaa"`, a fixed offset such as `"+05:00"`, the wrong case), `POST` and `PUT` are
-a `400` naming `timeZone`. On `PUT`, leaving it out keeps it, a blank one clears it, and changing it moves no data.
-A field comes back with `timeZone` only when it has one
-([ADR-063](../adr/0063-a-datetime-field-may-name-its-time-zone.md)).
+`timeZone` names the zone a `DATETIME` field's wall-clock time belongs to: an IANA name such as `"America/Lima"`, in
+any case, or a fixed UTC offset written `±HH`, `±HHMM` or `±HH:MM`, which never follows daylight saving time. The API
+stores and answers one spelling: the canonical name (`"america/lima"` → `"America/Lima"`) or `±HH:MM` (`"-0500"` →
+`"-05:00"`; `"Z"` and `"-00:00"` → `"+00:00"`). The value stays an instant, sent and answered in UTC; the API
+converts nothing, and a client shows and reads the field's wall time in that zone ahead of any zone of its own. Only a
+`DATETIME` field takes one: on any other type, or a name that is neither (`"America/Limaa"`, `"GMT+5"`,
+`"+05:00:30"`), `POST` and `PUT` are a `400` naming `timeZone`. On `PUT`, leaving it out keeps it, a blank one clears
+it, and changing it moves no data. A field comes back with `timeZone` only when it has one
+([ADR-063](../adr/0063-a-datetime-field-may-name-its-time-zone.md),
+[ADR-064](../adr/0064-field-time-zone-in-any-case-or-a-fixed-offset.md)).
 
 ```json
 { "name": "ocurrido", "label": "Ocurrido", "type": "DATETIME", "timeZone": "America/Lima" }
@@ -1169,7 +1172,7 @@ unchanged.
 ### Read mask
 
 An app may also rewrite what a caller reads of a record's values, per record, with a `RecordReadMask` bean
-([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)); the files module's
+([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)); the files module's
 `FileDescriptorReadPolicy` is one (see [Files](#files)). No route or parameter changes. The record's `attributes` in
 `GET`, the list, related records, the answer of `POST`, `PUT`, `PATCH` (and its `Idempotency-Key` replay), a
 transition's answer, GIS features and each `before` and `after` of the history and `/api/audit` carry the rewritten
@@ -1357,7 +1360,7 @@ A field declares its settings next to `type` in `POST /api/metadata/objects/{obj
 `image/png`, `image/jpeg`, `image/webp`). The field's JSON carries `"file": { "maxBytes", "contentTypes" }`.
 
 An app may change what a caller reads of a descriptor, per record, with a `FileDescriptorReadPolicy` bean
-([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `name` replaced or left out, other
+([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `name` replaced or left out, other
 keys left out. `id` always stays. Everywhere the descriptor reaches that caller follows: records, lists, related
 records, write answers, history and `/api/audit`, the staged upload's `201`; the download's `Content-Disposition`
 names the file as the caller reads it (`file` when they read no `name`). Without such a bean nothing changes.

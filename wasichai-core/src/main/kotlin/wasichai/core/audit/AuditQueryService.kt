@@ -92,7 +92,7 @@ class AuditQueryService(
     private val access: AccessPolicy,
     private val schemas: WasichaiSchemas,
     private val scope: AuditRecordScope,
-    // the app's read masks (ADR-064). defaulted: code that builds this service itself keeps compiling
+    // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
     private val masks: AuditStateMask? = null
 ) {
     // tenant-wide read: needs an organization-wide READ grant, not one on some object.

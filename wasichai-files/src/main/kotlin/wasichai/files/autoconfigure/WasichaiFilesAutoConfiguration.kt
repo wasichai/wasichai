@@ -97,7 +97,7 @@ class WasichaiFilesAutoConfiguration {
         policies: FileDescriptorReadPolicies
     ): FileService = FileService(records, metadata, currentUser, files, store, types.associateBy { it.type.name }, policies)
 
-    // the app's FileDescriptorReadPolicy beans, as a RecordReadMask core asks everywhere a record leaves it (ADR-064).
+    // the app's FileDescriptorReadPolicy beans, as a RecordReadMask core asks everywhere a record leaves it (ADR-065).
     // no @ConditionalOnMissingBean: an app adds a policy, it never swaps out another's
     @Bean
     fun fileDescriptorReadPolicies(policies: ObjectProvider<FileDescriptorReadPolicy>): FileDescriptorReadPolicies =

@@ -264,7 +264,7 @@ authorization model.
   `400`). Never asked for `ADMIN`, the platform or automations.
 - `RecordReadMask` — an app's or a module's rewrite of the values a caller reads of one record, decided on the record
   as stored (so on a field the caller cannot read), such as the files module's hidden file names
-  ([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every
+  ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every
   bean in `@Order` wherever a record's `attributes` leave core for a person or a service account, `ADMIN` included:
   get, lists, `rows`, write answers, related records, the workflow transition's answer, and each audit `before` and
   `after` (through the `AuditStateMask` port). A mask answers the keys it was given; a key added is dropped. A
@@ -280,7 +280,7 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 `RecordWriteGuards`: `appendOnly` holds for everyone, so an app adds a `RecordWriteGuard` instead
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)); and `RecordReadScopes`: an app adds a
 `RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)),
-and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
+and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `correlationIdWebFilter`, `healthController`.

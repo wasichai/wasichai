@@ -89,7 +89,7 @@ class RecordService(
     private val readScopes: RecordReadScopes,
     private val tenants: TenantDirectory,
     private val idempotency: IdempotencyKeys,
-    // the app's read masks (ADR-064). defaulted: code that builds this service itself keeps compiling
+    // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
     private val masks: RecordReadMasks = RecordReadMasks.NONE,
     transactions: () -> TransactionalOperator
 ) {
@@ -795,7 +795,7 @@ class RecordService(
         )
     }
 
-    // what a write answers its caller: their readable fields, masked (ADR-064). [stored] is the record whole
+    // what a write answers its caller: their readable fields, masked (ADR-065). [stored] is the record whole
     private suspend fun RecordRow.answer(
         caller: Caller,
         definition: ObjectDefinition,

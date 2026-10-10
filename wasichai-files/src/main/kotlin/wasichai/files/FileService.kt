@@ -36,7 +36,7 @@ class FileDownload(
     val file: StoredFile,
     val fieldType: wasichai.core.metadata.FieldType,
     val content: Flux<DataBuffer>,
-    // what Content-Disposition names it: the name its caller reads (ADR-064)
+    // what Content-Disposition names it: the name its caller reads (ADR-065)
     val fileName: String = file.fileName
 )
 
@@ -54,7 +54,7 @@ class FileService(
     private val files: StoredFileRepository,
     private val store: FileStore,
     private val handlers: Map<String, FileFieldType>,
-    // the app's FileDescriptorReadPolicy beans (ADR-064). defaulted: code that builds this service itself keeps compiling
+    // the app's FileDescriptorReadPolicy beans (ADR-065). defaulted: code that builds this service itself keeps compiling
     private val policies: FileDescriptorReadPolicies = FileDescriptorReadPolicies.NONE
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -98,7 +98,7 @@ class FileService(
         return store(user, definition, field, upload).descriptor()
     }
 
-    /** [stage], answered as its uploader reads it: through the read policies, with no record (ADR-064). */
+    /** [stage], answered as its uploader reads it: through the read policies, with no record (ADR-065). */
     suspend fun stageAsRead(
         objectName: String,
         fieldName: String,
@@ -126,7 +126,7 @@ class FileService(
         val value = record.attributes[field.name]
         val id = fileIdOf(value) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
         val file = files.find(user.organizationId, id) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
-        // the name the caller reads, as the read policies left it (ADR-064): none read, none sent
+        // the name the caller reads, as the read policies left it (ADR-065): none read, none sent
         val name = (value as? Map<*, *>)?.get("name") as? String
         return FileDownload(file, field.type, store.open(file.objectKey), safeName(name))
     }

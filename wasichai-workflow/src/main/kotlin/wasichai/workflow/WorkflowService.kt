@@ -85,7 +85,7 @@ class WorkflowService(
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
     private val readScopes: RecordReadScopes,
-    // the app's read masks (ADR-064). defaulted: code that builds this service itself keeps compiling
+    // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
     private val masks: RecordReadMasks = RecordReadMasks.NONE
 ) {
     suspend fun byObject(objectName: String): Pair<Workflow, String> {

@@ -7,7 +7,7 @@ Newest first. Architectural reasoning lives in `docs/adr/`; this file records wh
 A `FILE` value's descriptor (`{id, name, contentType, size, sha256}`) reached every caller who could read the field, in
 the record, the list, related records and the history, and SGSPE's classified evidence often carries a person's name
 or id number in its original file name ([#90](https://github.com/wasichai/wasichai/issues/90)). Core gains a
-**`RecordReadMask` SPI** ([ADR-064](adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
+**`RecordReadMask` SPI** ([ADR-065](adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
 `suspend fun mask(caller, definition, stored, attributes)` answers the attributes the caller gets of one record,
 decided on the record as stored (every field, so on a classification the caller cannot read); a key added is dropped,
 so a mask never hands out a field the field permissions hide. Every bean runs in `@Order` through one non-replaceable
@@ -33,6 +33,19 @@ download or their own upload's answer, and a public record keeps its name; `ADMI
 [build-your-app.md](guides/build-your-app.md#hide-part-of-a-value-file-names-on-classified-records),
 [core.md](modules/core.md), [files.md](modules/files.md#who-reads-what-of-a-file), [rest.md](api/rest.md) "Read mask"
 and "Files".
+## 2026-10-10 — A field's time zone in any case, or a fixed UTC offset
+
+A `DATETIME` field's `timeZone` was accepted only as one of `ZoneId.getAvailableZoneIds()`, case-sensitive and regions
+only, so `america/lima` and `-05:00` were a `400` ([#99](https://github.com/wasichai/wasichai/issues/99)). Now a region
+name matches in any case and is stored and answered canonical (`america/lima` → `America/Lima`), and a fixed offset
+`±HH`, `±HHMM` or `±HH:MM` (within ±18:00) is accepted and stored and answered as `±HH:MM` (`-0500` → `-05:00`; `Z`,
+`-00:00` → `+00:00`). Still a `400` on `timeZone`: a typo, `GMT+5`/`UTC-5`, seconds (`+05:00:30`), `+5`, `+19:00`. No
+migration: stored zones are already canonical region names. `FieldTimeZones` only; no route, property or column changes.
+[ADR-064](adr/0064-field-time-zone-in-any-case-or-a-fixed-offset.md) amends ADR-063 and ADR-031 D48. Tests:
+`FieldTimeZonesTest` (canonical spelling for any case, offsets normalized, the refused forms) and
+`FieldTimeZoneApiTest` (`-0500` on create answered `-05:00`, `america/lima` and `+05:00` on update, `GMT+5` and
+`+05:00:30` a `400` on `timeZone`).
+
 ## 2026-10-10 — A DATETIME field may name its time zone
 
 A `DATETIME` field stores an instant, but nothing said whose wall clock it belongs to, so a client guessed (the

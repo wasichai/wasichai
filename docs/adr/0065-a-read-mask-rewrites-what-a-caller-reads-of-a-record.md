@@ -1,4 +1,4 @@
-# ADR-064: A read mask rewrites what a caller reads of a record; files hide a file's name through it
+# ADR-065: A read mask rewrites what a caller reads of a record; files hide a file's name through it
 
 **Status**: accepted · 2026-10-10 · extends [ADR-048](0048-a-read-scope-narrows-what-a-caller-reads.md) and
 [ADR-061](0061-file-and-image-fields-with-a-storage-spi.md)

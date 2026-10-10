@@ -20,7 +20,7 @@ import wasichai.core.metadata.readableBy
 import java.time.Instant
 import java.util.UUID
 
-// issue 90 (ADR-064): every record RecordService hands its caller goes through the app's read masks, decided on
+// issue 90 (ADR-065): every record RecordService hands its caller goes through the app's read masks, decided on
 // the record as stored, a field the caller cannot read included
 class RecordServiceReadMaskTest {
     private val nombre = ObjectDefinitionFixtures.field("nombre", FieldType.TEXT)

@@ -4,7 +4,7 @@ import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.metadata.ObjectDefinition
 
 /**
- * What a caller reads of an audited state: the app's read masks (ADR-064). Audit sits below data in core's DAG,
+ * What a caller reads of an audited state: the app's read masks (ADR-065). Audit sits below data in core's DAG,
  * so data answers this (`RecordReadMasks`) and audit only asks.
  */
 interface AuditStateMask {

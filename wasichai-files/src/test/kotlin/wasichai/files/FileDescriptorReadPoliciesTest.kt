@@ -10,7 +10,7 @@ import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
-// issue 90 (ADR-064): the policies see every file value of a record, in order, and never lose its id
+// issue 90 (ADR-065): the policies see every file value of a record, in order, and never lose its id
 class FileDescriptorReadPoliciesTest {
     private val obj = CustomObject(UUID.randomUUID(), UUID.randomUUID(), "evidencia", "Evidencia", "Evidencias", null, true, "evidencia__1", null, null)
 

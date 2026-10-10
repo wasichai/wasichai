@@ -535,7 +535,7 @@ class ProjectScope(
 
 A read scope hides whole records and a field permission a whole field, per role. When a reader may see a record and
 its file but not everything about the file, such as the original name of a confidential piece of evidence, declare a
-`FileDescriptorReadPolicy` (wasichai-files, [ADR-064](../adr/0064-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
+`FileDescriptorReadPolicy` (wasichai-files, [ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
 
 ```kotlin
 // a reserved record's files read as "Archivo reservado" unless the caller holds the role that downloads them
