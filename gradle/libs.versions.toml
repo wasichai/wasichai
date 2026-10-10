@@ -5,7 +5,7 @@ springBoot = "4.1.1"
 ktlint = "14.2.0"
 ktlintTool = "1.7.1"
 postgresqlJdbc = "42.7.13"
-flyway = "13.8.1"
+flyway = "13.9.0"
 testcontainers = "2.0.5"
 embabel = "1.5.3"
 # wasichai-files' S3-compatible store: optional, an app that uses it adds the s3 artifact itself
