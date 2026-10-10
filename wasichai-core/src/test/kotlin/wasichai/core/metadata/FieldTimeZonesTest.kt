@@ -11,6 +11,31 @@ class FieldTimeZonesTest {
         assertThat(FieldTimeZones.checked(FieldType.DATETIME, " America/Lima ")).isEqualTo("America/Lima")
     }
 
+    // issue 99
+    @Test
+    fun `a region name in any case is answered in its canonical spelling`() {
+        assertThat(FieldTimeZones.checked(FieldType.DATETIME, "america/lima")).isEqualTo("America/Lima")
+        assertThat(FieldTimeZones.checked(FieldType.DATETIME, "AMERICA/ARGENTINA/BUENOS_AIRES")).isEqualTo("America/Argentina/Buenos_Aires")
+        assertThat(FieldTimeZones.checked(FieldType.DATETIME, "utc")).isEqualTo("UTC")
+    }
+
+    @Test
+    fun `a fixed offset is answered as plus or minus HH colon MM`() {
+        mapOf(
+            "-0500" to "-05:00",
+            "+05:00" to "+05:00",
+            "-05" to "-05:00",
+            "+0530" to "+05:30",
+            "+18:00" to "+18:00",
+            "Z" to "+00:00",
+            "z" to "+00:00",
+            "+00:00" to "+00:00",
+            "-00:00" to "+00:00"
+        ).forEach { (sent, stored) ->
+            assertThat(FieldTimeZones.checked(FieldType.DATETIME, sent)).describedAs(sent).isEqualTo(stored)
+        }
+    }
+
     @Test
     fun `left out or blank is no zone, on any type`() {
         assertThat(FieldTimeZones.checked(FieldType.DATETIME, null)).isNull()
@@ -21,15 +46,17 @@ class FieldTimeZonesTest {
     @Test
     fun `a zone on any other type is refused on timeZone`() {
         listOf(FieldType.TEXT, FieldType.DATE).forEach { type ->
-            assertThatThrownBy { FieldTimeZones.checked(type, "America/Lima") }
-                .isInstanceOf(ValidationException::class.java)
-                .hasMessageContaining("DATETIME")
+            listOf("America/Lima", "-05:00").forEach { zone ->
+                assertThatThrownBy { FieldTimeZones.checked(type, zone) }
+                    .isInstanceOf(ValidationException::class.java)
+                    .hasMessageContaining("DATETIME")
+            }
         }
     }
 
     @Test
-    fun `an unknown name, a fixed offset or the wrong case is refused`() {
-        listOf("America/Limaa", "+05:00", "GMT+5", "america/lima").forEach { name ->
+    fun `a typo, a prefixed offset, seconds or an offset out of range is refused`() {
+        listOf("America/Limaa", "GMT+5", "UTC-5", "+05:00:30", "+050030", "+5", "+5:00", "+19:00", "+05:60", "05:00").forEach { name ->
             assertThatThrownBy { FieldTimeZones.checked(FieldType.DATETIME, name) }
                 .describedAs(name)
                 .isInstanceOf(ValidationException::class.java)

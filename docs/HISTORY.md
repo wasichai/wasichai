@@ -2,6 +2,19 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-10 — A field's time zone in any case, or a fixed UTC offset
+
+A `DATETIME` field's `timeZone` was accepted only as one of `ZoneId.getAvailableZoneIds()`, case-sensitive and regions
+only, so `america/lima` and `-05:00` were a `400` ([#99](https://github.com/wasichai/wasichai/issues/99)). Now a region
+name matches in any case and is stored and answered canonical (`america/lima` → `America/Lima`), and a fixed offset
+`±HH`, `±HHMM` or `±HH:MM` (within ±18:00) is accepted and stored and answered as `±HH:MM` (`-0500` → `-05:00`; `Z`,
+`-00:00` → `+00:00`). Still a `400` on `timeZone`: a typo, `GMT+5`/`UTC-5`, seconds (`+05:00:30`), `+5`, `+19:00`. No
+migration: stored zones are already canonical region names. `FieldTimeZones` only; no route, property or column changes.
+[ADR-064](adr/0064-field-time-zone-in-any-case-or-a-fixed-offset.md) amends ADR-063 and ADR-031 D48. Tests:
+`FieldTimeZonesTest` (canonical spelling for any case, offsets normalized, the refused forms) and
+`FieldTimeZoneApiTest` (`-0500` on create answered `-05:00`, `america/lima` and `+05:00` on update, `GMT+5` and
+`+05:00:30` a `400` on `timeZone`).
+
 ## 2026-10-10 — A DATETIME field may name its time zone
 
 A `DATETIME` field stores an instant, but nothing said whose wall clock it belongs to, so a client guessed (the

@@ -431,6 +431,8 @@ These are the only intended differences. Anything else that behaves differently 
   converted ([ADR-063](0063-a-datetime-field-may-name-its-time-zone.md)). `custom_fields.time_zone` is a known
   schema-parity deviation, and on a fresh database it moves the `wasichai-gis` and `wasichai-files` columns one
   place. Tested by `FieldTimeZoneApiTest`, `FieldTimeZonesTest`, `MetadataJsonTest` and `SchemaParityTest`.
+  Amended by [ADR-064](0064-field-time-zone-in-any-case-or-a-fixed-offset.md): a region name in any case and a fixed
+  offset (`±HH`, `±HHMM`, `±HH:MM`) are accepted too, and stored and answered normalized (`America/Lima`, `-05:00`).
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
