@@ -89,6 +89,8 @@ class RecordService(
     private val readScopes: RecordReadScopes,
     private val tenants: TenantDirectory,
     private val idempotency: IdempotencyKeys,
+    // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
+    private val masks: RecordReadMasks = RecordReadMasks.NONE,
     transactions: () -> TransactionalOperator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -171,7 +173,8 @@ class RecordService(
                 caller.organizationId,
                 query.copy(createdBy = caller.ownerFilter(), withState = workflow.attached, criteria = query.criteria + caller.scope(definition))
             )
-        return page.map { it.toResponse() }
+        val masked = masks.rows(caller.user, caller.organizationId, definition, visible, page.content)
+        return page.copy(content = masked).map { it.toResponse() }
     }
 
     suspend fun get(
@@ -183,10 +186,10 @@ class RecordService(
         caller.requirePermission(Actions.READ, definition.obj.id)
         val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
-        return store
-            .findById(visible, caller.organizationId, id, caller.ownerFilter(), workflow.attached, caller.scope(definition))
-            ?.toResponse()
-            ?: throw NotFoundException("Record $id does not exist")
+        val row =
+            store.findById(visible, caller.organizationId, id, caller.ownerFilter(), workflow.attached, caller.scope(definition))
+                ?: throw NotFoundException("Record $id does not exist")
+        return masks.row(caller.user, caller.organizationId, definition, visible, row).toResponse()
     }
 
     suspend fun create(
@@ -388,7 +391,7 @@ class RecordService(
         // nothing about what insert hands back, and a locked field left out would read as cleared
         val stored = storedRow(definition, caller.organizationId, created, workflow.attached)
         recorded(RecordChangeKind.CREATED, created.id, after = stored.attributes, state = stored.state)
-        return created.onlyReadable(definition, fieldAccess).toResponse()
+        return created.answer(caller, definition, fieldAccess, stored)
     }
 
     suspend fun update(
@@ -505,7 +508,7 @@ class RecordService(
         // before is a full read; after must be one too, or every locked field reads as cleared (ADR-0025)
         val stored = storedRow(definition, caller.organizationId, updated, workflow.attached)
         write.recorded(RecordChangeKind.UPDATED, id, before = before.attributes, after = stored.attributes, state = stored.state)
-        return updated.onlyReadable(definition, fieldAccess).toResponse()
+        return updated.answer(caller, definition, fieldAccess, stored)
     }
 
     suspend fun delete(
@@ -566,10 +569,11 @@ class RecordService(
         val definition = metadata.loadDefinition(caller.organizationId, objectName)
         caller.requirePermission(Actions.READ, definition.obj.id)
         val visible = definition.readableBy(caller.fieldAccess(definition.obj.id))
-        return visible to
+        val rows =
             store
                 .query(visible, caller.organizationId, query.copy(createdBy = caller.ownerFilter(), criteria = query.criteria + caller.scope(definition)))
                 .content
+        return visible to masks.rows(caller.user, caller.organizationId, definition, visible, rows)
     }
 
     // who is calling: the token's user, or the platform inside asPlatform. user null = the platform.
@@ -790,6 +794,17 @@ class RecordService(
             "Field '${blocked.name}' is required but your roles may not write it, so you cannot create ${definition.obj.name}"
         )
     }
+
+    // what a write answers its caller: their readable fields, masked (ADR-065). [stored] is the record whole
+    private suspend fun RecordRow.answer(
+        caller: Caller,
+        definition: ObjectDefinition,
+        fieldAccess: FieldAccess,
+        stored: RecordRow
+    ): RecordResponse =
+        masks
+            .row(caller.user, caller.organizationId, definition, definition.readableBy(fieldAccess), onlyReadable(definition, fieldAccess), stored.attributes)
+            .toResponse()
 
     private fun RecordRow.onlyReadable(
         definition: ObjectDefinition,

@@ -14,6 +14,7 @@ import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordChangeListener
 import wasichai.core.data.RecordETag
+import wasichai.core.data.RecordReadMasks
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordResponse
 import wasichai.core.data.RecordStore
@@ -83,7 +84,9 @@ class WorkflowService(
     private val access: AccessPolicy,
     private val changes: List<RecordChangeListener>,
     private val guards: RecordWriteGuards,
-    private val readScopes: RecordReadScopes
+    private val readScopes: RecordReadScopes,
+    // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
+    private val masks: RecordReadMasks = RecordReadMasks.NONE
 ) {
     suspend fun byObject(objectName: String): Pair<Workflow, String> {
         val user = currentUser.require()
@@ -302,7 +305,7 @@ class WorkflowService(
             )
         // every listener, in @Order, inside this transaction (P1 R9)
         changes.forEach { it.recordChanged(change) }
-        return moved.toResponse()
+        return masks.row(user, user.organizationId, definition, visible, moved, full?.attributes).toResponse()
     }
 
     // the guarded UPDATE matched no row: gone or out of reach (404), stale against If-Match (412, ADR-051), or

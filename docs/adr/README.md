@@ -96,3 +96,5 @@ supersedes it and says so in its status line.
 - [ADR-063: A DATETIME field may name its time zone](0063-a-datetime-field-may-name-its-time-zone.md)
 - [ADR-064: A field's time zone may be a region in any case or a fixed UTC
   offset](0064-field-time-zone-in-any-case-or-a-fixed-offset.md)
+- [ADR-065: A read mask rewrites what a caller reads of a record; files hide a file's name through
+  it](0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)

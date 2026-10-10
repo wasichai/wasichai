@@ -1169,6 +1169,16 @@ on its related records, its history and its transitions, on a link or unlink nam
 on a `RELATION` field naming it. Never `403`. `ADMIN` is not narrowed. Without such a bean every answer above is
 unchanged.
 
+### Read mask
+
+An app may also rewrite what a caller reads of a record's values, per record, with a `RecordReadMask` bean
+([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)); the files module's
+`FileDescriptorReadPolicy` is one (see [Files](#files)). No route or parameter changes. The record's `attributes` in
+`GET`, the list, related records, the answer of `POST`, `PUT`, `PATCH` (and its `Idempotency-Key` replay), a
+transition's answer, GIS features and each `before` and `after` of the history and `/api/audit` carry the rewritten
+values; a mask never adds a field the caller cannot read. It may apply to `ADMIN` too. Without such a bean every answer
+is unchanged.
+
 ### Change reason
 
 ```http
@@ -1348,6 +1358,12 @@ POST /api/objects/{object}/files/{field}                 multipart/form-data, pa
 A field declares its settings next to `type` in `POST /api/metadata/objects/{object}/fields`: `maxBytes` (1 to
 `wasichai.files.max-bytes`, the default) and `contentTypes` (`["application/pdf", "image/*"]`; `IMAGE` defaults to
 `image/png`, `image/jpeg`, `image/webp`). The field's JSON carries `"file": { "maxBytes", "contentTypes" }`.
+
+An app may change what a caller reads of a descriptor, per record, with a `FileDescriptorReadPolicy` bean
+([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `name` replaced or left out, other
+keys left out. `id` always stays. Everywhere the descriptor reaches that caller follows: records, lists, related
+records, write answers, history and `/api/audit`, the staged upload's `201`; the download's `Content-Disposition`
+names the file as the caller reads it (`file` when they read no `name`). Without such a bean nothing changes.
 
 ## Audit and history
 
