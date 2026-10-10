@@ -422,6 +422,16 @@ These are the only intended differences. Anything else that behaves differently 
   `FilesOnlyApiTest`, `FileFieldTypeTest`, `StoredFileGuardTest`, `ContentSnifferTest`, `LocalFileStoreTest` and
   `WasichaiFilesAutoConfigurationTest`.
 
+**Because one object can mix zones**
+
+- **D48. A `DATETIME` field may name its time zone.** The original's fields had no zone. A field's JSON may carry
+  `timeZone`, an IANA name such as `America/Lima`, accepted on `POST` and `PUT` of a `DATETIME` field only; any other
+  type or a name that is not an IANA zone is a `400` naming `timeZone`. Left out on create it is none, and a field
+  without one has no such key, so a model that declares none reads as before. Values stay instants and nothing is
+  converted ([ADR-063](0063-a-datetime-field-may-name-its-time-zone.md)). `custom_fields.time_zone` is a known
+  schema-parity deviation, and on a fresh database it moves the `wasichai-gis` and `wasichai-files` columns one
+  place. Tested by `FieldTimeZoneApiTest`, `FieldTimeZonesTest`, `MetadataJsonTest` and `SchemaParityTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

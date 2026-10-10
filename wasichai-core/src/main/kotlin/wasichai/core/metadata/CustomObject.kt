@@ -46,7 +46,9 @@ data class CustomField(
     val visible: Boolean,
     val editable: Boolean,
     // a single-column index on every organization's table (ADR-036). relations get one anyway.
-    val indexed: Boolean = false
+    val indexed: Boolean = false,
+    // a DATETIME field's IANA zone (ADR-063). the column keeps instants either way
+    val timeZone: String? = null
 )
 
 // object plus its fields. what the UI needs to render anything.
