@@ -22,6 +22,8 @@ import wasichai.core.data.RecordChangeListener
 import wasichai.core.data.RecordController
 import wasichai.core.data.RecordQueryContributor
 import wasichai.core.data.RecordQueryParser
+import wasichai.core.data.RecordReadMask
+import wasichai.core.data.RecordReadMasks
 import wasichai.core.data.RecordReadScope
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
@@ -82,8 +84,9 @@ class WasichaiDataAutoConfiguration {
         metadata: MetadataService,
         access: AccessPolicy,
         schemas: WasichaiSchemas,
-        readScopes: RecordReadScopes
-    ): AuditQueryService = AuditQueryService(db, objectMapper, currentUser, metadata, access, schemas, readScopes)
+        readScopes: RecordReadScopes,
+        masks: RecordReadMasks
+    ): AuditQueryService = AuditQueryService(db, objectMapper, currentUser, metadata, access, schemas, readScopes, masks)
 
     @Bean
     @ConditionalOnMissingBean
@@ -120,6 +123,13 @@ class WasichaiDataAutoConfiguration {
         scopes: ObjectProvider<RecordReadScope>,
         store: RecordStore
     ): RecordReadScopes = RecordReadScopes(scopes.orderedStream().toList(), store)
+
+    // no @ConditionalOnMissingBean: an app adds a RecordReadMask, it never swaps out another's (ADR-063)
+    @Bean
+    fun recordReadMasks(
+        masks: ObjectProvider<RecordReadMask>,
+        store: RecordStore
+    ): RecordReadMasks = RecordReadMasks(masks.orderedStream().toList(), store)
 
     // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
     @Bean
@@ -166,6 +176,7 @@ class WasichaiDataAutoConfiguration {
         readScopes: RecordReadScopes,
         tenants: TenantDirectory,
         idempotency: IdempotencyKeys,
+        masks: RecordReadMasks,
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): RecordService =
         RecordService(
@@ -181,7 +192,8 @@ class WasichaiDataAutoConfiguration {
             references,
             readScopes,
             tenants,
-            idempotency
+            idempotency,
+            masks
         ) { TransactionalOperator.create(transactionManager.getObject()) }
 
     // Idempotency-Key on record creation (ADR-058). the transaction manager is looked up on first use, as for ClusterLock
@@ -219,9 +231,25 @@ class WasichaiDataAutoConfiguration {
         schemas: WasichaiSchemas,
         audit: AuditService,
         guards: RecordWriteGuards,
-        readScopes: RecordReadScopes
+        readScopes: RecordReadScopes,
+        masks: RecordReadMasks
     ): RelatedRecordService =
-        RelatedRecordService(relationships, relationshipService, objects, fields, metadata, store, currentUser, access, db, schemas, audit, guards, readScopes)
+        RelatedRecordService(
+            relationships,
+            relationshipService,
+            objects,
+            fields,
+            metadata,
+            store,
+            currentUser,
+            access,
+            db,
+            schemas,
+            audit,
+            guards,
+            readScopes,
+            masks
+        )
 
     @Bean
     @ConditionalOnMissingBean

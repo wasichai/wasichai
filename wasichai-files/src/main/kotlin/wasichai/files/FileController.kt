@@ -54,7 +54,7 @@ class FileController(
         @PathVariable("object") objectName: String,
         @PathVariable field: String,
         @RequestPart("file") file: FilePart
-    ): Map<String, Any?> = files.stage(objectName, field, file.toUpload()).toMap()
+    ): Map<String, Any?> = files.stageAsRead(objectName, field, file.toUpload())
 
     // the bytes. an IMAGE is shown inline; anything else is a download the browser never renders
     @GetMapping("/records/{id}/files/{field}")
@@ -68,7 +68,7 @@ class FileController(
         val inline = download.fieldType == IMAGE && file.contentType.startsWith("image/")
         val disposition =
             (if (inline) ContentDisposition.inline() else ContentDisposition.attachment())
-                .filename(file.fileName, StandardCharsets.UTF_8)
+                .filename(download.fileName, StandardCharsets.UTF_8)
                 .build()
         return ResponseEntity
             .ok()

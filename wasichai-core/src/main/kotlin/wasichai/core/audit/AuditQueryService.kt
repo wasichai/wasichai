@@ -91,7 +91,9 @@ class AuditQueryService(
     private val metadata: MetadataService,
     private val access: AccessPolicy,
     private val schemas: WasichaiSchemas,
-    private val scope: AuditRecordScope
+    private val scope: AuditRecordScope,
+    // the app's read masks (ADR-063). defaulted: code that builds this service itself keeps compiling
+    private val masks: AuditStateMask? = null
 ) {
     // tenant-wide read: needs an organization-wide READ grant, not one on some object.
     // the admin trail (admin:*) is MANAGE_ORGANIZATION's instead (ADR-049): asked for by name, anyone else gets
@@ -317,8 +319,10 @@ class AuditQueryService(
         rows: List<AuditRow>
     ): List<AuditEntry> {
         val readable = mutableMapOf<String, Set<String>?>()
+        val masked = mutableMapOf<String, ObjectDefinition?>()
         return rows.map { row ->
             val allowed = readable.getOrPut(row.objectName) { readableFields(user, row.objectName) }
+            val mask = masked.getOrPut(row.objectName) { maskedDefinition(user, row.objectName) }
             AuditEntry(
                 id = row.id.toString(),
                 userEmail = row.userEmail,
@@ -326,7 +330,7 @@ class AuditQueryService(
                 recordId = row.recordId?.toString(),
                 operation = row.operation,
                 occurredAt = row.occurredAt,
-                changes = changes(row, allowed),
+                changes = changes(mask?.let { masked(user, it, row) } ?: row, allowed),
                 documentId = row.documentId?.toString(),
                 reason = row.reason,
                 serviceAccount = row.serviceAccount,
@@ -344,6 +348,29 @@ class AuditQueryService(
     ): List<FieldChange> {
         if (AdminEntity.isAdmin(row.objectName)) return AuditDiff.changes(row.before ?: emptyMap(), row.after ?: emptyMap())
         return AuditDiff.changes(filter(row.before, allowed), filter(row.after, allowed))
+    }
+
+    // the definition the masks rewrite this object's states with, null when none does. never an admin entry
+    private suspend fun maskedDefinition(
+        user: AuthenticatedUser,
+        objectName: String
+    ): ObjectDefinition? {
+        if (masks == null || AdminEntity.isAdmin(objectName)) return null
+        val definition = definitionOrNull(user, objectName) ?: return null
+        return definition.takeIf { masks.appliesTo(user, it) }
+    }
+
+    // each state is the whole record at that point: what the masks decide on
+    private suspend fun masked(
+        user: AuthenticatedUser,
+        definition: ObjectDefinition,
+        row: AuditRow
+    ): AuditRow {
+        val masks = masks ?: return row
+        return row.copy(
+            before = row.before?.let { masks.state(user, definition, it) },
+            after = row.after?.let { masks.state(user, definition, it) }
+        )
     }
 
     // null means no restriction. empty set means nothing may be shown.

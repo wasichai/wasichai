@@ -262,6 +262,14 @@ authorization model.
   both sides, the `RELATION` target check, history and `/api/audit`, the lookups before an update, delete, link or
   transition, and so GIS features and the agent's tools. Out of scope reads as missing (`404`, or the `RELATION`
   `400`). Never asked for `ADMIN`, the platform or automations.
+- `RecordReadMask` — an app's or a module's rewrite of the values a caller reads of one record, decided on the record
+  as stored (so on a field the caller cannot read), such as the files module's hidden file names
+  ([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every
+  bean in `@Order` wherever a record's `attributes` leave core for a person or a service account, `ADMIN` included:
+  get, lists, `rows`, write answers, related records, the workflow transition's answer, and each audit `before` and
+  `after` (through the `AuditStateMask` port). A mask answers the keys it was given; a key added is dropped. A
+  projected read pays one more query by ids, only for an object a mask `appliesTo`. Never asked for the platform or
+  automations; sections are not masked.
 - `ObjectRemovalListener`, `FieldUsage` — a module's veto or note when an object or field is about to be removed.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));
@@ -271,7 +279,8 @@ authorization model.
 declaring its own bean of the same type, grouped by the auto-configuration that owns them. The exceptions are
 `RecordWriteGuards`: `appendOnly` holds for everyone, so an app adds a `RecordWriteGuard` instead
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)); and `RecordReadScopes`: an app adds a
-`RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)).
+`RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)),
+and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `correlationIdWebFilter`, `healthController`.

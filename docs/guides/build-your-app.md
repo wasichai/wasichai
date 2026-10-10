@@ -531,6 +531,36 @@ class ProjectScope(
   a record in another project. Keep creates in scope with a `RecordWriteGuard`.
 - GeoServer layers read the table themselves: do not publish a scoped object as a layer.
 
+### Hide part of a value: file names on classified records
+
+A read scope hides whole records and a field permission a whole field, per role. When a reader may see a record and
+its file but not everything about the file, such as the original name of a confidential piece of evidence, declare a
+`FileDescriptorReadPolicy` (wasichai-files, [ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
+
+```kotlin
+// a reserved record's files read as "Archivo reservado" unless the caller holds the role that downloads them
+@Component
+class ReservedEvidence : FileDescriptorReadPolicy {
+    override suspend fun descriptor(read: FileRead): Map<String, Any?> {
+        val reserved = read.record?.get("clasificacion") in setOf("CONFIDENCIAL", "DATOS_PERSONALES")
+        if (!reserved || read.caller.isAdmin || "DESCARGA_RESERVADA" in read.caller.roles) return read.descriptor
+        return read.descriptor + ("name" to "Archivo reservado")
+    }
+}
+```
+
+- `read.record` is the record as stored, every field, so the classification decides even when the caller cannot read
+  it; in history it is the state of that entry, and it is `null` for a staged upload, which no record holds yet.
+- Answer the descriptor unchanged, with `name` replaced or left out (`read.descriptor - "name"`), or with other keys
+  left out. `id` stays whatever you answer.
+- It applies wherever the descriptor reaches that caller: the record, lists, related records, write answers, history
+  and `/api/audit`, GIS features, the assistant's tools, the staged upload's answer, and the download's file name.
+  `ADMIN` is asked too; the platform and automations are not.
+- Several beans run in `@Order`, each on what the one before answered. It runs for every file value of every record a
+  caller reads: keep it cheap, or cache per request what it looks up.
+- The same mechanism is open to any value: a core `RecordReadMask` bean rewrites a record's `attributes` per caller and
+  record, and the files policy is one.
+
 ## Every change says why
 
 When each change must carry an observation, mark the object `requiresReason`: a write without a reason is a `400` on

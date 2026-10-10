@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordChangeListener
+import wasichai.core.data.RecordReadMasks
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordWriteGuards
@@ -67,9 +68,10 @@ class WasichaiWorkflowAutoConfiguration {
         access: AccessPolicy,
         changes: ObjectProvider<RecordChangeListener>,
         guards: RecordWriteGuards,
-        readScopes: RecordReadScopes
+        readScopes: RecordReadScopes,
+        masks: RecordReadMasks
     ): WorkflowService =
-        WorkflowService(roles, workflows, metadata, schema, store, audit, currentUser, access, changes.orderedStream().toList(), guards, readScopes)
+        WorkflowService(roles, workflows, metadata, schema, store, audit, currentUser, access, changes.orderedStream().toList(), guards, readScopes, masks)
 
     @Bean
     @ConditionalOnMissingBean

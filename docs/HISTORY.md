@@ -2,6 +2,38 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-10 — Read masks: a file's name hidden per record and per caller
+
+A `FILE` value's descriptor (`{id, name, contentType, size, sha256}`) reached every caller who could read the field, in
+the record, the list, related records and the history, and SGSPE's classified evidence often carries a person's name
+or id number in its original file name ([#90](https://github.com/wasichai/wasichai/issues/90)). Core gains a
+**`RecordReadMask` SPI** ([ADR-063](adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)):
+`suspend fun mask(caller, definition, stored, attributes)` answers the attributes the caller gets of one record,
+decided on the record as stored (every field, so on a classification the caller cannot read); a key added is dropped,
+so a mask never hands out a field the field permissions hide. Every bean runs in `@Order` through one non-replaceable
+`RecordReadMasks`, for a person or a service account (`ADMIN` included, the platform and automations never), wherever a
+record's `attributes` leave core: `RecordService` get, list and `rows` (so GIS features and the agent's tools), the
+answers of create, update and patch (so the files upload's answer and an `Idempotency-Key` replay), related records,
+the workflow transition's answer, and each `before` and `after` of a record's history and `/api/audit`, masked on that
+state through a new audit port, `AuditStateMask`. A projected read of an object a mask `appliesTo` pays one more query,
+by ids, for the stored records; a whole read, a write and an audit state already hold them. wasichai-files adds the
+issue's **`FileDescriptorReadPolicy`** (`suspend fun descriptor(read: FileRead): Map<String, Any?>`, `FileRead` = caller,
+definition, field, stored record, descriptor) and turns every policy bean into one mask, `FileDescriptorReadPolicies`:
+each `FILE` or `IMAGE` value goes through the policies in `@Order`, `id` always kept first and as stored. The staged
+upload's `201` goes through them with `record` null (new `FileService.stageAsRead`), and the download's
+`Content-Disposition` names the file with the `name` the caller reads, `file` when none (`FileDownload.fileName`). With
+no mask and no policy every answer, query and file name is what it was, so there is no ADR-031 entry, no route,
+property or migration. Constructor changes, each a new defaulted argument: `RecordService` (`masks`, before
+`transactions`), `RelatedRecordService`, `AuditQueryService`, `WorkflowService` and `FileService`. Not reached:
+GeoServer layers, wasichai-documents and notification texts, which render as the platform. New tests:
+`RecordReadMasksTest`, `RecordServiceReadMaskTest`, `AuditQueryServiceMaskTest`, `FileDescriptorReadPoliciesTest` and
+the integration test `FileDescriptorReadPolicyApiTest` (a reader without the right, who cannot read the classification
+either, never receives the original name from the record, the list, related records, history, `/api/audit`, the
+download or their own upload's answer, and a public record keeps its name; `ADMIN` reads it everywhere). Docs:
+[build-your-app.md](guides/build-your-app.md#hide-part-of-a-value-file-names-on-classified-records),
+[core.md](modules/core.md), [files.md](modules/files.md#who-reads-what-of-a-file), [rest.md](api/rest.md) "Read mask"
+and "Files".
+
 ## 2026-10-08 — RecordService.createAll: a batch create that looks things up once
 
 `RecordService.create` pays a fixed set of round trips per record (definition, permission and field access, workflow

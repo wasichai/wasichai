@@ -1,5 +1,6 @@
 package wasichai.files.autoconfigure
 
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -16,6 +17,8 @@ import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.files.FILE
 import wasichai.files.FileController
+import wasichai.files.FileDescriptorReadPolicies
+import wasichai.files.FileDescriptorReadPolicy
 import wasichai.files.FileFieldType
 import wasichai.files.FileService
 import wasichai.files.FileStore
@@ -90,8 +93,15 @@ class WasichaiFilesAutoConfiguration {
         currentUser: CurrentUser,
         files: StoredFileRepository,
         store: FileStore,
-        types: List<FileFieldType>
-    ): FileService = FileService(records, metadata, currentUser, files, store, types.associateBy { it.type.name })
+        types: List<FileFieldType>,
+        policies: FileDescriptorReadPolicies
+    ): FileService = FileService(records, metadata, currentUser, files, store, types.associateBy { it.type.name }, policies)
+
+    // the app's FileDescriptorReadPolicy beans, as a RecordReadMask core asks everywhere a record leaves it (ADR-063).
+    // no @ConditionalOnMissingBean: an app adds a policy, it never swaps out another's
+    @Bean
+    fun fileDescriptorReadPolicies(policies: ObjectProvider<FileDescriptorReadPolicy>): FileDescriptorReadPolicies =
+        FileDescriptorReadPolicies(policies.orderedStream().toList())
 
     @Bean
     @ConditionalOnMissingBean

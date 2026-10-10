@@ -35,7 +35,9 @@ class FileUpload(
 class FileDownload(
     val file: StoredFile,
     val fieldType: wasichai.core.metadata.FieldType,
-    val content: Flux<DataBuffer>
+    val content: Flux<DataBuffer>,
+    // what Content-Disposition names it: the name its caller reads (ADR-063)
+    val fileName: String = file.fileName
 )
 
 /**
@@ -51,7 +53,9 @@ class FileService(
     private val currentUser: CurrentUser,
     private val files: StoredFileRepository,
     private val store: FileStore,
-    private val handlers: Map<String, FileFieldType>
+    private val handlers: Map<String, FileFieldType>,
+    // the app's FileDescriptorReadPolicy beans (ADR-063). defaulted: code that builds this service itself keeps compiling
+    private val policies: FileDescriptorReadPolicies = FileDescriptorReadPolicies.NONE
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -94,6 +98,18 @@ class FileService(
         return store(user, definition, field, upload).descriptor()
     }
 
+    /** [stage], answered as its uploader reads it: through the read policies, with no record (ADR-063). */
+    suspend fun stageAsRead(
+        objectName: String,
+        fieldName: String,
+        upload: FileUpload
+    ): Map<String, Any?> {
+        val staged = stage(objectName, fieldName, upload)
+        val user = currentUser.require()
+        val definition = metadata.loadDefinition(user.organizationId, objectName)
+        return policies.descriptor(FileRead(user, definition, fileField(definition, fieldName), null, staged.toMap()))
+    }
+
     /** The file [fieldName] of the record holds, if the caller may read that field of that record. */
     suspend fun open(
         objectName: String,
@@ -107,9 +123,12 @@ class FileService(
         val field = fileField(definition, fieldName)
         // a field the caller cannot read is left out of the record: it is not there for them
         if (!record.attributes.containsKey(field.name)) throw noSuchField(definition, fieldName)
-        val id = fileIdOf(record.attributes[field.name]) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
+        val value = record.attributes[field.name]
+        val id = fileIdOf(value) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
         val file = files.find(user.organizationId, id) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
-        return FileDownload(file, field.type, store.open(file.objectKey))
+        // the name the caller reads, as the read policies left it (ADR-063): none read, none sent
+        val name = (value as? Map<*, *>)?.get("name") as? String
+        return FileDownload(file, field.type, store.open(file.objectKey), safeName(name))
     }
 
     // the upload, checked against the field and stored: the row first, so a crash between the two leaves

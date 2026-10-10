@@ -93,3 +93,5 @@ supersedes it and says so in its status line.
 - [ADR-061: FILE and IMAGE fields, stored through a FileStore SPI and written as record
   writes](0061-file-and-image-fields-with-a-storage-spi.md)
 - [ADR-062: RecordService.createAll, a batch create that looks things up once](0062-batch-record-creation.md)
+- [ADR-063: A read mask rewrites what a caller reads of a record; files hide a file's name through
+  it](0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)

@@ -40,6 +40,20 @@ No frontend package yet (planned). Runs on plain PostgreSQL.
   and older than `wasichai.files.cleanup.delay`: replaced or cleared ones, those of deleted records, fields, objects or
   tenants, and staged uploads never attached. Bytes first, then the row.
 
+## Who reads what of a file
+
+A `FileDescriptorReadPolicy` bean decides what a caller reads of a descriptor, per record
+([ADR-063](../adr/0063-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)): `FileRead` carries the caller, the
+object, the field, the record as stored (every field; `null` for a staged upload) and the descriptor, and the policy
+answers the descriptor to expose, `name` replaced or left out, other keys left out. `id` always stays. The module turns
+every policy into one core `RecordReadMask` (`FileDescriptorReadPolicies`), so it applies wherever a record reaches a
+person or a service account, `ADMIN` included: records, lists, related records, write answers and their replays,
+workflow transitions, history and `/api/audit`, GIS features, the assistant's tools. The staged upload's answer goes
+through it too, and the download's `Content-Disposition` names the file as the caller reads it (`file` when they read
+no `name`). Several policies run in `@Order`. With none, nothing is re-read or rewritten. The platform, automations,
+listeners and wasichai-documents see the descriptor whole. Example:
+[build-your-app.md](../guides/build-your-app.md#hide-part-of-a-value-file-names-on-classified-records).
+
 ## How a write goes
 
 `POST …/records/{id}/files/{field}` checks the caller has `UPDATE` on the object, reads the part while counting (one
@@ -96,3 +110,5 @@ core's `custom_fields_type_valid` list, whatever it holds, on every start.
   without them and PostgreSQL refuses the rows. Install gis first, or before creating file fields.
 - Only a person can upload: the platform (`asPlatform`) and automations cannot attach a file.
 - The history keeps a replaced file's descriptor; its bytes go with the cleanup.
+- A `FileDescriptorReadPolicy` does not reach what renders as the platform: a document template or a notification text
+  that prints a file's name prints it whole.

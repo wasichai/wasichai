@@ -45,7 +45,9 @@ class RelatedRecordService(
     private val schemas: WasichaiSchemas,
     private val audit: AuditService,
     private val guards: RecordWriteGuards,
-    private val readScopes: RecordReadScopes
+    private val readScopes: RecordReadScopes,
+    // the app's read masks (ADR-063). defaulted: code that builds this service itself keeps compiling
+    private val masks: RecordReadMasks = RecordReadMasks.NONE
 ) {
     // records on the other side of a relationship, from one record. direction: INVERSE walks a
     // self-relationship from the end FORWARD does not; 400 on any other relationship.
@@ -61,16 +63,21 @@ class RelatedRecordService(
             objects.findByName(user.organizationId, objectName)
                 ?: throw NotFoundException("Object '$objectName' does not exist")
         currentUser.requirePermission(user, Actions.READ, obj.id)
-        return relatedRows(
-            user.organizationId,
-            objectName,
-            recordId,
-            relationshipName,
-            query.copy(createdBy = access.ownerFilter(user)),
-            narrow = { definition -> definition.readableBy(access.fieldAccess(user, definition.obj.id)) },
-            reader = user,
-            direction = direction
-        )
+        val (visible, page) =
+            relatedRows(
+                user.organizationId,
+                objectName,
+                recordId,
+                relationshipName,
+                query.copy(createdBy = access.ownerFilter(user)),
+                narrow = { definition -> definition.readableBy(access.fieldAccess(user, definition.obj.id)) },
+                reader = user,
+                direction = direction
+            )
+        // masked against the other object whole: a mask may decide on a field the caller cannot read
+        if (page.content.isEmpty() || !masks.appliesTo(user, visible)) return visible to page
+        val other = metadata.loadDefinition(user.organizationId, visible.obj.name)
+        return visible to page.copy(content = masks.rows(user, user.organizationId, other, visible, page.content))
     }
 
     // the same walk with no caller behind it: a module acting as the platform (ADR-016) has no user
