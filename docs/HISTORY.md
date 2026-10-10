@@ -2,6 +2,13 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-10 — Release 1.0.0 prepared
+
+`release-please-config.json` pins `"release-as": "1.0.0"`, so the next release PR bumps `gradle.properties` and
+`CHANGELOG.md` to 1.0.0 whatever the commits say; merging it tags `v1.0.0` and `publish.yml` publishes the twenty-four
+libraries. The README's BOM snippet points at 1.0.0. The pin goes away in the commit after the release, so later
+versions follow the commits again (as after v0.1.0). The npm packages keep their own version line (ADR-032).
+
 ## 2026-10-10 — Read masks: a file's name hidden per record and per caller
 
 A `FILE` value's descriptor (`{id, name, contentType, size, sha256}`) reached every caller who could read the field, in
