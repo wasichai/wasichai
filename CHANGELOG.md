@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/wasichai/wasichai/compare/v1.1.0...v1.2.0) (2026-10-11)
+
+
+### Features
+
+* **core:** cache workflows, automations, rules, relationships and file fields with the definitions ([#109](https://github.com/wasichai/wasichai/issues/109)) ([acbae3e](https://github.com/wasichai/wasichai/commit/acbae3eac23d2c68aaac14c69f8c5ddfe0f0317c))
+
 ## [1.1.0](https://github.com/wasichai/wasichai/compare/v1.0.0...v1.1.0) (2026-10-11)
 
 
