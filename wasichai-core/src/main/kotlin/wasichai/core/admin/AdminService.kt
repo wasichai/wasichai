@@ -24,6 +24,7 @@ import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.platform.RequestMemo
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.bindNullable
@@ -198,6 +199,8 @@ class AdminService(
             .awaitSingle()
         val created = roleOrFail(admin.organizationId, name)
         audit.record(admin, AdminEntity.ROLE, UUID.fromString(created.id), AdminOperation.CREATE, null, AdminSnapshots.role(created))
+        // what this request remembered of the roles is wrong now (ADR-066)
+        RequestMemo.clear()
         return created
     }
 
@@ -225,6 +228,8 @@ class AdminService(
             .awaitSingle()
         val updated = roleOrFail(admin.organizationId, name.trim().uppercase())
         audit.record(admin, AdminEntity.ROLE, role, AdminOperation.UPDATE, AdminSnapshots.role(before), AdminSnapshots.role(updated))
+        // what this request remembered of the roles is wrong now (ADR-066)
+        RequestMemo.clear()
         return updated
     }
 
@@ -244,6 +249,8 @@ class AdminService(
             .rowsUpdated()
             .awaitSingle()
         audit.record(admin, AdminEntity.ROLE, id, AdminOperation.DELETE, AdminSnapshots.role(before), null)
+        // what this request remembered of the roles is wrong now (ADR-066)
+        RequestMemo.clear()
     }
 
     // replaces the whole action set of the role
@@ -323,6 +330,8 @@ class AdminService(
             AdminSnapshots.permissions(before),
             AdminSnapshots.permissions(updated)
         )
+        // what this request remembered of the roles is wrong now (ADR-066)
+        RequestMemo.clear()
         return updated
     }
 
@@ -395,6 +404,8 @@ class AdminService(
             AdminSnapshots.fieldPermissions(before),
             AdminSnapshots.fieldPermissions(updated)
         )
+        // what this request remembered of the roles is wrong now (ADR-066)
+        RequestMemo.clear()
         return updated
     }
 

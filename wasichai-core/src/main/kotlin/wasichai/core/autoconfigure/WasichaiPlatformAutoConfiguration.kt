@@ -13,19 +13,21 @@ import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.CorrelationIdWebFilter
 import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.ModuleMigration
+import wasichai.core.platform.RequestMemoWebFilter
 import wasichai.core.platform.SystemColumnContributor
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
 import wasichai.core.platform.WasichaiIdempotencyProperties
 import wasichai.core.platform.WasichaiLoginProperties
+import wasichai.core.platform.WasichaiMetadataProperties
 import wasichai.core.platform.WasichaiMigrations
 import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiPasswordProperties
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.WasichaiWebProperties
 
-// properties, schema names, system columns, migrations, errors, health, correlation id. no scanning: every bean here.
+// properties, schema names, system columns, migrations, errors, health, correlation id, request memo. no scanning: every bean here.
 @AutoConfiguration
 @EnableConfigurationProperties(
     WasichaiDatabaseProperties::class,
@@ -35,7 +37,8 @@ import wasichai.core.platform.WasichaiWebProperties
     WasichaiIdempotencyProperties::class,
     WasichaiOrganizationsProperties::class,
     WasichaiLoginProperties::class,
-    WasichaiPasswordProperties::class
+    WasichaiPasswordProperties::class,
+    WasichaiMetadataProperties::class
 )
 class WasichaiPlatformAutoConfiguration {
     @Bean
@@ -77,6 +80,11 @@ class WasichaiPlatformAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun correlationIdWebFilter(): CorrelationIdWebFilter = CorrelationIdWebFilter()
+
+    // role answers looked up once per request (ADR-066)
+    @Bean
+    @ConditionalOnMissingBean
+    fun requestMemoWebFilter(): RequestMemoWebFilter = RequestMemoWebFilter()
 
     @Bean
     @ConditionalOnMissingBean

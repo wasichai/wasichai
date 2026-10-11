@@ -57,7 +57,9 @@ class RelationshipService(
     private val metadata: MetadataService,
     private val schema: ObjectSchemaManager,
     private val currentUser: CurrentUser,
-    private val audit: AdminAudit
+    private val audit: AdminAudit,
+    // who hears of a change; the definitions it drops (ADR-066). defaulted: uncached, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
     suspend fun list(): List<Relationship> {
         val user = currentUser.requireWithPermission(Actions.READ)
@@ -141,6 +143,7 @@ class RelationshipService(
                 )
             )
         audit.record(user, AdminEntity.RELATIONSHIP, created.id, AdminOperation.CREATE, null, snapshot(created))
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.RELATIONSHIP, AdminOperation.CREATE, source.id, source.name, name))
         return created
     }
 
@@ -182,6 +185,7 @@ class RelationshipService(
                 )
             )
         audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.UPDATE, snapshot(relationship), snapshot(updated))
+        changes.changed(relationshipChange(relationship, AdminOperation.UPDATE))
         return updated
     }
 
@@ -217,6 +221,7 @@ class RelationshipService(
         }
 
         val before = snapshot(relationship)
+        val change = relationshipChange(relationship, AdminOperation.DELETE)
         relationship.joinTable?.let { schema.dropJoinTable(it) }
         column?.let { (owner, field) ->
             schema.dropColumn(owner, field)
@@ -224,6 +229,7 @@ class RelationshipService(
         }
         relationships.delete(relationship.id)
         audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.DELETE, before, null)
+        changes.changed(change)
     }
 
     // the admin trail's view of it (ADR-049): ends and column by name, as the api speaks them
@@ -237,6 +243,20 @@ class RelationshipService(
             "target" to objects.findById(relationship.organizationId, relationship.targetObjectId)?.name,
             "fieldName" to relationship.relationFieldId?.let { fields.findById(it)?.name },
             "joinTable" to relationship.joinTable
+        )
+
+    // a relationship's change, told by its source object (ADR-066)
+    private suspend fun relationshipChange(
+        relationship: Relationship,
+        operation: AdminOperation
+    ): MetadataChange =
+        MetadataChange(
+            relationship.organizationId,
+            MetadataChangeKind.RELATIONSHIP,
+            operation,
+            relationship.sourceObjectId,
+            objects.findById(relationship.organizationId, relationship.sourceObjectId)?.name,
+            relationship.name
         )
 
     // one relationship seen from one object. data walks records with it. on a self-relationship

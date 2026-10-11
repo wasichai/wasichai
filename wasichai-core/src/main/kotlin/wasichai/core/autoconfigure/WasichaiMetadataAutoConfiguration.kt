@@ -18,12 +18,15 @@ import wasichai.core.metadata.DeclaredIndexReconciler
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.FieldUsage
+import wasichai.core.metadata.MetadataChangeListener
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataMapper
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectActionController
 import wasichai.core.metadata.ObjectActionRepository
 import wasichai.core.metadata.ObjectActionService
 import wasichai.core.metadata.ObjectController
+import wasichai.core.metadata.ObjectDefinitionCache
 import wasichai.core.metadata.ObjectMetadataController
 import wasichai.core.metadata.ObjectRemovalListener
 import wasichai.core.metadata.ObjectSchemaManager
@@ -35,6 +38,7 @@ import wasichai.core.metadata.SystemFieldController
 import wasichai.core.platform.DatabaseTenantDirectory
 import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.TenantDirectory
+import wasichai.core.platform.WasichaiMetadataProperties
 import wasichai.core.platform.WasichaiSchemas
 
 // custom objects, fields, relationships and the field-type registry modules extend
@@ -99,6 +103,14 @@ class WasichaiMetadataAutoConfiguration {
         schema: ObjectSchemaManager
     ): DeclaredIndexReconciler = DeclaredIndexReconciler(tenants, objects, fields, schema)
 
+    // definitions cached for wasichai.metadata.cache.ttl, dropped on every change; listeners told after commit (ADR-066)
+    @Bean
+    @ConditionalOnMissingBean
+    fun metadataChanges(
+        properties: WasichaiMetadataProperties,
+        listeners: ObjectProvider<MetadataChangeListener>
+    ): MetadataChanges = MetadataChanges(ObjectDefinitionCache(properties.cache.ttl), listeners.orderedStream().toList())
+
     @Bean
     @ConditionalOnMissingBean
     fun metadataService(
@@ -113,7 +125,8 @@ class WasichaiMetadataAutoConfiguration {
         usages: ObjectProvider<FieldUsage>,
         removals: ObjectProvider<ObjectRemovalListener>,
         actions: ObjectActionRepository,
-        audit: AdminAudit
+        audit: AdminAudit,
+        changes: MetadataChanges
     ): MetadataService =
         MetadataService(
             objects,
@@ -127,7 +140,8 @@ class WasichaiMetadataAutoConfiguration {
             usages.orderedStream().toList(),
             removals.orderedStream().toList(),
             actions,
-            audit
+            audit,
+            changes
         )
 
     @Bean
@@ -139,8 +153,9 @@ class WasichaiMetadataAutoConfiguration {
         metadata: MetadataService,
         schema: ObjectSchemaManager,
         currentUser: CurrentUser,
-        audit: AdminAudit
-    ): RelationshipService = RelationshipService(relationships, objects, fields, metadata, schema, currentUser, audit)
+        audit: AdminAudit,
+        changes: MetadataChanges
+    ): RelationshipService = RelationshipService(relationships, objects, fields, metadata, schema, currentUser, audit, changes)
 
     @Bean
     @ConditionalOnMissingBean

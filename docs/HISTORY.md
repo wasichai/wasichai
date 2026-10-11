@@ -2,6 +2,27 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-11 — Definitions cached, the caller's roles read once per object and request
+
+SGSPE's lists cost a caller who is not `ADMIN` four statements more than `ADMIN`, and a create with three links 188
+statements, most of them the same definition and role reads again for every operation
+([#105](https://github.com/wasichai/wasichai/issues/105)). Core now caches object definitions per node
+([ADR-066](adr/0066-cached-definitions-and-one-access-read-per-request.md)): `MetadataService.loadDefinition` and
+`loadDefinitionById` answer from an `ObjectDefinitionCache` for `wasichai.metadata.cache.ttl` (default `5s`, `0s` reads
+every time), never cache a missing object, and every write to objects, fields or relationships (and a tenant's
+deletion) drops the organization's definitions at once and again when its transaction ends; a transaction that changed
+the model reads its own and caches none. Another node sees a change within the ttl (ADR-031 D49). A new port,
+`MetadataChangeListener`, is told after each committed change. What a caller's roles say about an object (the actions
+allowed, the owner rule, the restricted fields) is one statement, `RoleQueries.objectAccess`, remembered for the
+request by a new `RequestMemoWebFilter`; `hasPermission` on an object, `AccessPolicy.fieldAccess`, `ownRecordsOnly` and
+`ownerFilter` answer from it, and a role or permission write clears the memo of its request. So a list by a caller who
+is not `ADMIN` costs `ADMIN`'s statements plus one, and N operations on one object in a request read its definition
+and its access once. No REST change, no migration. Constructor changes: `AccessPolicy` takes `RoleQueries` (the old
+constructor stays); `MetadataService`, `RelationshipService` and `OrganizationService` take a defaulted
+`MetadataChanges`. New tests: `ObjectDefinitionCacheTest`, `MetadataChangesTest`, `RequestMemoTest`,
+`RoleQueriesMemoTest` and the integration test `MetadataCacheApiTest` (statements counted on the driver). Docs:
+[core.md](modules/core.md#what-a-request-reads-of-the-model-and-the-roles), [build-your-app.md](guides/build-your-app.md).
+
 ## 2026-10-10 — v1.0.0 released
 
 release-please tagged `v1.0.0` and `publish.yml` publishes the libraries to GitHub Packages. The `"release-as": "1.0.0"`

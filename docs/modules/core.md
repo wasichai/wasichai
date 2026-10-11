@@ -155,6 +155,17 @@ request order, and stores nothing. What it looked up stays as read at the start 
 listeners make to a target's readability is not seen. It runs in the caller's transaction (ADR-038) or, with none, in
 its own. There is no REST route and no `Idempotency-Key` variant; `update` and `delete` have no batch form.
 
+### What a request reads of the model and the roles
+
+Each node keeps an object's definition for `wasichai.metadata.cache.ttl` (default `5s`) and drops the organization's at
+once when it changes the model itself; another node sees a change within the ttl (ADR-031 D49). A transaction that
+changed the model reads its own definitions from the database and caches none of them. `MetadataService.loadDefinition`
+is the cached lookup, so an app's own code (a `RecordReadScope` walking a parent chain) calls it rather than keep a
+cache of its own. For a caller who is not `ADMIN`, the actions their roles allow on an object, the owner rule and the
+field rules are one statement, read once per object and request, so a list costs `ADMIN`'s statements plus one
+([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)). Role answers are never kept past the
+request.
+
 ## Configuration
 
 | Property | Default | Meaning |
@@ -168,6 +179,7 @@ its own. There is no REST route and no `Idempotency-Key` variant; `update` and `
 | `wasichai.database.data-schema` | `app_data` | schema holding one physical table per custom object (ADR-004) |
 | `wasichai.database.migrate` | `true` | `false` when the app runs migrations another way |
 | `wasichai.metadata.reconcile-indexes` | `true` | at startup, build the declared and relation indexes data tables lack (ADR-036) |
+| `wasichai.metadata.cache.ttl` | `5s` | how long a node keeps a definition; the most a model change takes elsewhere; `0s` keeps none (ADR-066) |
 | `wasichai.security.jwt.secret` | *(none)* | HS256 signing key, at least 32 bytes; required, a library must not ship one that works |
 | `wasichai.security.jwt.revocation` | `false` | `true`: a token issued before its user's revocation marker is `401` (ADR-059); recommended |
 | `wasichai.security.jwt.revocation-cache` | `5s` | how long a node trusts a user's marker; the longest a revocation takes on another node |
@@ -271,6 +283,10 @@ authorization model.
   projected read pays one more query by ids, only for an object a mask `appliesTo`. Never asked for the platform or
   automations; sections are not masked.
 - `ObjectRemovalListener`, `FieldUsage` — a module's veto or note when an object or field is about to be removed.
+- `MetadataChangeListener` — told after an object, field or relationship was created, updated or deleted and the
+  transaction committed, never for a rolled back change, every bean in `@Order`
+  ([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)). For an app that keeps something
+  derived from the model; it invalidates, it does not write to the database. A listener that throws is logged.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));
   core registers its own (`core`) and its opt-in dev seed (`core_seed`).
@@ -283,13 +299,14 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
-  `globalExceptionHandler`, `correlationIdWebFilter`, `healthController`.
+  `globalExceptionHandler`, `correlationIdWebFilter`, `requestMemoWebFilter`, `healthController`.
 - Security (`WasichaiSecurityAutoConfiguration`): `wasichaiJwtKey`, `jwtDecoder`, `passwordEncoder`,
   `securityFilterChain`, `corsConfigurationSource`, `roleQueries`, `roleDirectory`, `orgUnitDirectory`, `userDirectory`,
   `currentUser`, `accessPolicy`, `userRepository`, `jwtService`, `authService`, `authController`,
   `myOrgUnitsController`.
 - Metadata (`WasichaiMetadataAutoConfiguration`): `fieldTypeRegistry`, `customObjectRepository`,
-  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `tenantDirectory`, `metadataService`, `relationshipService`,
+  `customFieldRepository`, `relationshipRepository`, `objectSchemaManager`, `tenantDirectory`, `metadataChanges`,
+  `metadataService`, `relationshipService`,
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
 - Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditLogOwnershipCheck`, `adminAudit`, `auditQueryService`,
@@ -473,6 +490,8 @@ Core is always installed.
 - D45: `Idempotency-Key` on `POST …/records`: a replay answers the stored `201` and body with `Idempotent-Replayed:
   true`, another body is a `422`, a key still in flight a `409` with `Retry-After`; the `idempotency_keys` table
   (ADR-058).
+- D49: a change to the model reaches another node within `wasichai.metadata.cache.ttl` (default `5s`); `0s` reads the
+  definition every time, as before (ADR-066).
 
 ## Known limitations
 

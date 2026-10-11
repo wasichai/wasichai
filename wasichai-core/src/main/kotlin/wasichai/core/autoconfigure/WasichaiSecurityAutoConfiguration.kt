@@ -200,10 +200,7 @@ class WasichaiSecurityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun accessPolicy(
-        db: DatabaseClient,
-        schemas: WasichaiSchemas
-    ): AccessPolicy = AccessPolicy(db, schemas)
+    fun accessPolicy(roleQueries: RoleQueries): AccessPolicy = AccessPolicy(roleQueries)
 
     @Bean
     @ConditionalOnMissingBean
