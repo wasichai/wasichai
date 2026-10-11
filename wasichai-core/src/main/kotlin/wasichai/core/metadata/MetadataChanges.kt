@@ -45,6 +45,27 @@ class MetadataChanges(
         load: suspend () -> ObjectDefinition
     ): ObjectDefinition = if (changedHere()) load() else cache.byId(organizationId, id, load)
 
+    // anything else a request reads of the organization's model (ADR-067): a relationship, an object's workflow,
+    // automations or rules. kept like a definition, under the reader's own key, and dropped with it
+    suspend fun <T> cached(
+        organizationId: UUID,
+        key: Any,
+        load: suspend () -> T
+    ): T = if (changedHere()) load() else cache.value(organizationId, key, load)
+
+    // [write] changes something [cached] keeps that is not an object, field or relationship (a workflow, an automation,
+    // a rule): the organization is dropped before (the transaction then reads its own, and at its end again) and after
+    // (outside a transaction, a read in between kept the old value). no MetadataChangeListener is told: they hear of
+    // the model, not of a module's setup
+    suspend fun <T> setupChanging(
+        organizationId: UUID,
+        write: suspend () -> T
+    ): T {
+        cache.evict(organizationId)
+        synchronization()?.let { pending(it, organizationId) }
+        return write().also { cache.evict(organizationId) }
+    }
+
     // inside the transaction that writes it, or right away when there is none
     suspend fun changed(change: MetadataChange) {
         cache.evict(change.organizationId)

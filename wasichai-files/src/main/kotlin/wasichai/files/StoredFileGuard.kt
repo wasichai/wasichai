@@ -23,7 +23,7 @@ class StoredFileGuard(
     override suspend fun beforeWrite(change: RecordWrite) {
         if (change.kind != RecordChangeKind.CREATED && change.kind != RecordChangeKind.UPDATED) return
         val attributes = change.attributes?.takeIf { it.isNotEmpty() } ?: return
-        val fields = files.fileFieldNames(change.objectId).filter { it in attributes }
+        val fields = files.fileFieldNames(change.organizationId, change.objectId).filter { it in attributes }
         if (fields.isEmpty()) return
         // field -> the id it is about to take, when that is not the one it holds
         val incoming =

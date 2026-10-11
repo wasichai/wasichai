@@ -40,6 +40,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldTypeRegistry
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipRepository
@@ -156,8 +157,9 @@ class WasichaiDataAutoConfiguration {
         schemas: WasichaiSchemas,
         objects: CustomObjectRepository,
         fields: CustomFieldRepository,
-        readScopes: RecordReadScopes
-    ): RelationTargets = RelationTargets(db, schemas, objects, fields, readScopes)
+        readScopes: RecordReadScopes,
+        changes: MetadataChanges
+    ): RelationTargets = RelationTargets(db, schemas, objects, fields, readScopes, changes)
 
     // the transaction manager is looked up on first createAll, as for IdempotencyKeys
     @Bean
@@ -232,7 +234,8 @@ class WasichaiDataAutoConfiguration {
         audit: AuditService,
         guards: RecordWriteGuards,
         readScopes: RecordReadScopes,
-        masks: RecordReadMasks
+        masks: RecordReadMasks,
+        changes: MetadataChanges
     ): RelatedRecordService =
         RelatedRecordService(
             relationships,
@@ -248,7 +251,8 @@ class WasichaiDataAutoConfiguration {
             audit,
             guards,
             readScopes,
-            masks
+            masks,
+            changes
         )
 
     @Bean

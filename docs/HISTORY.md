@@ -2,6 +2,22 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-11 — Workflows, automations, rules, relationships and file fields cached with the definitions
+
+After 1.1.0, SGSPE's create with three links still cost 81 statements, 31 of them reads of the model outside the
+definition cache ([#108](https://github.com/wasichai/wasichai/issues/108)). They now answer from it
+([ADR-067](adr/0067-the-rest-of-the-model-a-request-reads-is-cached.md)): `ObjectDefinitionCache.value` keeps any other
+value read from the model under its reader's key, null included, and `MetadataChanges.cached` and
+`MetadataChanges.setupChanging` are the ways in and out. Core: `RelatedRecordService` finds objects through
+`loadDefinition` and relationships by name through the cache; `RelationTargets` reads the target's definition through
+it. Modules: `WorkflowRepository.forObject` (record paths; admin writes still read the database),
+`AutomationRepository.findEnabledByObject`, `NotificationRuleRepository.enabledByObject` and
+`StoredFileRepository.fileFieldNames(organization, object)`; their writes drop the organization like a model change.
+Another node sees a workflow, automation or rule changed within `wasichai.metadata.cache.ttl` (ADR-031 D50). Constructor
+changes: `RelatedRecordService`, `RelationTargets` and the four repositories take a defaulted `MetadataChanges`;
+`WorkflowRepository.delete` and `AutomationRepository.delete` take the organization. New tests: in
+`ObjectDefinitionCacheTest` and `MetadataChangesTest`, and the integration test `ModelLookupCacheApiTest`.
+
 ## 2026-10-11 — Definitions cached, the caller's roles read once per object and request
 
 SGSPE's lists cost a caller who is not `ADMIN` four statements more than `ADMIN`, and a create with three links 188

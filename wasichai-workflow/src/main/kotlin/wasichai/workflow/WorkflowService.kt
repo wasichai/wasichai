@@ -147,7 +147,7 @@ class WorkflowService(
                 ?: throw NotFoundException("Object '${definition.obj.name}' has no workflow")
         // the definition goes, workflow_state and its data stay. dropping the column would
         // destroy history for a decision the admin may well be reversing.
-        workflows.delete(existing.id)
+        workflows.delete(existing.organizationId, existing.id)
     }
 
     suspend fun transitionsOf(
@@ -157,7 +157,7 @@ class WorkflowService(
         val user = currentUser.require()
         val definition = metadata.loadDefinition(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.READ, definition.obj.id)
-        val workflow = workflows.findByObject(user.organizationId, definition.obj.id)
+        val workflow = workflows.forObject(user.organizationId, definition.obj.id)
         if (workflow == null || !workflow.enabled) return emptyList()
 
         val visible = definition.readableBy(access.fieldAccess(user, definition.obj.id))
@@ -227,7 +227,7 @@ class WorkflowService(
         val definition = metadata.loadDefinition(user.organizationId, objectName)
         currentUser.requirePermission(user, Actions.UPDATE, definition.obj.id)
         val workflow =
-            workflows.findByObject(user.organizationId, definition.obj.id)
+            workflows.forObject(user.organizationId, definition.obj.id)
                 ?: throw NotFoundException("Object '${definition.obj.name}' has no workflow")
         if (!workflow.enabled) {
             throw ConflictException("Workflow '${workflow.name}' is disabled")

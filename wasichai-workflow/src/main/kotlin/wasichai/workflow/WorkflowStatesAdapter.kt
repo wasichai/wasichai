@@ -16,7 +16,7 @@ class WorkflowStatesAdapter(
     ): ObjectWorkflowState {
         // deleting a workflow keeps the column and its data but stops surfacing it. the state is
         // still on disk if the admin reattaches a workflow.
-        val workflow = workflows.findByObject(organizationId, objectId) ?: return ObjectWorkflowState.NONE
+        val workflow = workflows.forObject(organizationId, objectId) ?: return ObjectWorkflowState.NONE
         return ObjectWorkflowState(
             attached = true,
             initialState = if (workflow.enabled) workflow.definition.initialState()?.name else null
@@ -28,7 +28,7 @@ class WorkflowStatesAdapter(
         objectId: UUID
     ): Set<String> {
         // no workflow and a disabled one are the same answer: nothing can be fired.
-        val workflow = workflows.findByObject(organizationId, objectId) ?: return emptySet()
+        val workflow = workflows.forObject(organizationId, objectId) ?: return emptySet()
         if (!workflow.enabled) return emptySet()
         return workflow.definition.transitions
             .map { it.name }
