@@ -98,3 +98,5 @@ supersedes it and says so in its status line.
   offset](0064-field-time-zone-in-any-case-or-a-fixed-offset.md)
 - [ADR-065: A read mask rewrites what a caller reads of a record; files hide a file's name through
   it](0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)
+- [ADR-066: Object definitions are cached; what the caller's roles say about an object is read once per
+  request](0066-cached-definitions-and-one-access-read-per-request.md)

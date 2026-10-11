@@ -434,6 +434,15 @@ These are the only intended differences. Anything else that behaves differently 
   Amended by [ADR-064](0064-field-time-zone-in-any-case-or-a-fixed-offset.md): a region name in any case and a fixed
   offset (`±HH`, `±HHMM`, `±HH:MM`) are accepted too, and stored and answered normalized (`America/Lima`, `-05:00`).
 
+**Because a definition is read once, not on every call**
+
+- **D49. A change to the model reaches another node within `wasichai.metadata.cache.ttl`.** The original read an
+  object's definition from the database on every call. Now each node keeps it for `wasichai.metadata.cache.ttl`
+  (default `5s`), and drops it at once when it changes the model itself. On another node, for at most that long, a
+  field added is answered as missing and a field or object dropped may answer `500`. `0s` reads every time, as before
+  ([ADR-066](0066-cached-definitions-and-one-access-read-per-request.md)). One node behaves as the original. Tested by
+  `ObjectDefinitionCacheTest`, `MetadataChangesTest` and `MetadataCacheApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

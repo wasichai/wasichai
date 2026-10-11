@@ -294,7 +294,10 @@ wasichai:
 The UI calls `POST /api/auth/logout` on sign-out. Behind a reverse proxy, set `server.forward-headers-strategy:
 native` (or `framework`) so the attempt limit sees the client's address and not the proxy's. On more than one node,
 declare a `LoginAttemptStore` bean shared by all of them, or each counts on its own; a revocation reaches the other
-nodes within `wasichai.security.jwt.revocation-cache`.
+nodes within `wasichai.security.jwt.revocation-cache`. A change to the model (an object, field or relationship) reaches
+them within `wasichai.metadata.cache.ttl` (`5s`); set it to `0s` to read definitions every time. What your app derives
+from the model itself, a `MetadataChangeListener` lets it drop after each committed change
+([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)).
 
 ## The AI assistant and what it sends out
 
@@ -529,6 +532,9 @@ class ProjectScope(
   field. `ADMIN`, the platform and automations are never asked; a service account is (`caller.serviceAccount` names it).
 - Several beans all apply, in `@Order`. The scope hides records, it does not judge values: a caller may still create
   a record in another project. Keep creates in scope with a `RecordWriteGuard`.
+- Another object's definition (a parent chain) comes from `MetadataService.loadDefinition`, which is cached
+  ([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)): no cache of your own. Your own
+  lookups (the assignments above) are yours to cache per request.
 - GeoServer layers read the table themselves: do not publish a scoped object as a layer.
 
 ### Hide part of a value: file names on classified records

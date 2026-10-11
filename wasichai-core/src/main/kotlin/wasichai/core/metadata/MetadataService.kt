@@ -31,7 +31,9 @@ class MetadataService(
     private val usages: List<FieldUsage>,
     private val removals: List<ObjectRemovalListener>,
     actions: ObjectActionRepository,
-    private val audit: AdminAudit
+    private val audit: AdminAudit,
+    // the definitions cache and who hears of a change (ADR-066). defaulted: uncached, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
     private val snapshots = MetadataSnapshots(objects, fields, actions)
 
@@ -54,35 +56,36 @@ class MetadataService(
     // what the caller is allowed to see. fields they cannot read are not listed at all.
     suspend fun definitionOf(name: String): ObjectDefinition {
         val user = currentUser.require()
-        val obj =
-            objects.findByName(user.organizationId, name)
-                ?: throw NotFoundException("Object '$name' does not exist")
-        currentUser.requirePermission(user, Actions.READ, obj.id)
-        val definition = ObjectDefinition(obj, fields.findByObject(obj.id))
-        return definition.readableBy(access.fieldAccess(user, obj.id))
+        val definition = loadDefinition(user.organizationId, name)
+        currentUser.requirePermission(user, Actions.READ, definition.obj.id)
+        return definition.readableBy(access.fieldAccess(user, definition.obj.id))
     }
 
-    // no permission check: callers that already checked a record-level action use this
+    // no permission check: callers that already checked a record-level action use this. cached for
+    // wasichai.metadata.cache.ttl, so an app's own lookups (a read scope's parent chain) need no cache of their own
+    // (ADR-066). a missing object is never cached
     suspend fun loadDefinition(
         organizationId: UUID,
         name: String
-    ): ObjectDefinition {
-        val obj =
-            objects.findByName(organizationId, name)
-                ?: throw NotFoundException("Object '$name' does not exist")
-        return ObjectDefinition(obj, fields.findByObject(obj.id))
-    }
+    ): ObjectDefinition =
+        changes.definition(organizationId, name) {
+            val obj =
+                objects.findByName(organizationId, name)
+                    ?: throw NotFoundException("Object '$name' does not exist")
+            ObjectDefinition(obj, fields.findByObject(obj.id))
+        }
 
     // same, for callers that only kept the id
     suspend fun loadDefinitionById(
         organizationId: UUID,
         id: UUID
-    ): ObjectDefinition {
-        val obj =
-            objects.findById(organizationId, id)
-                ?: throw NotFoundException("Object does not exist")
-        return ObjectDefinition(obj, fields.findByObject(obj.id))
-    }
+    ): ObjectDefinition =
+        changes.definitionById(organizationId, id) {
+            val obj =
+                objects.findById(organizationId, id)
+                    ?: throw NotFoundException("Object does not exist")
+            ObjectDefinition(obj, fields.findByObject(obj.id))
+        }
 
     @Transactional
     suspend fun createObject(request: CreateObjectRequest): ObjectDefinition {
@@ -125,6 +128,7 @@ class MetadataService(
         if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
         schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
         audit.record(user, AdminEntity.OBJECT, stored.id, AdminOperation.CREATE, null, snapshots.obj(stored))
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.CREATE, stored.id, stored.name))
         return ObjectDefinition(stored, storedFields)
     }
 
@@ -158,6 +162,7 @@ class MetadataService(
         val stored = fields.insert(buildField(obj.id, request, position, user.organizationId))
         schema.addColumn(obj, stored, relationTables(listOf(stored), user.organizationId))
         if (audited) audit.record(user, AdminEntity.FIELD, stored.id, AdminOperation.CREATE, null, snapshots.field(obj, stored))
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.CREATE, obj.id, obj.name, stored.name))
         return stored
     }
 
@@ -259,6 +264,7 @@ class MetadataService(
         }
         val saved = fields.update(updated)
         audit.record(user, AdminEntity.FIELD, existing.id, AdminOperation.UPDATE, snapshots.field(obj, existing), snapshots.field(obj, saved))
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.UPDATE, obj.id, obj.name, saved.name))
         return saved
     }
 
@@ -300,6 +306,7 @@ class MetadataService(
         schema.dropColumn(obj, field)
         fields.delete(field.id)
         audit.record(user, AdminEntity.FIELD, field.id, AdminOperation.DELETE, before, null)
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.DELETE, obj.id, obj.name, field.name))
     }
 
     @Transactional
@@ -351,6 +358,7 @@ class MetadataService(
             }
         }
         audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(updated))
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.UPDATE, obj.id, obj.name))
         return ObjectDefinition(updated, objectFields)
     }
 
@@ -391,6 +399,7 @@ class MetadataService(
         schema.dropTable(obj)
         objects.delete(user.organizationId, obj.id)
         audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.DELETE, before, null)
+        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.DELETE, obj.id, obj.name))
     }
 
     // a unique the data already breaks: the caller's 409, not a server error. thrown inside the

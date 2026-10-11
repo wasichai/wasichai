@@ -5,6 +5,7 @@ import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
+import wasichai.core.platform.RequestMemo
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
 
@@ -70,6 +71,8 @@ class RoleQueries(
         return PermittedObjects(everywhere, ids)
     }
 
+    // on an object: answered from objectAccess, one query per object and request whatever the action.
+    // org-wide (no object): its own query, remembered for the request too (ADR-066)
     suspend fun hasPermission(
         roleNames: List<String>,
         organizationId: UUID,
@@ -77,20 +80,150 @@ class RoleQueries(
         objectId: UUID? = null
     ): Boolean {
         if (roleNames.isEmpty()) return false
-        var spec =
+        if (objectId != null) return action in objectAccess(roleNames, organizationId, objectId).actions
+        return RequestMemo.remember(OrgWideKey(organizationId, roleNames.toSet(), action)) {
             db
-                .sql(permissionQuery(schemas, objectScoped = objectId != null))
+                .sql(permissionQuery(schemas, objectScoped = false))
                 .bind("organizationId", organizationId)
                 .bind("roleNames", roleNames)
                 .bind("action", action)
-        if (objectId != null) spec = spec.bind("objectId", objectId)
-        return spec
-            .map { _, _ -> true }
-            .one()
-            .awaitFirstOrNull() ?: false
+                .map { _, _ -> true }
+                .one()
+                .awaitFirstOrNull() ?: false
+        }
     }
 
+    /**
+     * Everything the caller's roles say about one object, in one statement (ADR-066): the actions they allow on it
+     * (org-wide rows count), whether every role keeps them to their own records, and the fields some rule restricts.
+     * Remembered for the request, by roles and object: the same object again costs nothing. No role: allows nothing,
+     * restricts nothing.
+     */
+    suspend fun objectAccess(
+        roleNames: List<String>,
+        organizationId: UUID,
+        objectId: UUID
+    ): ObjectAccess {
+        if (roleNames.isEmpty()) return ObjectAccess(emptySet(), ownRecordsOnly = false, FieldAccess.FULL)
+        val roles = roleNames.toSet()
+        return RequestMemo.remember(ObjectKey(organizationId, roles, objectId)) {
+            loadObjectAccess(roleNames, organizationId, objectId).also {
+                // the owner rule has no object: whatever object asks next gets it for free
+                RequestMemo.put(OwnRecordsKey(organizationId, roles), it.ownRecordsOnly)
+            }
+        }
+    }
+
+    // the owner rule alone, for a read that has not asked about an object yet
+    suspend fun ownRecordsOnly(
+        roleNames: List<String>,
+        organizationId: UUID
+    ): Boolean {
+        if (roleNames.isEmpty()) return false
+        return RequestMemo.remember(OwnRecordsKey(organizationId, roleNames.toSet())) { loadOwnRecordsOnly(roleNames, organizationId) }
+    }
+
+    // the two reads behind the memo. open for unit tests only
+    internal open suspend fun loadOwnRecordsOnly(
+        roleNames: List<String>,
+        organizationId: UUID
+    ): Boolean =
+        db
+            .sql(ownRecordsOnlyQuery(schemas))
+            .bind("organizationId", organizationId)
+            .bind("roleNames", roleNames)
+            .map { row, _ -> row.get("restricted") as Boolean? ?: false }
+            .one()
+            .awaitFirstOrNull() ?: false
+
+    internal open suspend fun loadObjectAccess(
+        roleNames: List<String>,
+        organizationId: UUID,
+        objectId: UUID
+    ): ObjectAccess {
+        val actions = mutableSetOf<String>()
+        var ownRecordsOnly = false
+        val read = mutableMapOf<UUID, Boolean>()
+        val write = mutableMapOf<UUID, Boolean>()
+        db
+            .sql(objectAccessQuery(schemas))
+            .bind("organizationId", organizationId)
+            .bind("roleNames", roleNames)
+            .bind("objectId", objectId)
+            .map { row, _ ->
+                when (row.get("kind", String::class.java)) {
+                    "action" -> actions += row.get("action", String::class.java)!!
+                    "owner" -> ownRecordsOnly = row.get("own_records_only") as Boolean? ?: false
+                    else -> {
+                        val id = row.get("field_id", UUID::class.java)!!
+                        read[id] = row.get("can_read") as Boolean
+                        write[id] = row.get("can_write") as Boolean
+                    }
+                }
+            }.all()
+            .asFlow()
+            .toList()
+        val fields = if (read.isEmpty()) FieldAccess.FULL else FieldAccess(read, write)
+        return ObjectAccess(actions, ownRecordsOnly, fields)
+    }
+
+    // request memo keys: roles as a set, so their order in the token does not matter
+    private data class ObjectKey(
+        val organizationId: UUID,
+        val roles: Set<String>,
+        val objectId: UUID
+    )
+
+    private data class OrgWideKey(
+        val organizationId: UUID,
+        val roles: Set<String>,
+        val action: String
+    )
+
+    private data class OwnRecordsKey(
+        val organizationId: UUID,
+        val roles: Set<String>
+    )
+
     companion object {
+        // the owner rule: true when every role of the caller says own records only. a query of its own
+        // here, a subquery where a read folds it in (RelationTargets, ADR-031 D30).
+        // binds :organizationId and :roleNames (never empty). no row of those roles: null, read as false.
+        internal fun ownRecordsOnlyQuery(schemas: WasichaiSchemas): String =
+            """
+            SELECT bool_and(own_records_only) AS restricted
+            FROM ${schemas.metadata}.roles
+            WHERE organization_id = :organizationId AND name IN (:roleNames)
+            """.trimIndent()
+
+        // the permission rule, the owner rule and the field rules of one object, one row per kind:
+        // 'action' per allowed action, one 'owner', 'field' per field some role restricts (a role without
+        // a rule grants the field: the permissive union wins). binds :organizationId, :roleNames, :objectId
+        internal fun objectAccessQuery(schemas: WasichaiSchemas): String =
+            """
+            WITH my_roles AS (
+                SELECT id, own_records_only FROM ${schemas.metadata}.roles
+                WHERE organization_id = :organizationId AND name IN (:roleNames)
+            )
+            SELECT 'action'::text AS kind, p.action AS action, NULL::boolean AS own_records_only,
+                   NULL::uuid AS field_id, NULL::boolean AS can_read, NULL::boolean AS can_write
+            FROM ${schemas.metadata}.permissions p
+            JOIN my_roles r ON r.id = p.role_id
+            WHERE p.allowed AND (p.object_id IS NULL OR p.object_id = :objectId)
+            UNION ALL
+            SELECT 'owner', NULL, bool_and(own_records_only), NULL, NULL, NULL
+            FROM my_roles
+            UNION ALL
+            SELECT 'field', NULL, NULL, f.id,
+                   bool_or(COALESCE(fp.can_read, true)), bool_or(COALESCE(fp.can_write, true))
+            FROM my_roles mr
+            CROSS JOIN ${schemas.metadata}.custom_fields f
+            LEFT JOIN ${schemas.metadata}.field_permissions fp ON fp.role_id = mr.id AND fp.field_id = f.id
+            WHERE f.object_id = :objectId
+            GROUP BY f.id
+            HAVING NOT (bool_or(COALESCE(fp.can_read, true)) AND bool_or(COALESCE(fp.can_write, true)))
+            """.trimIndent()
+
         // the permission rule, one row when one of the roles allows [action]. a query of its own here, a
         // subquery where a read folds it in (RelationTargets, ADR-031 D30).
         // binds :organizationId, :roleNames (never empty), :action, and :objectId when [objectScoped].

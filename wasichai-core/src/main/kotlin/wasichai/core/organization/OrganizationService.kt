@@ -16,6 +16,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.PasswordPolicy
 import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Instant
@@ -40,7 +41,9 @@ class OrganizationService(
     private val db: DatabaseClient,
     private val schemas: WasichaiSchemas,
     private val audit: AdminAudit,
-    private val passwordPolicy: PasswordPolicy
+    private val passwordPolicy: PasswordPolicy,
+    // a deleted tenant's definitions leave the cache (ADR-066). defaulted: uncached, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
     suspend fun current(): Organization {
         val user = currentUser.require()
@@ -181,6 +184,7 @@ class OrganizationService(
             .rowsUpdated()
             .awaitSingle()
         organization?.let { audit.record(user, AdminEntity.ORGANIZATION, it.id, AdminOperation.DELETE, snapshot(it), null) }
+        changes.organizationRemoved(user.organizationId)
     }
 
     private fun snapshot(organization: Organization): Map<String, Any?> = linkedMapOf("name" to organization.name, "slug" to organization.slug)
