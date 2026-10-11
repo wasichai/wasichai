@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/wasichai/wasichai/compare/v1.0.0...v1.1.0) (2026-10-11)
+
+
+### Features
+
+* **core:** cache object definitions and read the caller's access once per request ([#106](https://github.com/wasichai/wasichai/issues/106)) ([513e9ee](https://github.com/wasichai/wasichai/commit/513e9ee97a78c3b9d3c1d8673dc1cdec67e29cf4))
+
 ## [1.0.0](https://github.com/wasichai/wasichai/compare/v0.6.0...v1.0.0) (2026-10-10)
 
 
