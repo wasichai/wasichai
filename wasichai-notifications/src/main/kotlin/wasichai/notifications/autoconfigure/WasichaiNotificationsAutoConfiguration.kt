@@ -19,6 +19,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.RoleDirectory
 import wasichai.core.identity.UserDirectory
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.Connections
@@ -265,8 +266,9 @@ class WasichaiNotificationsAutoConfiguration {
     fun notificationRuleRepository(
         db: DatabaseClient,
         json: JsonMapper,
-        schemas: WasichaiSchemas
-    ): NotificationRuleRepository = NotificationRuleRepository(db, json, schemas)
+        schemas: WasichaiSchemas,
+        changes: MetadataChanges
+    ): NotificationRuleRepository = NotificationRuleRepository(db, json, schemas, changes)
 
     // the zone is settled here, once: the property, else the app's unique Clock's, else the system's (WARN)
     @Bean

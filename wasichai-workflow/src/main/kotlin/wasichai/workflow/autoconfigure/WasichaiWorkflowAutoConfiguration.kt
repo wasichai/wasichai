@@ -18,6 +18,7 @@ import wasichai.core.data.RecordWriteGuards
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.RoleDirectory
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.ModuleMigration
@@ -47,8 +48,9 @@ class WasichaiWorkflowAutoConfiguration {
     fun workflowRepository(
         db: DatabaseClient,
         objectMapper: JsonMapper,
-        schemas: WasichaiSchemas
-    ): WorkflowRepository = WorkflowRepository(db, objectMapper, schemas)
+        schemas: WasichaiSchemas,
+        changes: MetadataChanges
+    ): WorkflowRepository = WorkflowRepository(db, objectMapper, schemas, changes)
 
     // named apart from core's "workflowStates" bean: same name would be a bean override, not a replacement
     @Bean

@@ -7,6 +7,7 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.platform.Rows
 import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.WasichaiSchemas
@@ -39,8 +40,14 @@ private const val COLUMNS =
 @Repository
 class StoredFileRepository(
     private val db: DatabaseClient,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    // where an object's file fields are kept between requests, with its definition (ADR-067); uncached by default
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
+    private data class FileFieldsOfObject(
+        val objectId: UUID
+    )
+
     suspend fun insert(file: StoredFile): StoredFile =
         db
             .sql(
@@ -119,7 +126,14 @@ class StoredFileRepository(
             .rowsUpdated()
             .awaitSingle() > 0
 
-    // the names of an object's file fields, for StoredFileGuard. empty for every other object.
+    // the names of an object's file fields, for StoredFileGuard on every write: kept like the object's definition,
+    // dropped by any field write (ADR-067)
+    suspend fun fileFieldNames(
+        organizationId: UUID,
+        objectId: UUID
+    ): Set<String> = changes.cached(organizationId, FileFieldsOfObject(objectId)) { fileFieldNames(objectId) }
+
+    // the names of an object's file fields, from the database. empty for every other object.
     suspend fun fileFieldNames(objectId: UUID): Set<String> =
         db
             .sql("SELECT name FROM ${schemas.metadata}.custom_fields WHERE object_id = :objectId AND type IN ('FILE', 'IMAGE')")

@@ -166,6 +166,12 @@ field rules are one statement, read once per object and request, so a list costs
 ([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)). Role answers are never kept past the
 request.
 
+The rest of the model a request reads is kept the same way, in the same organization bucket
+([ADR-067](../adr/0067-the-rest-of-the-model-a-request-reads-is-cached.md)): relationships by name, a relation target's
+definition, and what modules read on every record operation (an object's workflow, automations, notification rules and
+file fields). A module keeps a value with `MetadataChanges.cached(organization, key) { … }` and writes what it keeps
+inside `MetadataChanges.setupChanging(organization) { … }`, which drops the organization like a model change.
+
 ## Configuration
 
 | Property | Default | Meaning |

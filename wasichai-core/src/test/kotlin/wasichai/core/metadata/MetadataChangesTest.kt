@@ -184,4 +184,70 @@ class MetadataChangesTest {
             assertThat(loads.count).isEqualTo(2)
             assertThat(heard.changes).isEmpty()
         }
+
+    // issue 108 (ADR-067): a module's setup (a workflow, an automation, a rule) is kept and dropped like the model
+
+    private data class WorkflowOf(
+        val objectId: UUID
+    )
+
+    private class Values {
+        var count = 0
+
+        suspend fun load(): String {
+            count++
+            return "flujo $count"
+        }
+    }
+
+    @Test
+    fun `a setup write drops what was cached before and after it, and tells nobody`() =
+        runTest {
+            val heard = Heard()
+            val changes = MetadataChanges(ObjectDefinitionCache(Duration.ofSeconds(5)), listOf(heard))
+            val key = WorkflowOf(UUID.randomUUID())
+            val values = Values()
+
+            changes.cached(organizationId, key, values::load)
+            // a read that lands while the write runs, outside any transaction: not kept past the write
+            changes.setupChanging(organizationId) { changes.cached(organizationId, key, values::load) }
+            val after = changes.cached(organizationId, key, values::load)
+
+            assertThat(after).isEqualTo("flujo 3")
+            assertThat(changes.cached(organizationId, key, values::load)).isEqualTo("flujo 3")
+            assertThat(heard.changes).isEmpty()
+        }
+
+    @Test
+    fun `a transaction that changed the setup reads it from the database and caches none of it`() =
+        runTest {
+            val changes = MetadataChanges(ObjectDefinitionCache(Duration.ofSeconds(5)))
+            val key = WorkflowOf(UUID.randomUUID())
+            val values = Values()
+
+            transactions.executeAndAwait {
+                changes.setupChanging(organizationId) { }
+                changes.cached(organizationId, key, values::load)
+                changes.cached(organizationId, key, values::load)
+            }
+            assertThat(values.count).isEqualTo(2)
+
+            changes.cached(organizationId, key, values::load)
+            changes.cached(organizationId, key, values::load)
+            assertThat(values.count).isEqualTo(3)
+        }
+
+    @Test
+    fun `a model change drops the setup too`() =
+        runTest {
+            val changes = MetadataChanges(ObjectDefinitionCache(Duration.ofSeconds(5)))
+            val key = WorkflowOf(UUID.randomUUID())
+            val values = Values()
+
+            changes.cached(organizationId, key, values::load)
+            changes.changed(change())
+            changes.cached(organizationId, key, values::load)
+
+            assertThat(values.count).isEqualTo(2)
+        }
 }

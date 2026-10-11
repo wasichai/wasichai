@@ -6,6 +6,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
@@ -18,9 +19,19 @@ private const val WORKFLOW_COLUMNS =
 class WorkflowRepository(
     private val db: DatabaseClient,
     private val objectMapper: ObjectMapper,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    // where an object's workflow is kept between requests (ADR-067); uncached by default, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
-    suspend fun insert(workflow: Workflow): Workflow =
+    private data class WorkflowOfObject(
+        val objectId: UUID
+    )
+
+    suspend fun insert(workflow: Workflow): Workflow = changes.setupChanging(workflow.organizationId) { insertRow(workflow) }
+
+    suspend fun update(workflow: Workflow): Workflow = changes.setupChanging(workflow.organizationId) { updateRow(workflow) }
+
+    private suspend fun insertRow(workflow: Workflow): Workflow =
         db
             .sql(
                 """
@@ -39,7 +50,7 @@ class WorkflowRepository(
             .one()
             .awaitSingle()
 
-    suspend fun update(workflow: Workflow): Workflow =
+    private suspend fun updateRow(workflow: Workflow): Workflow =
         db
             .sql(
                 """
@@ -58,6 +69,13 @@ class WorkflowRepository(
             .map(::map)
             .one()
             .awaitSingle()
+
+    // the object's workflow as the record paths read it: kept like its definition, dropped by any workflow or model
+    // write (ADR-067). admin writes read findByObject, from the database
+    suspend fun forObject(
+        organizationId: UUID,
+        objectId: UUID
+    ): Workflow? = changes.cached(organizationId, WorkflowOfObject(objectId)) { findByObject(organizationId, objectId) }
 
     suspend fun findByObject(
         organizationId: UUID,
@@ -83,13 +101,19 @@ class WorkflowRepository(
             .one()
             .awaitFirstOrNull()
 
-    suspend fun delete(id: UUID) {
-        db
-            .sql("DELETE FROM ${schemas.metadata}.workflows WHERE id = :id")
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle()
+    suspend fun delete(
+        organizationId: UUID,
+        id: UUID
+    ) {
+        changes.setupChanging(organizationId) {
+            db
+                .sql("DELETE FROM ${schemas.metadata}.workflows WHERE id = :id AND organization_id = :org")
+                .bind("id", id)
+                .bind("org", organizationId)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle()
+        }
     }
 
     private fun map(

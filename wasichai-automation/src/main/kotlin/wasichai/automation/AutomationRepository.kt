@@ -7,6 +7,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
@@ -19,9 +20,19 @@ private const val COLUMNS =
 class AutomationRepository(
     private val db: DatabaseClient,
     private val objectMapper: ObjectMapper,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    // where an object's enabled automations are kept between requests (ADR-067); uncached by default, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
-    suspend fun insert(automation: Automation): Automation =
+    private data class EnabledOfObject(
+        val objectId: UUID
+    )
+
+    suspend fun insert(automation: Automation): Automation = changes.setupChanging(automation.organizationId) { insertRow(automation) }
+
+    suspend fun update(automation: Automation): Automation = changes.setupChanging(automation.organizationId) { updateRow(automation) }
+
+    private suspend fun insertRow(automation: Automation): Automation =
         db
             .sql(
                 """
@@ -34,7 +45,7 @@ class AutomationRepository(
             .one()
             .awaitSingle()
 
-    suspend fun update(automation: Automation): Automation =
+    private suspend fun updateRow(automation: Automation): Automation =
         db
             .sql(
                 """
@@ -71,8 +82,14 @@ class AutomationRepository(
             .collectList()
             .awaitSingle()
 
-    // the hot path: every record change asks for the automations watching that object
+    // the hot path: every record change asks for the automations watching that object. kept like its definition,
+    // dropped by any automation or model write (ADR-067)
     suspend fun findEnabledByObject(
+        organizationId: UUID,
+        objectId: UUID
+    ): List<Automation> = changes.cached(organizationId, EnabledOfObject(objectId)) { selectEnabledByObject(organizationId, objectId) }
+
+    private suspend fun selectEnabledByObject(
         organizationId: UUID,
         objectId: UUID
     ): List<Automation> =
@@ -114,13 +131,19 @@ class AutomationRepository(
             .one()
             .awaitFirstOrNull()
 
-    suspend fun delete(id: UUID) {
-        db
-            .sql("DELETE FROM ${schemas.metadata}.automations WHERE id = :id")
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle()
+    suspend fun delete(
+        organizationId: UUID,
+        id: UUID
+    ) {
+        changes.setupChanging(organizationId) {
+            db
+                .sql("DELETE FROM ${schemas.metadata}.automations WHERE id = :id AND organization_id = :org")
+                .bind("id", id)
+                .bind("org", organizationId)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle()
+        }
     }
 
     private fun DatabaseClient.GenericExecuteSpec.bindAll(automation: Automation) = bindCommon(automation).bind("objectId", automation.objectId)

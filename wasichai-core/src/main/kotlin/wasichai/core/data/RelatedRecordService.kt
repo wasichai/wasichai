@@ -19,6 +19,7 @@ import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.metadata.Relationship
@@ -35,7 +36,8 @@ import java.util.UUID
 class RelatedRecordService(
     private val relationships: RelationshipRepository,
     private val relationshipService: RelationshipService,
-    private val objects: CustomObjectRepository,
+    // kept for code that builds this service itself: objects are now found through metadata's cache (ADR-067)
+    @Suppress("unused") objects: CustomObjectRepository,
     private val fields: CustomFieldRepository,
     private val metadata: MetadataService,
     private val store: RecordStore,
@@ -47,8 +49,22 @@ class RelatedRecordService(
     private val guards: RecordWriteGuards,
     private val readScopes: RecordReadScopes,
     // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
-    private val masks: RecordReadMasks = RecordReadMasks.NONE
+    private val masks: RecordReadMasks = RecordReadMasks.NONE,
+    // where a relationship found by name is kept (ADR-067); uncached by default, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
+    private data class RelationshipByName(
+        val name: String
+    )
+
+    // a relationship by name, kept like the definitions it joins: every relationship write drops it (ADR-067)
+    private suspend fun relationship(
+        organizationId: UUID,
+        name: String
+    ): Relationship =
+        changes.cached(organizationId, RelationshipByName(name)) { relationships.findByName(organizationId, name) }
+            ?: throw NotFoundException("Relationship '$name' does not exist")
+
     // records on the other side of a relationship, from one record. direction: INVERSE walks a
     // self-relationship from the end FORWARD does not; 400 on any other relationship.
     suspend fun relatedRecords(
@@ -59,9 +75,7 @@ class RelatedRecordService(
         direction: RelationshipDirection = RelationshipDirection.FORWARD
     ): Pair<ObjectDefinition, PageResponse<RecordRow>> {
         val user = currentUser.require()
-        val obj =
-            objects.findByName(user.organizationId, objectName)
-                ?: throw NotFoundException("Object '$objectName' does not exist")
+        val obj = metadata.loadDefinition(user.organizationId, objectName).obj
         currentUser.requirePermission(user, Actions.READ, obj.id)
         val (visible, page) =
             relatedRows(
@@ -93,12 +107,9 @@ class RelatedRecordService(
         reader: AuthenticatedUser? = null,
         direction: RelationshipDirection = RelationshipDirection.FORWARD
     ): Pair<ObjectDefinition, PageResponse<RecordRow>> {
-        val obj =
-            objects.findByName(organizationId, objectName)
-                ?: throw NotFoundException("Object '$objectName' does not exist")
+        val obj = metadata.loadDefinition(organizationId, objectName).obj
         val relationship =
-            relationships.findByName(organizationId, relationshipName)
-                ?: throw NotFoundException("Relationship '$relationshipName' does not exist")
+            relationship(organizationId, relationshipName)
         // which end we stand on: the object's, or for a self-relationship the direction's
         val view = relationshipService.side(relationship, obj, direction)
         val other = metadata.loadDefinition(organizationId, view.otherObject.name)
@@ -347,13 +358,10 @@ class RelatedRecordService(
         objectName: String,
         relationshipName: String
     ): Pair<Relationship, CustomObject> {
-        val obj =
-            objects.findByName(user.organizationId, objectName)
-                ?: throw NotFoundException("Object '$objectName' does not exist")
+        val obj = metadata.loadDefinition(user.organizationId, objectName).obj
         currentUser.requirePermission(user, Actions.UPDATE, obj.id)
         val relationship =
-            relationships.findByName(user.organizationId, relationshipName)
-                ?: throw NotFoundException("Relationship '$relationshipName' does not exist")
+            relationship(user.organizationId, relationshipName)
         if (!relationship.type.usesJoinTable) {
             throw ValidationException(
                 "Not a many-to-many relationship",

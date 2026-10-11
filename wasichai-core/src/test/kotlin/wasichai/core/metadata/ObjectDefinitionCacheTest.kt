@@ -144,4 +144,64 @@ class ObjectDefinitionCacheTest {
             assertThat(cache.byName(organizationId, "predio", fresh::load)).isNotSameAs(stale)
             assertThat(fresh.count).isEqualTo(1)
         }
+
+    // issue 108 (ADR-067): the rest of the model a request reads, under its reader's key
+
+    private data class WorkflowOf(
+        val objectId: UUID
+    )
+
+    private class Values<T>(
+        private val value: T
+    ) {
+        var count = 0
+
+        suspend fun load(): T {
+            count++
+            return value
+        }
+    }
+
+    @Test
+    fun `a value is loaded once within the ttl, per key, null included`() =
+        runTest {
+            val cache = ObjectDefinitionCache(Duration.ofSeconds(5), clock)
+            val object1 = UUID.randomUUID()
+            val none = Values<String?>(null)
+            val other = Values<String?>("otro")
+
+            repeat(2) { cache.value(organizationId, WorkflowOf(object1), none::load) }
+            repeat(2) { cache.value(organizationId, WorkflowOf(UUID.randomUUID()), other::load) }
+
+            assertThat(cache.value(organizationId, WorkflowOf(object1), none::load)).isNull()
+            assertThat(none.count).isEqualTo(1)
+            assertThat(other.count).isEqualTo(2)
+        }
+
+    @Test
+    fun `past the ttl, or once the organization is evicted, a value is loaded again`() =
+        runTest {
+            val cache = ObjectDefinitionCache(Duration.ofSeconds(5), clock)
+            val key = WorkflowOf(UUID.randomUUID())
+            val loads = Values("flujo")
+
+            cache.value(organizationId, key, loads::load)
+            clock.now = clock.now.plusSeconds(5)
+            cache.value(organizationId, key, loads::load)
+            cache.evict(organizationId)
+            cache.value(organizationId, key, loads::load)
+
+            assertThat(loads.count).isEqualTo(3)
+        }
+
+    @Test
+    fun `a zero ttl keeps no value`() =
+        runTest {
+            val cache = ObjectDefinitionCache(Duration.ZERO, clock)
+            val loads = Values("flujo")
+
+            repeat(2) { cache.value(organizationId, WorkflowOf(UUID.randomUUID()), loads::load) }
+
+            assertThat(loads.count).isEqualTo(2)
+        }
 }

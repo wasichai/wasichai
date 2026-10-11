@@ -6,6 +6,7 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
@@ -24,8 +25,14 @@ data class StoredRule(
 class NotificationRuleRepository(
     private val db: DatabaseClient,
     private val json: JsonMapper,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    // where an object's enabled rules are kept between requests (ADR-067); uncached by default, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
+    private data class EnabledOfObject(
+        val objectId: UUID
+    )
+
     private val table get() = "${schemas.metadata}.notification_rules"
 
     private val select
@@ -36,6 +43,12 @@ class NotificationRuleRepository(
             """.trimIndent()
 
     suspend fun insert(
+        organizationId: UUID,
+        objectId: UUID,
+        rule: NotificationRuleDefinition
+    ): UUID = changes.setupChanging(organizationId) { insertRow(organizationId, objectId, rule) }
+
+    private suspend fun insertRow(
         organizationId: UUID,
         objectId: UUID,
         rule: NotificationRuleDefinition
@@ -60,30 +73,34 @@ class NotificationRuleRepository(
         id: UUID,
         rule: NotificationRuleDefinition
     ): Boolean =
-        db
-            .sql(
-                """
-                UPDATE $table SET name = :name, label = :label, enabled = :enabled, definition = CAST(:definition AS jsonb), updated_at = now()
-                WHERE organization_id = :org AND id = :id
-                """.trimIndent()
-            ).bind("org", organizationId)
-            .bind("id", id)
-            .bindRule(rule)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle() > 0
+        changes.setupChanging(organizationId) {
+            db
+                .sql(
+                    """
+                        UPDATE $table SET name = :name, label = :label, enabled = :enabled, definition = CAST(:definition AS jsonb), updated_at = now()
+                    WHERE organization_id = :org AND id = :id
+                    """.trimIndent()
+                ).bind("org", organizationId)
+                .bind("id", id)
+                .bindRule(rule)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle() > 0
+        }
 
     suspend fun delete(
         organizationId: UUID,
         id: UUID
     ): Boolean =
-        db
-            .sql("DELETE FROM $table WHERE organization_id = :org AND id = :id")
-            .bind("org", organizationId)
-            .bind("id", id)
-            .fetch()
-            .rowsUpdated()
-            .awaitSingle() > 0
+        changes.setupChanging(organizationId) {
+            db
+                .sql("DELETE FROM $table WHERE organization_id = :org AND id = :id")
+                .bind("org", organizationId)
+                .bind("id", id)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle() > 0
+        }
 
     suspend fun findByName(
         organizationId: UUID,
@@ -107,11 +124,15 @@ class NotificationRuleRepository(
     // the loop's
     suspend fun enabledAll(organizationId: UUID): List<StoredRule> = list("r.organization_id = :org AND r.enabled", organizationId, null)
 
-    // the hot path: every record write asks. notification_rules_object_idx answers it.
+    // the hot path: every record write asks. kept like the object's definition, dropped by any rule or model write
+    // (ADR-067); notification_rules_object_idx answers the load
     suspend fun enabledByObject(
         organizationId: UUID,
         objectId: UUID
-    ): List<StoredRule> = list("r.organization_id = :org AND r.object_id = :objectId AND r.enabled", organizationId, objectId)
+    ): List<StoredRule> =
+        changes.cached(organizationId, EnabledOfObject(objectId)) {
+            list("r.organization_id = :org AND r.object_id = :objectId AND r.enabled", organizationId, objectId)
+        }
 
     private suspend fun list(
         where: String,

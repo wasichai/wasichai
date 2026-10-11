@@ -442,6 +442,12 @@ These are the only intended differences. Anything else that behaves differently 
   field added is answered as missing and a field or object dropped may answer `500`. `0s` reads every time, as before
   ([ADR-066](0066-cached-definitions-and-one-access-read-per-request.md)). One node behaves as the original. Tested by
   `ObjectDefinitionCacheTest`, `MetadataChangesTest` and `MetadataCacheApiTest`.
+- **D50. A workflow, automation or notification rule changed reaches another node within
+  `wasichai.metadata.cache.ttl`.** The original read them on every record operation. Now each node keeps them with the
+  object's definition and drops them at once when it writes them itself; another node, for at most the ttl, still fires
+  the old workflow, automation or rule. `0s` reads every time, as before
+  ([ADR-067](0067-the-rest-of-the-model-a-request-reads-is-cached.md)). Tested by `MetadataChangesTest` and
+  `ModelLookupCacheApiTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

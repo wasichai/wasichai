@@ -124,7 +124,7 @@ class AutomationService(
         name: String
     ) {
         val (automation, _) = load(objectName, name, Actions.MANAGE_METADATA)
-        automations.delete(automation.id)
+        automations.delete(automation.organizationId, automation.id)
     }
 
     // the log answers "why did my record change" and "why did nothing happen"

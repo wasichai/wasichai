@@ -29,6 +29,7 @@ import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.FieldTypeRegistry
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
@@ -48,8 +49,9 @@ class WasichaiAutomationAutoConfiguration {
     fun automationRepository(
         db: DatabaseClient,
         objectMapper: JsonMapper,
-        schemas: WasichaiSchemas
-    ): AutomationRepository = AutomationRepository(db, objectMapper, schemas)
+        schemas: WasichaiSchemas,
+        changes: MetadataChanges
+    ): AutomationRepository = AutomationRepository(db, objectMapper, schemas, changes)
 
     @Bean
     @ConditionalOnMissingBean

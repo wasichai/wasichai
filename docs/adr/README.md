@@ -100,3 +100,5 @@ supersedes it and says so in its status line.
   it](0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)
 - [ADR-066: Object definitions are cached; what the caller's roles say about an object is read once per
   request](0066-cached-definitions-and-one-access-read-per-request.md)
+- [ADR-067: The rest of the model a request reads is cached like a
+  definition](0067-the-rest-of-the-model-a-request-reads-is-cached.md)

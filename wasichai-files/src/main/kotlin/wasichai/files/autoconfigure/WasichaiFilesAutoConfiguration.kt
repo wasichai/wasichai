@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordService
 import wasichai.core.identity.CurrentUser
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.ModuleMigration
@@ -61,8 +62,9 @@ class WasichaiFilesAutoConfiguration {
     @ConditionalOnMissingBean
     fun storedFileRepository(
         db: DatabaseClient,
-        schemas: WasichaiSchemas
-    ): StoredFileRepository = StoredFileRepository(db, schemas)
+        schemas: WasichaiSchemas,
+        changes: MetadataChanges
+    ): StoredFileRepository = StoredFileRepository(db, schemas, changes)
 
     // the s3 auto-configuration runs first: with wasichai.files.store=s3 its store is already here
     @Bean

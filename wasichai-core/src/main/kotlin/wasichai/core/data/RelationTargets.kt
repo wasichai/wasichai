@@ -5,6 +5,7 @@ import kotlinx.coroutines.reactive.asFlow
 import org.springframework.r2dbc.core.DatabaseClient
 import wasichai.core.common.Actions
 import wasichai.core.common.FieldViolation
+import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.AuthenticatedUser
@@ -14,6 +15,7 @@ import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.FieldType
+import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.WasichaiSchemas
 import java.util.UUID
@@ -38,8 +40,14 @@ open class RelationTargets(
     private val schemas: WasichaiSchemas,
     private val objects: CustomObjectRepository,
     private val fields: CustomFieldRepository,
-    private val readScopes: RecordReadScopes
+    private val readScopes: RecordReadScopes,
+    // where the target's definition is kept, with metadata's (ADR-067); uncached by default, as before
+    private val changes: MetadataChanges = MetadataChanges.uncached()
 ) {
+    private data class TargetObject(
+        val id: UUID
+    )
+
     // a batch's RELATION targets, looked up once per target object (issue 77). only for the reader and
     // organization it was made for
     internal class Checked(
@@ -135,18 +143,31 @@ open class RelationTargets(
         ids: List<UUID>,
         scope: AuthenticatedUser?
     ): Set<UUID> {
-        val target = objects.findById(organizationId, targetObjectId) ?: return emptySet()
+        // a scope that applies needs the target's fields; otherwise its object is enough. both kept with the
+        // definitions (ADR-067)
+        val scoped = scope != null && scope.roles.isNotEmpty() && readScopes.appliesTo(scope)
+        val definition =
+            if (!scoped) {
+                null
+            } else {
+                try {
+                    changes.definitionById(organizationId, targetObjectId) {
+                        val obj = objects.findById(organizationId, targetObjectId) ?: throw NotFoundException("Object does not exist")
+                        ObjectDefinition(obj, fields.findByObject(obj.id))
+                    }
+                } catch (_: NotFoundException) {
+                    return emptySet()
+                }
+            }
+        val target =
+            definition?.obj
+                ?: changes.cached(organizationId, TargetObject(targetObjectId)) { objects.findById(organizationId, targetObjectId) }
+                ?: return emptySet()
         // no role grants nothing (RoleQueries): no read to ask
         if (scope != null && scope.roles.isEmpty()) return emptySet()
         // the app's read scope on the target, as RecordService.get applies it. its values bind as c<n>
         val bindings = mutableMapOf<String, Any>()
-        val terms =
-            if (scope == null || !readScopes.appliesTo(scope)) {
-                emptyList()
-            } else {
-                val definition = ObjectDefinition(target, fields.findByObject(target.id))
-                readScopes.criteria(scope, definition).map { it.term(definition, bindings) }
-            }
+        val terms = definition?.let { readScopes.criteria(scope!!, it).map { term -> term.term(it, bindings) } } ?: emptyList()
         var spec =
             db
                 .sql(sql(target, scope != null, terms))
