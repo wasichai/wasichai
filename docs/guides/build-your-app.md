@@ -850,7 +850,8 @@ plugins {
 ./build/native/nativeCompile/<app>
 ```
 
-Every module ships the hints it needs: the types it keeps as `jsonb` and core's migrations under `db/wasichai/`
+Every module ships the hints it needs: the types it keeps as `jsonb` or writes as `Any`, Kotlin's own collections,
+and core's migrations under `db/wasichai/`
 ([ADR-068](../adr/0068-native-image-support.md)). Two things differ from the JVM:
 
 - **Switches are fixed when the image is built.** `wasichai.<module>.enabled`, `wasichai.files.store`,
@@ -865,9 +866,9 @@ Every module ships the hints it needs: the types it keeps as `jsonb` and core's 
 Backend: a library with an `@AutoConfiguration` class registered in
 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, beans implementing core's SPIs
 (for example a `FieldTypeHandler`), its own `ModuleMigration` for schema changes, and a `wasichai.<name>.enabled`
-switch. A type it keeps as `jsonb` goes in its auto-configuration's `@RegisterReflectionForBinding`, or a native image
-cannot read it. Frontend: a `WasichaiModule` factory (routes, nav, field renderers, page components — see `@wasichai/core`'s
-README, "Writing a module"). [ADR-025](../adr/0025-extension-spis.md) documents the SPIs and
+switch. A type it keeps as `jsonb`, or writes into a response typed `Any`, goes in its auto-configuration's
+`@RegisterReflectionForBinding`, or a native image cannot bind it. Frontend: a `WasichaiModule` factory (routes, nav,
+field renderers, page components — see `@wasichai/core`'s README, "Writing a module"). [ADR-025](../adr/0025-extension-spis.md) documents the SPIs and
 [ADR-028](../adr/0028-frontend-module-registry.md) the frontend registry; `views` is the smallest shipped module
 and a good model to copy from.
 
