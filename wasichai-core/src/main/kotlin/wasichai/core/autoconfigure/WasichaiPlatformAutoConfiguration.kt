@@ -13,6 +13,7 @@ import wasichai.core.common.HealthController
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.CorrelationIdWebFilter
 import wasichai.core.platform.JwtProperties
+import wasichai.core.platform.KotlinCollectionsRuntimeHints
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.RequestMemoWebFilter
 import wasichai.core.platform.SystemColumnContributor
@@ -42,8 +43,8 @@ import wasichai.core.platform.WasichaiWebProperties
     WasichaiPasswordProperties::class,
     WasichaiMetadataProperties::class
 )
-// every module's migrations, in a native image (ADR-068)
-@ImportRuntimeHints(WasichaiMigrationsRuntimeHints::class)
+// every module's migrations, and kotlin's own collections jackson writes, in a native image (ADR-068)
+@ImportRuntimeHints(WasichaiMigrationsRuntimeHints::class, KotlinCollectionsRuntimeHints::class)
 class WasichaiPlatformAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
