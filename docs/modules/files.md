@@ -34,7 +34,8 @@ No frontend package yet (planned). Runs on plain PostgreSQL.
 
 - A `RecordWriteGuard` (`StoredFileGuard`): on every write path, a file field takes only `null`, the file it already
   holds, or the writer's own upload for that object and field, made within half of `wasichai.files.cleanup.delay`.
-  No body, automation or platform job can point a record at another record's or another tenant's file.
+  The platform's writer is its `asPlatform` block ([below](#from-a-background-job)). No body, automation or platform
+  job can point a record at another record's or another tenant's file.
 - `StoredFileCleanup`: every `wasichai.files.cleanup.interval`, on one replica (`ClusterLock`
   `wasichai.files.cleanup`, ADR-039), deletes the files no `FILE`/`IMAGE` column of their organization names any more
   and older than `wasichai.files.cleanup.delay`: replaced or cleared ones, those of deleted records, fields, objects or
@@ -67,6 +68,27 @@ removed at once; what a crash leaves, the cleanup removes.
 
 An `appendOnly` object never takes an update, so its records get their file at creation: stage the upload, then send
 its `id` as the field's value in the create.
+
+## From a background job
+
+Inside `RecordService.asPlatform`, a job stages, attaches and opens files with `FileService`, with no user
+([ADR-068](../adr/0068-the-platform-stages-attaches-and-opens-files-within-its-own-run.md)):
+
+```kotlin
+records.asPlatform(organizationId, "job:drafts") {
+    val draft = files.stage("informe", "borrador", FileUpload("borrador.pdf", "application/pdf", content))
+    records.create("informe", RecordRequest(mapOf("codigo" to "I-1", "borrador" to draft.id.toString())))
+    val photo = files.open("evidencia", evidenceId, "foto") // any file of the organization
+}
+```
+
+- `stage` stores the file for the block's organization, with no uploader (`created_by` null), checked against the
+  field like any upload. Only a write of **that same block** attaches it. Another block, a person or an automation
+  gets a `400` on the field, and the cleanup removes it once `wasichai.files.cleanup.delay` has passed.
+- A write in the block attaches only what the block staged: never a person's upload, never another organization's
+  file.
+- `open` reads any file of the block's organization, with no permission check, as every platform read.
+- `replace` and `stageAsRead` serve the routes and need a person. Automations still cannot attach a file.
 
 ## Stores
 
@@ -108,7 +130,7 @@ core's `custom_fields_type_valid` list, whatever it holds, on every start.
   spool a large part to disk before that.
 - Adding wasichai-gis to a database that already has `FILE`/`IMAGE` fields fails: gis's `V1` rebuilds the type list
   without them and PostgreSQL refuses the rows. Install gis first, or before creating file fields.
-- Only a person can upload: the platform (`asPlatform`) and automations cannot attach a file.
+- Automations cannot attach a file. The platform can, but only what the same `asPlatform` block staged.
 - The history keeps a replaced file's descriptor; its bytes go with the cleanup.
 - A `FileDescriptorReadPolicy` does not reach what renders as the platform: a document template or a notification text
   that prints a file's name prints it whole.
