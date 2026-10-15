@@ -1,5 +1,6 @@
 package wasichai.views.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -13,6 +14,7 @@ import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.views.ViewController
+import wasichai.views.ViewDefinition
 import wasichai.views.ViewMetadataController
 import wasichai.views.ViewRepository
 import wasichai.views.ViewService
@@ -20,6 +22,8 @@ import wasichai.views.ViewService
 // named list views. no scanning: every bean here, each one replaceable by the app.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.views", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(ViewDefinition::class)
 @EnableConfigurationProperties(WasichaiViewsProperties::class)
 class WasichaiViewsAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

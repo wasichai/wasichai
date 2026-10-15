@@ -1,5 +1,6 @@
 package wasichai.automation.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -9,6 +10,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.automation.AutomationController
+import wasichai.automation.AutomationDefinition
 import wasichai.automation.AutomationDispatcher
 import wasichai.automation.AutomationDrain
 import wasichai.automation.AutomationFieldUsage
@@ -21,6 +23,8 @@ import wasichai.automation.AutomationService
 import wasichai.automation.DocumentIssuer
 import wasichai.automation.NoAutomationNotifier
 import wasichai.automation.NoDocumentIssuer
+import wasichai.automation.RunPayload
+import wasichai.automation.RunStep
 import wasichai.automation.WebhookSender
 import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
@@ -38,6 +42,8 @@ import wasichai.core.platform.WasichaiSchemas
 // module the null one answers, and no auto-config order has to be right for that (M2).
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.automation", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(AutomationDefinition::class, RunPayload::class, RunStep::class)
 @EnableConfigurationProperties(AutomationProperties::class)
 class WasichaiAutomationAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

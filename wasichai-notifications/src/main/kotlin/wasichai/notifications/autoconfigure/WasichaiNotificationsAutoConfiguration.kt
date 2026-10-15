@@ -1,6 +1,7 @@
 package wasichai.notifications.autoconfigure
 
 import org.slf4j.LoggerFactory
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -34,6 +35,7 @@ import wasichai.notifications.DeliveryWork
 import wasichai.notifications.InboxController
 import wasichai.notifications.InboxRepository
 import wasichai.notifications.InboxService
+import wasichai.notifications.LinkJson
 import wasichai.notifications.NotificationAdminController
 import wasichai.notifications.NotificationAdminService
 import wasichai.notifications.NotificationChannel
@@ -45,6 +47,7 @@ import wasichai.notifications.NotificationPreparer
 import wasichai.notifications.NotificationRepository
 import wasichai.notifications.NotificationRuleCleanup
 import wasichai.notifications.NotificationRuleController
+import wasichai.notifications.NotificationRuleDefinition
 import wasichai.notifications.NotificationRuleFieldUsage
 import wasichai.notifications.NotificationRuleListener
 import wasichai.notifications.NotificationRuleRepository
@@ -63,6 +66,8 @@ import java.time.ZoneId
 // notifications (ADR-046). tables reference core's org_units: core migrates at 0, modules after.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.notifications", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(NotificationRuleDefinition::class, LinkJson::class)
 @EnableConfigurationProperties(NotificationsProperties::class)
 class WasichaiNotificationsAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

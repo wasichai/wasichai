@@ -1,5 +1,6 @@
 package wasichai.pages.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -22,6 +23,7 @@ import wasichai.pages.ObjectPageController
 import wasichai.pages.PageComponentProvider
 import wasichai.pages.PageComponentTypes
 import wasichai.pages.PageController
+import wasichai.pages.PageDefinition
 import wasichai.pages.PageMetadataController
 import wasichai.pages.PageRepository
 import wasichai.pages.PageService
@@ -32,6 +34,8 @@ import wasichai.pages.PageTemplateController
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class, WasichaiFormsAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.pages", name = ["enabled"], havingValue = "true", matchIfMissing = true)
 @ConditionalOnBean(FormService::class)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(PageDefinition::class)
 @EnableConfigurationProperties(WasichaiPagesProperties::class)
 class WasichaiPagesAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

@@ -1,5 +1,6 @@
 package wasichai.workflow.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -24,6 +25,7 @@ import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.workflow.WorkflowController
+import wasichai.workflow.WorkflowDefinition
 import wasichai.workflow.WorkflowRepository
 import wasichai.workflow.WorkflowService
 import wasichai.workflow.WorkflowStatesAdapter
@@ -33,6 +35,8 @@ import wasichai.workflow.WorkflowSystemColumns
 // whether it still needs its NoWorkflowStates null object (P1 R9).
 @AutoConfiguration(before = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.workflow", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(WorkflowDefinition::class)
 @EnableConfigurationProperties(WasichaiWorkflowProperties::class)
 class WasichaiWorkflowAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

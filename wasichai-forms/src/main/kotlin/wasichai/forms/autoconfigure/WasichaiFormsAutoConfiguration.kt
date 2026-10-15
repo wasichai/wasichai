@@ -1,5 +1,6 @@
 package wasichai.forms.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -13,6 +14,7 @@ import wasichai.core.metadata.MetadataService
 import wasichai.core.platform.ModuleMigration
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.forms.FormController
+import wasichai.forms.FormDefinition
 import wasichai.forms.FormMetadataController
 import wasichai.forms.FormRepository
 import wasichai.forms.FormService
@@ -20,6 +22,8 @@ import wasichai.forms.FormService
 // named forms. no scanning: every bean here, each one replaceable by the app.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.forms", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(FormDefinition::class)
 @EnableConfigurationProperties(WasichaiFormsProperties::class)
 class WasichaiFormsAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

@@ -1,5 +1,6 @@
 package wasichai.documents.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -20,14 +21,18 @@ import wasichai.documents.DocumentController
 import wasichai.documents.DocumentCounterRepository
 import wasichai.documents.DocumentRepository
 import wasichai.documents.DocumentService
+import wasichai.documents.DocumentSnapshot
 import wasichai.documents.DocumentTypeController
 import wasichai.documents.DocumentTypeRepository
 import wasichai.documents.DocumentTypeService
+import wasichai.documents.TemplateNode
 
 // document types and issued documents. the automation port adapter is a separate auto-config
 // (WasichaiDocumentsAutomationAutoConfiguration) that only exists when wasichai-automation does.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.documents", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// read from jsonb, outside any controller: spring cannot see them for a native image (ADR-068)
+@RegisterReflectionForBinding(DocumentSnapshot::class, TemplateNode::class)
 @EnableConfigurationProperties(WasichaiDocumentsProperties::class)
 class WasichaiDocumentsAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off
