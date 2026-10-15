@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/wasichai/wasichai/compare/v1.2.0...v1.3.0) (2026-10-15)
+
+
+### Features
+
+* **files:** let the platform stage, attach and open files inside asPlatform ([#113](https://github.com/wasichai/wasichai/issues/113)) ([c38d473](https://github.com/wasichai/wasichai/commit/c38d4735e090fcaa59eba7cc8b504ad850106b4d))
+
+
+### Bug Fixes
+
+* **documents:** keep null cells in related table snapshots ([#115](https://github.com/wasichai/wasichai/issues/115)) ([033253c](https://github.com/wasichai/wasichai/commit/033253c9e9b71b1bb88caa5ed3aa887a5855ed51)), closes [#112](https://github.com/wasichai/wasichai/issues/112)
+
 ## [1.2.0](https://github.com/wasichai/wasichai/compare/v1.1.0...v1.2.0) (2026-10-11)
 
 
