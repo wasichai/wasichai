@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.ImportRuntimeHints
 import wasichai.core.common.GlobalExceptionHandler
 import wasichai.core.common.HealthController
 import wasichai.core.metadata.ObjectSchemaManager
@@ -22,6 +23,7 @@ import wasichai.core.platform.WasichaiIdempotencyProperties
 import wasichai.core.platform.WasichaiLoginProperties
 import wasichai.core.platform.WasichaiMetadataProperties
 import wasichai.core.platform.WasichaiMigrations
+import wasichai.core.platform.WasichaiMigrationsRuntimeHints
 import wasichai.core.platform.WasichaiOrganizationsProperties
 import wasichai.core.platform.WasichaiPasswordProperties
 import wasichai.core.platform.WasichaiSchemas
@@ -40,6 +42,8 @@ import wasichai.core.platform.WasichaiWebProperties
     WasichaiPasswordProperties::class,
     WasichaiMetadataProperties::class
 )
+// every module's migrations, in a native image (ADR-068)
+@ImportRuntimeHints(WasichaiMigrationsRuntimeHints::class)
 class WasichaiPlatformAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean

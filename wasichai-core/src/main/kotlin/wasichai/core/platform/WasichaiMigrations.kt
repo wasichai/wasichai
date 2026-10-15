@@ -1,7 +1,10 @@
 package wasichai.core.platform
 
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.ClassProvider
+import org.flywaydb.core.api.migration.JavaMigration
 import org.springframework.beans.factory.InitializingBean
+import org.springframework.core.NativeDetector
 
 // runs every module's migrations at startup, before traffic, in order. flyway is jdbc only,
 // so it gets its own short-lived connection. ADR-008, ADR-0026.
@@ -43,7 +46,11 @@ class WasichaiMigrations(
         plan.forEach { flyway(it).migrate() }
     }
 
-    internal fun flyway(module: ModuleMigration): Flyway =
+    // native: flyway cannot scan an image, ClasspathMigrations lists it; no module has java migrations (ADR-068)
+    internal fun flyway(
+        module: ModuleMigration,
+        native: Boolean = NativeDetector.inNativeImage()
+    ): Flyway =
         Flyway
             .configure()
             .dataSource(database.jdbcUrl, database.username, database.password)
@@ -56,5 +63,10 @@ class WasichaiMigrations(
             .baselineVersion("0")
             .placeholders(
                 mapOf("metadataSchema" to schemas.metadata, "dataSchema" to schemas.data, "auditPurgeRole" to audit.purgeRolePlaceholder)
-            ).load()
+            ).apply {
+                if (native) {
+                    resourceProvider(ClasspathMigrations(module.location))
+                    javaMigrationClassProvider(ClassProvider<JavaMigration> { emptyList() })
+                }
+            }.load()
 }
