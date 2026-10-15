@@ -1,6 +1,7 @@
 package wasichai.files
 
 import wasichai.core.common.ValidationException
+import wasichai.core.data.PlatformRun
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuard
@@ -13,12 +14,17 @@ import java.util.UUID
  * record at a file it did not upload: another record's, another tenant's, or one the cleanup is about to
  * delete. The value a field already holds passes unchanged (a PUT sends back what it read); null clears.
  *
+ * The platform's writer is its run (ADR-068): an `asPlatform` block attaches only what that same block staged. An
+ * automation has neither a user nor a run, so it attaches nothing.
+ *
  * [maxAge]: how old an upload may be and still be attached. Below the cleanup delay, so the cleanup
  * never deletes a file a write is attaching.
  */
 class StoredFileGuard(
     private val files: StoredFileRepository,
-    private val maxAge: Duration
+    private val maxAge: Duration,
+    // the platform block the write runs in; a seam for tests
+    private val platformRun: suspend () -> PlatformRun? = { PlatformRun.current() }
 ) : RecordWriteGuard {
     override suspend fun beforeWrite(change: RecordWrite) {
         if (change.kind != RecordChangeKind.CREATED && change.kind != RecordChangeKind.UPDATED) return
@@ -35,10 +41,15 @@ class StoredFileGuard(
                 }
         if (incoming.isEmpty()) return
         val userId = change.userId
+        // no user: the platform's run, when the write is its own and in its organization
+        val run = if (userId == null) platformRun()?.takeIf { it.organizationId == change.organizationId } else null
         incoming.forEach { (name, id) ->
             val own =
-                userId != null &&
-                    id in files.uploadedBy(change.organizationId, userId, change.objectId, name, listOf(id), maxAge)
+                when {
+                    userId != null -> id in files.uploadedBy(change.organizationId, userId, change.objectId, name, listOf(id), maxAge)
+                    run != null -> id in files.stagedBy(change.organizationId, run.id, change.objectId, name, listOf(id), maxAge)
+                    else -> false
+                }
             if (!own) {
                 throw ValidationException(
                     "Invalid file for '$name'",

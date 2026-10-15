@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 
 class FilesMigrationSqlTest {
     private val v1 = javaClass.getResource("/db/wasichai/files/V1__files.sql")!!.readText()
+    private val v2 = javaClass.getResource("/db/wasichai/files/V2__platform_run.sql")!!.readText()
     private val types = javaClass.getResource("/db/wasichai/files/afterMigrate__file_types.sql")!!.readText()
 
     @Test
@@ -14,6 +15,15 @@ class FilesMigrationSqlTest {
         // only created_by points elsewhere: a deleted tenant's or object's rows stay for the cleanup
         assertThat(Regex("REFERENCES").findAll(table).count()).isEqualTo(1)
         assertThat(table).contains("created_by      uuid REFERENCES \${metadataSchema}.users (id) ON DELETE SET NULL")
+    }
+
+    // ADR-068: a staged file names a person or a platform run, never both
+    @Test
+    fun `a stored file has one uploader, a person or a platform run`() {
+        assertThat(v2)
+            .contains("ADD COLUMN platform_run uuid,")
+            .contains("CHECK (created_by IS NULL OR platform_run IS NULL)")
+            .doesNotContain("REFERENCES")
     }
 
     @Test

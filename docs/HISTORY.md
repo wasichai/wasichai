@@ -2,6 +2,19 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-15 — Files from a background job: the platform stages, attaches and opens them
+
+SGSPE's report job runs inside `asPlatform` and could not keep its drafts in `FILE` fields, nor read the photos people
+attached ([#111](https://github.com/wasichai/wasichai/issues/111)). Now it can
+([ADR-068](adr/0068-the-platform-stages-attaches-and-opens-files-within-its-own-run.md)). Core: each `asPlatform`
+block is a `PlatformRun` (organization plus a fresh id), read with `PlatformRun.current()`. Files: `FileService.stage`
+and `open` work inside a block, with no user. A staged file records its run in `stored_files.platform_run` (migration
+`V2__platform_run.sql`, never both an uploader and a run). `StoredFileGuard` lets a write with no user attach only what
+its own run staged, for that object and field. Automations, other runs, people and other organizations are still
+refused. `StoredFileGuard` takes a defaulted run reader, and `StoredFile` a defaulted `platformRun`. No REST change.
+New tests: `PlatformFilesTest` (integration), plus cases in `StoredFileGuardTest`, `RecordServicePlatformTest` and
+`FilesMigrationSqlTest`.
+
 ## 2026-10-11 — Workflows, automations, rules, relationships and file fields cached with the definitions
 
 After 1.1.0, SGSPE's create with three links still cost 81 statements, 31 of them reads of the model outside the

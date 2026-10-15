@@ -439,7 +439,12 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "USING btree (organization_id, created_at)",
                 "index stored_files.stored_files_pkey CREATE UNIQUE INDEX stored_files_pkey ON META.stored_files USING btree (id)",
                 "table stored_files"
-            ).associateWith { "ADR-031 D47: FILE and IMAGE field types" }
+            ).associateWith { "ADR-031 D47: FILE and IMAGE field types" } +
+            // the platform's own staged files (ADR-068): the run that staged one, never with a person
+            listOf(
+                "column stored_files.platform_run #12 uuid",
+                "constraint stored_files.stored_files_one_uploader CHECK (((created_by IS NULL) OR (platform_run IS NULL)))"
+            ).associateWith { "ADR-031 D47, ADR-068: files staged by a platform run" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

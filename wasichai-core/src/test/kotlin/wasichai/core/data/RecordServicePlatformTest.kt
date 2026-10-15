@@ -250,6 +250,28 @@ class RecordServicePlatformTest {
             assertThat(after.exceptionOrNull()).isInstanceOf(UnauthorizedException::class.java)
         }
 
+    // ADR-068: each block is a run of its own, gone outside it and under a user put in later
+    @Test
+    fun `each block is a run of its own, in its organization`() =
+        runTest {
+            val records = service()
+            val other = UUID.randomUUID()
+
+            val first = records.asPlatform(organizationId) { PlatformRun.current() }
+            val second = records.asPlatform(organizationId) { PlatformRun.current() }
+            val nested = records.asPlatform(organizationId) { PlatformRun.current() to records.asPlatform(other) { PlatformRun.current() } }
+            val user = ReactiveSecurityContextHolder.withAuthentication(TestingAuthenticationToken("someone", "n/a", "ROLE_ADMIN"))
+            val underUser = records.asPlatform(organizationId) { withContext(user.asCoroutineContext()) { PlatformRun.current() } }
+
+            assertThat(first!!.organizationId).isEqualTo(organizationId)
+            assertThat(second!!.organizationId).isEqualTo(organizationId)
+            assertThat(first.id).isNotEqualTo(second.id)
+            assertThat(nested.second!!.organizationId).isEqualTo(other)
+            assertThat(nested.second!!.id).isNotEqualTo(nested.first!!.id)
+            assertThat(PlatformRun.current()).isNull()
+            assertThat(underUser).isNull()
+        }
+
     @Test
     fun `a caller with a user never becomes the platform`() =
         runTest {

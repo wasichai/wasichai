@@ -28,13 +28,15 @@ data class StoredFile(
     val sizeBytes: Long,
     val sha256: String,
     val createdBy: UUID?,
-    val createdAt: Instant?
+    val createdAt: Instant?,
+    // the asPlatform block that staged it, when the platform did (ADR-068); never with createdBy
+    val platformRun: UUID? = null
 ) {
     fun descriptor(): FileDescriptor = FileDescriptor(id, fileName, contentType, sizeBytes, sha256)
 }
 
 private const val COLUMNS =
-    "id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by, created_at"
+    "id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by, created_at, platform_run"
 
 // every query names its organization, except the cleanup's, which walks them one by one (ADR-0061)
 @Repository
@@ -53,8 +55,8 @@ class StoredFileRepository(
             .sql(
                 """
                 INSERT INTO ${schemas.metadata}.stored_files
-                    (id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by)
-                VALUES (:id, :organizationId, :objectId, :fieldName, :objectKey, :fileName, :contentType, :sizeBytes, :sha256, :createdBy)
+                    (id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by, platform_run)
+                VALUES (:id, :organizationId, :objectId, :fieldName, :objectKey, :fileName, :contentType, :sizeBytes, :sha256, :createdBy, :platformRun)
                 RETURNING $COLUMNS
                 """.trimIndent()
             ).bind("id", file.id)
@@ -67,6 +69,7 @@ class StoredFileRepository(
             .bind("sizeBytes", file.sizeBytes)
             .bind("sha256", file.sha256)
             .bindNullable("createdBy", file.createdBy)
+            .bindNullable("platformRun", file.platformRun)
             .map { row, _ -> map(row) }
             .one()
             .awaitSingle()
@@ -103,6 +106,37 @@ class StoredFileRepository(
                 """.trimIndent()
             ).bind("organizationId", organizationId)
             .bind("userId", userId)
+            .bind("objectId", objectId)
+            .bind("fieldName", fieldName)
+            .bind("ids", ids.toTypedArray())
+            .bind("maxAge", maxAge.toMillis() / 1000.0)
+            .map { row, _ -> Rows.uuid(row, "id") }
+            .all()
+            .asFlow()
+            .toList()
+            .toSet()
+    }
+
+    // the ids among [ids] that the platform block [run] staged for this object and field within [maxAge]: the only new
+    // values a platform write may give a file field (StoredFileGuard, ADR-068)
+    suspend fun stagedBy(
+        organizationId: UUID,
+        run: UUID,
+        objectId: UUID,
+        fieldName: String,
+        ids: Collection<UUID>,
+        maxAge: Duration
+    ): Set<UUID> {
+        if (ids.isEmpty()) return emptySet()
+        return db
+            .sql(
+                """
+                SELECT id FROM ${schemas.metadata}.stored_files
+                WHERE organization_id = :organizationId AND platform_run = :run AND object_id = :objectId
+                  AND field_name = :fieldName AND id = ANY(:ids) AND created_at > now() - make_interval(secs => :maxAge)
+                """.trimIndent()
+            ).bind("organizationId", organizationId)
+            .bind("run", run)
             .bind("objectId", objectId)
             .bind("fieldName", fieldName)
             .bind("ids", ids.toTypedArray())
@@ -213,6 +247,7 @@ class StoredFileRepository(
             sizeBytes = Rows.long(row, "size_bytes"),
             sha256 = Rows.string(row, "sha256"),
             createdBy = Rows.uuidOrNull(row, "created_by"),
-            createdAt = Rows.instantOrNull(row, "created_at")
+            createdAt = Rows.instantOrNull(row, "created_at"),
+            platformRun = Rows.uuidOrNull(row, "platform_run")
         )
 }
