@@ -1,5 +1,6 @@
 package wasichai.gis.autoconfigure
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -19,6 +20,7 @@ import wasichai.gis.FeatureController
 import wasichai.gis.GeoServerClient
 import wasichai.gis.GeoServerProperties
 import wasichai.gis.GeometryFieldType
+import wasichai.gis.GeometryResponse
 import wasichai.gis.LayerCleanup
 import wasichai.gis.LayerController
 import wasichai.gis.LayerService
@@ -27,6 +29,8 @@ import wasichai.gis.LayerService
 // core finds the first three through ObjectProviders, so no ordering against core is needed.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.gis", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+// written inside a field's properties, a Map<String, Any?>: spring cannot see it for a native image (ADR-068)
+@RegisterReflectionForBinding(GeometryResponse::class)
 @EnableConfigurationProperties(WasichaiGisProperties::class, GeoServerProperties::class)
 class WasichaiGisAutoConfiguration {
     // never @ConditionalOnMissingBean: core's own ModuleMigration would always make it back off

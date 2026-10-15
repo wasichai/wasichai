@@ -15,6 +15,8 @@ import wasichai.documents.TemplateNode
 import wasichai.documents.autoconfigure.WasichaiDocumentsAutoConfiguration
 import wasichai.forms.FormDefinition
 import wasichai.forms.autoconfigure.WasichaiFormsAutoConfiguration
+import wasichai.gis.GeometryResponse
+import wasichai.gis.autoconfigure.WasichaiGisAutoConfiguration
 import wasichai.notifications.LinkJson
 import wasichai.notifications.NotificationRuleDefinition
 import wasichai.notifications.autoconfigure.WasichaiNotificationsAutoConfiguration
@@ -25,11 +27,11 @@ import wasichai.views.autoconfigure.WasichaiViewsAutoConfiguration
 import wasichai.workflow.WorkflowDefinition
 import wasichai.workflow.autoconfigure.WasichaiWorkflowAutoConfiguration
 
-// what a module reads from jsonb has to be bindable in a native image (ADR-068)
+// what a module reads from jsonb, or writes into a response as Any, has to be bindable in a native image (ADR-068)
 class NativeBindingHintsTest {
     @ParameterizedTest
     @MethodSource("modules")
-    fun `a module's auto-configuration registers the types it keeps as jsonb`(
+    fun `a module's auto-configuration registers the types spring cannot see`(
         configuration: Class<*>,
         types: List<Class<*>>
     ) {
@@ -52,6 +54,7 @@ class NativeBindingHintsTest {
                     listOf(AutomationDefinition::class.java, RunPayload::class.java, RunStep::class.java)
                 ),
                 arrayOf(WasichaiDocumentsAutoConfiguration::class.java, listOf(DocumentSnapshot::class.java, TemplateNode::class.java)),
+                arrayOf(WasichaiGisAutoConfiguration::class.java, listOf(GeometryResponse::class.java)),
                 arrayOf(
                     WasichaiNotificationsAutoConfiguration::class.java,
                     listOf(NotificationRuleDefinition::class.java, LinkJson::class.java)
