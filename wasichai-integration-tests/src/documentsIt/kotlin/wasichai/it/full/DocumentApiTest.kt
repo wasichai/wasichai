@@ -289,6 +289,63 @@ class DocumentApiTest : FullAppIntegrationTest() {
             .isEqualTo(0)
     }
 
+    // #112: an optional field left empty on a related record used to fail the issue when the
+    // snapshot was read back, and roll the whole issue back with it
+    @Test
+    fun `a related row with an empty field is frozen with the cell as null`() {
+        val lote = uniqueName("lote")
+        val relationship = uniqueName("rel").take(30)
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(
+                mapOf(
+                    "name" to lote,
+                    "label" to "Lote",
+                    "pluralLabel" to "Lotes",
+                    "fields" to listOf(mapOf("name" to "codigo", "type" to "TEXT"), mapOf("name" to "nota", "type" to "TEXT"))
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        client
+            .post()
+            .uri("/api/relationships")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(
+                mapOf(
+                    "name" to relationship,
+                    "label" to "Predio",
+                    "inverseLabel" to "Lotes",
+                    "type" to "MANY_TO_ONE",
+                    "source" to lote,
+                    "target" to predio,
+                    "fieldName" to "predio_ref"
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        client
+            .post()
+            .uri("/api/objects/$lote/records")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("attributes" to mapOf("codigo" to "L-1", "predio_ref" to record)))
+            .exchange()
+            .expectStatus()
+            .isCreated
+
+        createType("oficio", sigla, template = doc(paragraph(text("Lotes")), relatedTable(relationship)))
+        issue("oficio")
+            .expectStatus()
+            .isCreated
+            .expectBody()
+            .jsonPath("$.snapshot.related.$relationship.rows.length()")
+            .isEqualTo(1)
+            .jsonPath("$.snapshot.related.$relationship.rows[0]")
+            .value<Map<String, Any?>> { row -> assertThat(row).containsEntry("codigo", "L-1").containsEntry("nota", null) }
+    }
+
     // ---- fixtures ----
 
     private fun doc(vararg content: Map<String, Any?>): Map<String, Any?> = mapOf("type" to "doc", "content" to content.toList())
@@ -299,10 +356,13 @@ class DocumentApiTest : FullAppIntegrationTest() {
 
     private fun field(name: String): Map<String, Any?> = mapOf("type" to "objectField", "attrs" to mapOf("field" to name))
 
+    private fun relatedTable(relationship: String): Map<String, Any?> = mapOf("type" to "relatedTable", "attrs" to mapOf("relationship" to relationship))
+
     private fun createType(
         name: String,
         prefix: String,
-        text: String = "Original"
+        text: String = "Original",
+        template: Map<String, Any?> = doc(paragraph(text(text)), paragraph(field("codigo")))
     ) {
         client
             .post()
@@ -313,7 +373,7 @@ class DocumentApiTest : FullAppIntegrationTest() {
                     "name" to name,
                     "prefix" to prefix,
                     "label" to if (name == "oficio") "Oficio" else "Constancia",
-                    "template" to doc(paragraph(text(text)), paragraph(field("codigo")))
+                    "template" to template
                 )
             ).exchange()
             .expectStatus()
