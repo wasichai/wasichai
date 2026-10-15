@@ -2,6 +2,15 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-15 — A related table with an empty cell no longer fails the issue
+
+Issuing a document whose template draws a `relatedTable` failed with `InvalidNullException` as soon as one related
+record had an empty field, and the issue rolled back ([#112](https://github.com/wasichai/wasichai/issues/112)). The
+snapshot is read back right after its insert, and jackson-module-kotlin 3's strict null checks (on by default) put
+`contentNulls=FAIL` on `RelatedSnapshot.rows`. Jackson handed that down to each row's map, so a null cell failed. `rows`
+is now `List<Map<String, Any?>?>`, which turns the check off. Empty cells are frozen as null. No REST change. New
+tests: `DocumentSnapshotJsonTest` (unit) and a case in `DocumentApiTest` (integration).
+
 ## 2026-10-15 — Files from a background job: the platform stages, attaches and opens them
 
 SGSPE's report job runs inside `asPlatform` and could not keep its drafts in `FILE` fields, nor read the photos people

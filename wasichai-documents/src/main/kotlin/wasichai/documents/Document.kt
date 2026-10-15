@@ -10,7 +10,10 @@ enum class DocumentStatus { VALID, ARCHIVED }
 data class RelatedSnapshot(
     val label: String,
     val columns: List<SnapshotColumn>,
-    val rows: List<Map<String, Any?>>
+    // the row is never null, but the `?` must stay: with a non-null element the kotlin module's
+    // strict null checks fail on null contents, and jackson hands that down to each row's values,
+    // so one empty cell would fail the issue (#112)
+    val rows: List<Map<String, Any?>?>
 )
 
 data class SnapshotColumn(
