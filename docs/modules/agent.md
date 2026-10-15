@@ -154,6 +154,9 @@ another Embabel provider starter instead.
 
 ## Known limitations
 
+- Not supported in a GraalVM native image: `EmbabelGate` decides at startup, from the key, whether Embabel exists,
+  and an image would fix that at build time. An app with this module builds for the JVM
+  ([ADR-068](../adr/0068-native-image-support.md)).
 - No write tools: the assistant can read the tenant's data but cannot create records, edit them or move a workflow
   state. The confirmation step that would make a write safe does not exist yet
   ([ADR-014](../adr/0014-agents-through-the-api.md)).

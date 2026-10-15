@@ -833,12 +833,40 @@ and Pendientes (`ACTION`). A municipal app already uses "notificación" for the 
 "aviso" may name a thing of its own (an advertisement); the code still says notifications. Titles say what is wrong
 and where, for the person who must act: "La licencia 0042 vence el 10/10/2026", not "Recordatorio".
 
+## Native image
+
+An app can ship as a GraalVM native image (GraalVM 25 or later, the line Spring Boot 4.1 builds on). Add the plugin
+next to Spring Boot's and build with GraalVM's `native-image` on the path:
+
+```kotlin
+plugins {
+    id("org.springframework.boot")
+    id("org.graalvm.buildtools.native")
+}
+```
+
+```bash
+./gradlew nativeCompile
+./build/native/nativeCompile/<app>
+```
+
+Every module ships the hints it needs: the types it keeps as `jsonb` and core's migrations under `db/wasichai/`
+([ADR-068](../adr/0068-native-image-support.md)). Two things differ from the JVM:
+
+- **Switches are fixed when the image is built.** `wasichai.<module>.enabled`, `wasichai.files.store`,
+  `wasichai.notifications.email.enabled`, `wasichai.notifications.listen`, `wasichai.seed.dev`,
+  `wasichai.database.migrate` and `wasichai.metadata.reconcile-indexes` choose beans; the image keeps what the build
+  saw. Set them for the build (in `application.yml`, or the environment of `nativeCompile`) and build again to change
+  one. Database, secrets, ttls and limits still read at startup.
+- **No assistant.** `wasichai-agent` is not supported in an image yet: an app with it builds for the JVM.
+
 ## Write your own module
 
 Backend: a library with an `@AutoConfiguration` class registered in
 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, beans implementing core's SPIs
 (for example a `FieldTypeHandler`), its own `ModuleMigration` for schema changes, and a `wasichai.<name>.enabled`
-switch. Frontend: a `WasichaiModule` factory (routes, nav, field renderers, page components — see `@wasichai/core`'s
+switch. A type it keeps as `jsonb` goes in its auto-configuration's `@RegisterReflectionForBinding`, or a native image
+cannot read it. Frontend: a `WasichaiModule` factory (routes, nav, field renderers, page components — see `@wasichai/core`'s
 README, "Writing a module"). [ADR-025](../adr/0025-extension-spis.md) documents the SPIs and
 [ADR-028](../adr/0028-frontend-module-registry.md) the frontend registry; `views` is the smallest shipped module
 and a good model to copy from.

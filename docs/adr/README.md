@@ -102,3 +102,5 @@ supersedes it and says so in its status line.
   request](0066-cached-definitions-and-one-access-read-per-request.md)
 - [ADR-067: The rest of the model a request reads is cached like a
   definition](0067-the-rest-of-the-model-a-request-reads-is-cached.md)
+- [ADR-068: An app on wasichai can be a GraalVM native image; the assistant cannot
+  yet](0068-native-image-support.md)

@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-15 — GraalVM native image support
+
+An app on wasichai can now build as a GraalVM native image (GraalVM 25 or later)
+([ADR-068](adr/0068-native-image-support.md)). Forms, views, pages, workflow, automation, documents and notifications
+name the types they keep as `jsonb` in `@RegisterReflectionForBinding`. Core registers every file under `db/wasichai/`
+as an image resource (`WasichaiMigrationsRuntimeHints`) and, in an image, hands Flyway `ClasspathMigrations`, a
+resource provider that lists a module's migrations through Spring's resolver; on the JVM Flyway scans as before. In an
+image the bean-choosing switches (`wasichai.<module>.enabled` and the others the ADR lists) are fixed at build time.
+`wasichai-agent` is not supported in an image. New tests: `ClasspathMigrationsTest` (core) and
+`NativeBindingHintsTest` (integration-tests, every module's hints).
+
 ## 2026-10-11 — Workflows, automations, rules, relationships and file fields cached with the definitions
 
 After 1.1.0, SGSPE's create with three links still cost 81 statements, 31 of them reads of the model outside the
