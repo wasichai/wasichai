@@ -1,6 +1,6 @@
 # Single source of truth for every backend dependency version.
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 springBoot = "4.1.1"
 ktlint = "14.2.0"
 ktlintTool = "1.7.1"
