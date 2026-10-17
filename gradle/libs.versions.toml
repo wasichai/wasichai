@@ -9,7 +9,7 @@ flyway = "13.9.0"
 testcontainers = "2.0.5"
 embabel = "1.5.3"
 # wasichai-files' S3-compatible store: optional, an app that uses it adds the s3 artifact itself
-awsSdk = "2.55.0"
+awsSdk = "2.55.16"
 # security floors over the spring boot bom: boot 4.1.1 ships vulnerable patch versions. drop each once boot catches up.
 jackson2 = "2.21.7"
 jackson3 = "3.2.3"
