@@ -1,7 +1,7 @@
-# weekly bumps. prefixes keep dependabot's commits and pr titles conventional (commits.yml).
 version: 2
+
 updates:
-  # actions are pinned by sha; dependabot moves the sha and the version comment together
+  # GitHub Actions: actualizaciones fijadas por SHA
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -10,9 +10,14 @@ updates:
       prefix: ci
     groups:
       actions:
-        patterns: ['*']
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
-  # gradle/libs.versions.toml
+  # Gradle / gradle/libs.versions.toml
   - package-ecosystem: gradle
     directory: /
     schedule:
@@ -20,8 +25,16 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    groups:
+      dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
-  # commitlint, husky, prettier
+  # npm: commitlint, husky, prettier y otras dependencias
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -31,4 +44,9 @@ updates:
       include: scope
     groups:
       tooling:
-        patterns: ['*']
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
