@@ -8,7 +8,17 @@
     "scripts": {
         "prepare": "husky",
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "docs:build": "docs/manuals/scripts/build.sh all",
+        "docs:html": "docs/manuals/scripts/build.sh html",
+        "docs:pdf": "docs/manuals/scripts/build.sh pdf",
+        "docs:clean": "docs/manuals/scripts/build.sh clean",
+        "docs:diagrams": "node docs/manuals/scripts/render-diagrams.mjs",
+        "docs:screenshots": "node docs/manuals/scripts/screenshots.mjs",
+        "docs:validate": "node docs/manuals/scripts/validate.mjs",
+        "docs:db:seed": "node docs/manuals/scripts/seed-demo.mjs",
+        "docs:db:export": "docs/manuals/scripts/export-demo-db.sh",
+        "docs:db:restore": "docs/manuals/scripts/restore-demo-db.sh"
     },
     "devDependencies": {
         "@commitlint/cli": "21.2.3",

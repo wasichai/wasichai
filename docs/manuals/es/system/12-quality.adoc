@@ -1,0 +1,40 @@
+[[sys-quality]]
+== Pruebas, construcción y publicación
+
+=== Pruebas del servidor
+
+[cols="2,3",options="header"]
+|===
+|Comando (desde `wasichai/`) |Qué ejecuta
+|`./gradlew build` |ktlint, pruebas unitarias y de arquitectura de todas las bibliotecas y starters.
+|`./gradlew -p build-logic test` |Pruebas de los _convention plugins_ (Gradle TestKit).
+|`./gradlew integrationTest` |Todas las suites de integración con una base real.
+|`./gradlew :wasichai-integration-tests:coreOnly` |Una suite concreta (hay una por módulo, más `fullApp` y las de
+paridad).
+|===
+
+Las pruebas de integración usan Testcontainers (`postgres:18` o `postgis/postgis:18-3.6`), o una base externa con
+las variables `WASICHAI_TEST_DB_HOST`, `_PORT`, `_NAME` (debe terminar en `_test`), `_USERNAME`, `_PASSWORD` y
+`WASICHAI_TEST_GIS_DB_PORT`. Nunca usan el puerto 5432. Los detalles, incluido el bloqueo de suite, están en
+{repo-url}/docs/development/getting-started.md#integration-tests[getting-started.md].
+
+=== Pruebas de la interfaz y de extremo a extremo
+
+* `wasichai-ui`: `yarn lint`, `yarn test` (Vitest en cada paquete) y `yarn build`.
+* `full-sample`: `e2e/smoke.sh` recorre todos los módulos por la API, contra el JAR y contra la imagen nativa en su
+  CI.
+* Las capturas de estos manuales (`docs:screenshots`) recorren con Playwright las pantallas principales con cuatro
+  perfiles y funcionan como prueba de humo de la interfaz.
+
+=== Integración continua
+
+`.github/workflows/ci.yml` ejecuta en cada _pull request_: el build del servidor, las pruebas de integración, el
+formato (`yarn format:check`), una publicación de prueba en Maven local y la construcción y validación de estos
+manuales (trabajo `docs`).
+
+=== Versiones y publicación
+
+Los mensajes de commit siguen Conventional Commits. `release-please` abre la PR de versión y, al fusionarla, etiqueta
+`vX.Y.Z`; `publish.yml` publica las bibliotecas en GitHub Packages
+(`https://maven.pkg.github.com/wasichai/wasichai`). Los paquetes npm se publican desde `wasichai-ui` con su propia
+versión. Ver {repo-url}/docs/development/releasing.md[releasing.md].

@@ -1,0 +1,57 @@
+[[user-workflow]]
+== Moving a case forward: workflows
+
+When an object has a workflow, each record is always in one of its states and only changes state through a
+*transition*. The state is not a field that can be edited in the form.
+
+=== Where the state is shown
+
+On the detail page, the workflow panel (in the example, *Trámite de licencia*, the licence process) shows the
+current state in a label and, below it, one button for each transition that leaves that state. Each button shows
+which state it leads to: *Aprobar → Aprobada* (approve, approved) (<<user-fig-transitions-ok>>).
+
+In a final state (such as _Aprobada_ or _Rechazada_, rejected) the panel says *Nothing leaves this state*.
+
+[[user-transition]]
+=== Applying a transition
+
+.Objective
+Move a record to the next state, for example approve a licence in review.
+
+.Prerequisites
+* Update permission (`UPDATE`) on the object.
+* If the transition is reserved to certain roles, having one of them. In the example, *Aprobar*, *Observar* and
+  *Rechazar* belong to the role _Revisor técnico_ (technical reviewer); *Enviar a revisión* and *Subsanar
+  observaciones*, to the _Registrador_ (registrar).
+* If the object asks for a reason, the reason for the change.
+
+.Procedure
+. Open the record.
+. In the workflow panel, click the button of the transition.
+. If the *Reason for the change* dialog opens, write the reason and click *Continue*.
+
+[[user-fig-transitions-ok]]
+.Transitions available to the reviewer
+image::screenshots/{lang}/user/16-transitions-revisor.png[Trámite de licencia panel in the state En revisión with the buttons Observar, Aprobar and Rechazar enabled,pdfwidth=45%]
+
+.Expected result
+The label shows the new state and the buttons of the transitions that leave it appear.
+
+.Verification
+The history shows an *Update* entry with the change of `state` and the reason.
+
+.Special cases
+* A transition your role cannot apply appears disabled, with the reason below it, for example
+  *requires role REVISOR* (<<user-fig-transitions-denied>>). The server sends this text and writes it in English,
+  whatever the interface language.
+* If someone else moved the record while you had it open, the transition is rejected because the record is no
+  longer in the starting state. Reload the page.
+* A transition can set off automatic rules. In the example, on entering _Aprobada_ the certificate is issued and the
+  _Resultado_ field is filled in; on entering _En revisión_ the reviewers are notified. These effects run in the
+  background and may take a few seconds to show.
+
+[[user-fig-transitions-denied]]
+.The same transitions as the registrar sees them
+image::screenshots/{lang}/user/17-transitions-registrador.png[Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar disabled and the text requires role REVISOR under each one,pdfwidth=45%]
+
+TIP: If the administrator disabled a workflow, the panel shows no transition buttons.

@@ -1,0 +1,59 @@
+[[sys-docs]]
+== Mantener estos manuales
+
+=== Organización
+
+Los manuales viven en `docs/manuals/` del repositorio `wasichai`, en AsciiDoc (ADR-070). Son la fuente canónica de
+los manuales de usuario, administrador y sistema; la referencia de desarrollo en Markdown (`docs/api`,
+`docs/modules`, `docs/adr`) sigue siendo canónica para su tema, y los manuales la enlazan en lugar de copiarla.
+
+[cols="2,3",options="header"]
+|===
+|Ruta |Contenido
+|`attributes.adoc` |Versión del producto, fecha de edición y enlaces comunes.
+|`es/`, `en/` |Un libro por manual y por idioma, con sus capítulos; misma estructura y mismos anclajes en los dos.
+|`theme/` |Tema del PDF, hoja de estilos del HTML y fuentes IBM Plex (licencia OFL).
+|`assets/screenshots/<idioma>/` |Capturas generadas.
+|`assets/diagrams/src/<idioma>/*.mmd` |Fuentes Mermaid de los diagramas; los PNG se generan.
+|`database/` |Datos de demostración, copia SQL, manifiesto y verificación.
+|`scripts/` |Generación, capturas, carga, exportación, restauración y validación.
+|`output/` |Resultado (HTML y PDF). No se versiona.
+|===
+
+=== Herramientas
+
+Ruby 3.3 con Bundler (Asciidoctor 2.0.26, Asciidoctor PDF 2.3.27, Rouge 5.1.0, fijados en `Gemfile.lock`) y Node 26
+con Yarn (Playwright 1.56.1 y Mermaid 12.2.0, en `docs/manuals/package.json`). Instalación:
+
+[source,bash]
+----
+# desde wasichai/docs/manuals/
+bundle config set --local path .bundle/gems && bundle install
+yarn install                       # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 si ya tiene Chromium
+npx playwright install chromium    # si no lo tiene; o CHROMIUM_PATH=/ruta/a/chrome
+----
+
+=== Comandos
+
+Todos desde la raíz de `wasichai/`:
+
+[cols="2,3",options="header"]
+|===
+|Comando |Qué hace
+|`yarn docs:build` |PDF y HTML de los seis libros (tres manuales × dos idiomas) en `docs/manuals/output/`.
+|`yarn docs:html` / `yarn docs:pdf` |Solo uno de los dos formatos.
+|`yarn docs:diagrams` |Regenera los PNG de los diagramas.
+|`yarn docs:screenshots` |Regenera las 80 capturas contra una aplicación en marcha (`WEB_URL`, `API_URL`,
+`WASICHAI_DEMO_PASSWORD`).
+|`yarn docs:validate` |Comprueba referencias, imágenes, paridad de idiomas, longitud de línea y ausencia de secretos.
+|`yarn docs:db:seed` / `docs:db:export` / `docs:db:restore` |Base de demostración (<<sys-demo-db>>).
+|`yarn docs:clean` |Borra `docs/manuals/output/`.
+|===
+
+=== Actualizar tras una versión nueva
+
+. Cambie `product-version`, `ui-version` y `edition-date` en `attributes.adoc`.
+. Restaure la base de demostración, arranque `full-sample` con su web y regenere las capturas
+  (`yarn docs:screenshots`). Si el modelo de datos cambió, vuelva a cargar desde cero y exporte.
+. Revise los capítulos afectados por los cambios de `docs/HISTORY.md`, en los dos idiomas.
+. `yarn docs:validate && yarn docs:build`, y revise el PDF.

@@ -1,0 +1,79 @@
+[[user-access]]
+== Acceso a la aplicación
+
+=== Requisitos
+
+* Un navegador web actual (la interfaz usa React 19 y funciones modernas del navegador; las capturas de este manual
+  se tomaron con Chromium). No hace falta instalar nada en el equipo.
+* La dirección (URL) de la aplicación, que le facilita su organización.
+* Una cuenta: un correo y una contraseña dados de alta por un administrador (capítulo _Usuarios, roles y permisos_
+  del _Manual del administrador_). No existe registro por cuenta propia ni recuperación de contraseña desde la pantalla de acceso:
+  si olvida su contraseña, pida a un administrador que le asigne una nueva.
+
+[[user-sign-in]]
+=== Iniciar sesión
+
+.Objetivo
+Entrar a la aplicación con su cuenta.
+
+.Requisitos previos
+Una cuenta activa en la organización.
+
+.Procedimiento
+. Abra la dirección de la aplicación. Si no ha iniciado sesión, la aplicación le lleva a la pantalla de acceso
+  (<<user-fig-login>>).
+. Escriba su correo en *Correo* y su contraseña en *Contraseña*.
+. Pulse *Iniciar sesión*.
+
+[[user-fig-login]]
+.Pantalla de acceso
+image::screenshots/{lang}/user/01-login.png[Tarjeta de acceso con el nombre de la aplicación, los campos Correo y Contraseña y el botón Iniciar sesión,pdfwidth=50%]
+
+.Resultado esperado
+Se abre la página *Inicio* (<<user-fig-home>>). En el pie del menú lateral aparecen su nombre y su correo.
+
+.Verificación
+Su nombre en el pie del menú confirma con qué cuenta entró.
+
+.Casos especiales
+* Si el correo o la contraseña no son correctos, la tarjeta muestra el mensaje *Invalid email or password*
+  (<<user-fig-login-error>>). El mensaje lo envía el servidor y llega en inglés aunque la interfaz esté en español.
+  Por seguridad, el mensaje es el mismo si el correo no existe o si la contraseña es incorrecta.
+* Una cuenta desactivada por un administrador no puede entrar y recibe el mismo mensaje.
+* Si la organización activó el límite de intentos, tras varios intentos fallidos seguidos la entrada queda bloqueada
+  durante un tiempo, incluso con la contraseña correcta (<<user-messages>>).
+
+[[user-fig-login-error]]
+.Correo o contraseña incorrectos
+image::screenshots/{lang}/user/20-login-error.png[La tarjeta de acceso con el mensaje Invalid email or password en rojo,pdfwidth=50%]
+
+[[user-session]]
+=== Duración de la sesión
+
+Al iniciar sesión, el servidor entrega a su navegador una credencial temporal (un _token_). Mientras es válida, la
+aplicación no vuelve a pedirle la contraseña, aunque cierre la pestaña. Por defecto dura 8 horas; su organización
+puede haber configurado otra duración.
+
+Cuando la credencial caduca, o cuando un administrador desactiva su cuenta o cambia su contraseña, la siguiente
+acción que haga recibe una respuesta de «no autenticado» y la aplicación le devuelve a la pantalla de acceso. Lo que
+estuviera escribiendo y no hubiera guardado se pierde.
+
+TIP: Si va a dejar un formulario largo a medias, guárdelo antes: la aplicación no guarda borradores.
+
+[[user-sign-out]]
+=== Cerrar sesión
+
+.Objetivo
+Salir de la aplicación para que nadie más use su sesión en ese equipo.
+
+.Procedimiento
+. Pulse *Cerrar sesión*, al pie del menú lateral.
+
+.Resultado esperado
+La aplicación borra la credencial del navegador y muestra la pantalla de acceso.
+
+.Casos especiales
+NOTE: Si su organización activó la revocación de credenciales, al cerrar sesión el servidor invalida además todas
+las credenciales que se le entregaron hasta ese momento, también las de otros navegadores. Sin esa opción, una
+credencial copiada fuera del navegador seguiría valiendo hasta su caducidad. Cierre siempre la sesión en equipos
+compartidos.

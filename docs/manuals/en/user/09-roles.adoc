@@ -1,0 +1,45 @@
+[[user-roles]]
+== What changes with your role
+
+What you can do is decided by the roles the administrator assigned to your account. Each role grants, object by
+object, four actions on the records: read (`READ`), create (`CREATE`), update (`UPDATE`) and delete (`DELETE`). It
+can also hide specific fields and limit the person to the records they created themselves, and the transitions of a
+workflow can be reserved to certain roles.
+
+=== How it shows on screen
+
+The server always does the check, on every operation. The interface hides some things, but not all:
+
+[cols="2,3",options="header"]
+|===
+|Situation |What you see
+|You cannot read an object |The object does not appear in *Home* or in *Objects*.
+|You cannot read a field |The field does not appear in the form, in the list or in the history.
+|You can read but not update |The form is shown and the *Save* button is available, but on saving the server
+answers *Missing permission UPDATE* and nothing changes (<<user-fig-forbidden>>).
+|The transition belongs to another role |The button appears disabled with the reason, for example
+*requires role REVISOR*.
+|Administration screens |They are visible in the menu. Without the matching permission, the server rejects your
+actions.
+|===
+
+=== Example: three profiles of the Distrito Demo
+
+Registrador (_Rosa Registradora_)::
+Reads, creates and updates licences and taxpayers; only reads plots. Can send a licence to review and correct
+remarks, but cannot approve or reject.
+Revisor técnico (_Raúl Revisor_)::
+Reads the three objects and updates licences. Can make remarks on, approve and reject licences in review.
+Consulta (_Carmen Consulta_)::
+Read only. Besides, does not see the identity document or the phone of taxpayers (<<user-fig-field-permissions>>).
+
+[[user-fig-field-permissions]]
+.A taxpayer as the Consulta role sees it: no DNI/RUC and no phone
+image::screenshots/{lang}/user/19-field-permissions-consulta.png[Detail of a taxpayer with the fields Código, Nombre, Tipo, Correo, Dirección fiscal and Activo; DNI/RUC and Teléfono are missing,pdfwidth=100%]
+
+[[user-fig-forbidden]]
+.The Consulta role tries to save: the server rejects it
+image::screenshots/{lang}/user/22-forbidden-consulta.png[The same form with the red notice Missing permission UPDATE above the fields,pdfwidth=100%]
+
+TIP: If you need to do something your role does not allow, ask the administrator to review your roles. Do not share
+your account: everything done with it is recorded in your name in the audit log.

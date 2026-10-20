@@ -1,0 +1,32 @@
+[[sys-dr]]
+== Recuperación ante desastres
+
+{product-name} no tiene componentes con estado propio fuera de PostgreSQL (y del almacén de archivos, si se usa).
+Recuperar el sistema es recuperar la base de datos y volver a desplegar la aplicación con su configuración.
+
+=== Qué preparar antes
+
+* Copias de la base con una frecuencia acorde a la pérdida de datos tolerable (RPO), guardadas fuera del servidor.
+  Para pérdidas menores que la frecuencia de copia, use el archivado continuo de PostgreSQL (WAL) o un servicio
+  gestionado con recuperación a un instante.
+* Copia del almacén de archivos con la misma frecuencia.
+* Los artefactos desplegables versionados (JAR o imagen, y `web/dist`) y la configuración, recuperables sin el
+  servidor caído.
+* Los secretos (`WASICHAI_JWT_SECRET`, credenciales) en un gestor de secretos.
+* Una restauración probada al menos cada trimestre, con el tiempo que tardó (RTO).
+
+=== Procedimiento
+
+. Declare la incidencia y detenga la aplicación si sigue corriendo contra datos dañados.
+. Prepare un servidor PostgreSQL 18 con PostGIS 3.6.
+. Restaure la última copia válida en una base nueva (<<sys-backup>>) y ejecute `verify.sql`.
+. Restaure el almacén de archivos, si lo hay.
+. Despliegue la misma versión de la aplicación que generó la copia, con su configuración y secretos.
+. Arranque: Flyway no debe tener migraciones pendientes (si las tiene, la versión desplegada es más nueva que la
+  copia; aplíquelas solo si esa es la intención).
+. Ejecute las pruebas de humo de <<sys-operation>> y una revisión funcional rápida con una cuenta de cada rol.
+. Republique las capas de GeoServer desde *Capas* si GeoServer también se perdió.
+. Comunique a las personas el punto en el tiempo de la copia: lo posterior se perdió.
+
+CAUTION: Si cambia `WASICHAI_JWT_SECRET` durante la recuperación, todas las sesiones caducan y las personas deben
+volver a iniciar sesión. Los secretos de las cuentas de servicio siguen valiendo (están en la base).

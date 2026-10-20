@@ -1,0 +1,2442 @@
+{
+    "description": "Synthetic demo dataset of a fictitious municipality (Distrito Demo). No real person, company or address.",
+    "organization": "demo",
+    "objects": [
+        {
+            "name": "contribuyente",
+            "label": "Contribuyente",
+            "pluralLabel": "Contribuyentes",
+            "description": "Persona natural o jurídica con obligaciones municipales",
+            "fields": [
+                {
+                    "name": "codigo",
+                    "label": "Código",
+                    "type": "TEXT",
+                    "required": true,
+                    "unique": true
+                },
+                {
+                    "name": "nombre",
+                    "label": "Nombre o razón social",
+                    "type": "TEXT",
+                    "required": true
+                },
+                {
+                    "name": "tipo",
+                    "label": "Tipo",
+                    "type": "ENUM",
+                    "enumOptions": [
+                        "PERSONA_NATURAL",
+                        "PERSONA_JURIDICA"
+                    ],
+                    "required": true
+                },
+                {
+                    "name": "documento",
+                    "label": "DNI / RUC",
+                    "type": "TEXT"
+                },
+                {
+                    "name": "email",
+                    "label": "Correo",
+                    "type": "EMAIL"
+                },
+                {
+                    "name": "telefono",
+                    "label": "Teléfono",
+                    "type": "TEXT"
+                },
+                {
+                    "name": "direccion",
+                    "label": "Dirección fiscal",
+                    "type": "TEXT"
+                },
+                {
+                    "name": "activo",
+                    "label": "Activo",
+                    "type": "BOOLEAN",
+                    "defaultValue": "true"
+                }
+            ]
+        },
+        {
+            "name": "predio",
+            "label": "Predio",
+            "pluralLabel": "Predios",
+            "description": "Unidad catastral del distrito",
+            "fields": [
+                {
+                    "name": "codigo",
+                    "label": "Código catastral",
+                    "type": "TEXT",
+                    "required": true,
+                    "unique": true
+                },
+                {
+                    "name": "direccion",
+                    "label": "Dirección",
+                    "type": "TEXT"
+                },
+                {
+                    "name": "area",
+                    "label": "Área (m²)",
+                    "type": "DECIMAL"
+                },
+                {
+                    "name": "uso",
+                    "label": "Uso",
+                    "type": "ENUM",
+                    "enumOptions": [
+                        "RESIDENCIAL",
+                        "COMERCIAL",
+                        "INDUSTRIAL",
+                        "AGRICOLA"
+                    ]
+                },
+                {
+                    "name": "valor_autovaluo",
+                    "label": "Valor de autovalúo (S/)",
+                    "type": "DECIMAL"
+                },
+                {
+                    "name": "lote",
+                    "label": "Lote",
+                    "type": "GEOMETRY",
+                    "geometryType": "POLYGON",
+                    "srid": 4326
+                }
+            ]
+        },
+        {
+            "name": "licencia",
+            "label": "Licencia de funcionamiento",
+            "pluralLabel": "Licencias de funcionamiento",
+            "description": "Solicitud de licencia para un establecimiento comercial",
+            "requiresReason": true,
+            "fields": [
+                {
+                    "name": "codigo",
+                    "label": "Expediente",
+                    "type": "TEXT",
+                    "required": true,
+                    "unique": true
+                },
+                {
+                    "name": "razon_social",
+                    "label": "Establecimiento",
+                    "type": "TEXT",
+                    "required": true
+                },
+                {
+                    "name": "giro",
+                    "label": "Giro",
+                    "type": "ENUM",
+                    "enumOptions": [
+                        "BODEGA",
+                        "RESTAURANTE",
+                        "FARMACIA",
+                        "FERRETERIA",
+                        "OFICINA",
+                        "TALLER"
+                    ],
+                    "required": true
+                },
+                {
+                    "name": "area_local",
+                    "label": "Área del local (m²)",
+                    "type": "DECIMAL"
+                },
+                {
+                    "name": "fecha_solicitud",
+                    "label": "Fecha de solicitud",
+                    "type": "DATE"
+                },
+                {
+                    "name": "fecha_inspeccion",
+                    "label": "Inspección",
+                    "type": "DATETIME",
+                    "timeZone": "America/Lima"
+                },
+                {
+                    "name": "observaciones",
+                    "label": "Observaciones",
+                    "type": "LONG_TEXT"
+                },
+                {
+                    "name": "resultado",
+                    "label": "Resultado",
+                    "type": "TEXT"
+                }
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "name": "predio_titular",
+            "label": "Titular",
+            "inverseLabel": "Predios",
+            "type": "MANY_TO_ONE",
+            "source": "predio",
+            "target": "contribuyente",
+            "fieldName": "titular"
+        },
+        {
+            "name": "licencia_solicitante",
+            "label": "Solicitante",
+            "inverseLabel": "Licencias",
+            "type": "MANY_TO_ONE",
+            "source": "licencia",
+            "target": "contribuyente",
+            "fieldName": "solicitante"
+        },
+        {
+            "name": "licencia_predio",
+            "label": "Predio",
+            "inverseLabel": "Licencias",
+            "type": "MANY_TO_ONE",
+            "source": "licencia",
+            "target": "predio",
+            "fieldName": "predio"
+        }
+    ],
+    "roles": [
+        {
+            "name": "REGISTRADOR",
+            "label": "Registrador de licencias",
+            "ownRecordsOnly": false,
+            "permissions": [
+                [
+                    "licencia",
+                    "READ"
+                ],
+                [
+                    "licencia",
+                    "CREATE"
+                ],
+                [
+                    "licencia",
+                    "UPDATE"
+                ],
+                [
+                    "contribuyente",
+                    "READ"
+                ],
+                [
+                    "contribuyente",
+                    "CREATE"
+                ],
+                [
+                    "contribuyente",
+                    "UPDATE"
+                ],
+                [
+                    "predio",
+                    "READ"
+                ]
+            ],
+            "fieldPermissions": []
+        },
+        {
+            "name": "REVISOR",
+            "label": "Revisor técnico",
+            "ownRecordsOnly": false,
+            "permissions": [
+                [
+                    "licencia",
+                    "READ"
+                ],
+                [
+                    "licencia",
+                    "UPDATE"
+                ],
+                [
+                    "contribuyente",
+                    "READ"
+                ],
+                [
+                    "predio",
+                    "READ"
+                ]
+            ],
+            "fieldPermissions": []
+        },
+        {
+            "name": "CONSULTA",
+            "label": "Consulta",
+            "ownRecordsOnly": false,
+            "permissions": [
+                [
+                    "licencia",
+                    "READ"
+                ],
+                [
+                    "contribuyente",
+                    "READ"
+                ],
+                [
+                    "predio",
+                    "READ"
+                ]
+            ],
+            "fieldPermissions": [
+                {
+                    "objectName": "contribuyente",
+                    "fieldName": "documento",
+                    "read": false,
+                    "write": false
+                },
+                {
+                    "objectName": "contribuyente",
+                    "fieldName": "telefono",
+                    "read": false,
+                    "write": false
+                }
+            ]
+        }
+    ],
+    "users": [
+        {
+            "email": "registrador@demo.example",
+            "displayName": "Rosa Registradora",
+            "roles": [
+                "REGISTRADOR"
+            ],
+            "orgUnits": [
+                "SGLC"
+            ]
+        },
+        {
+            "email": "revisor@demo.example",
+            "displayName": "Raúl Revisor",
+            "roles": [
+                "REVISOR"
+            ],
+            "orgUnits": [
+                "SGLC"
+            ]
+        },
+        {
+            "email": "consulta@demo.example",
+            "displayName": "Carmen Consulta",
+            "roles": [
+                "CONSULTA"
+            ],
+            "orgUnits": [
+                "GDE"
+            ]
+        }
+    ],
+    "orgUnits": [
+        {
+            "code": "GDE",
+            "label": "Gerencia de Desarrollo Económico"
+        },
+        {
+            "code": "SGLC",
+            "label": "Subgerencia de Licencias Comerciales",
+            "parentCode": "GDE"
+        }
+    ],
+    "serviceAccounts": [
+        {
+            "name": "integracion-rentas",
+            "roles": [
+                "CONSULTA"
+            ]
+        }
+    ],
+    "workflows": [
+        {
+            "objectName": "licencia",
+            "name": "licencia-tramite",
+            "label": "Trámite de licencia",
+            "enabled": true,
+            "definition": {
+                "states": [
+                    {
+                        "name": "borrador",
+                        "label": "Borrador",
+                        "type": "INITIAL",
+                        "x": 40,
+                        "y": 160
+                    },
+                    {
+                        "name": "en_revision",
+                        "label": "En revisión",
+                        "type": "INTERMEDIATE",
+                        "x": 320,
+                        "y": 160
+                    },
+                    {
+                        "name": "observada",
+                        "label": "Observada",
+                        "type": "INTERMEDIATE",
+                        "x": 320,
+                        "y": 360
+                    },
+                    {
+                        "name": "aprobada",
+                        "label": "Aprobada",
+                        "type": "FINAL",
+                        "x": 620,
+                        "y": 60
+                    },
+                    {
+                        "name": "rechazada",
+                        "label": "Rechazada",
+                        "type": "FINAL",
+                        "x": 620,
+                        "y": 260
+                    }
+                ],
+                "transitions": [
+                    {
+                        "name": "enviar",
+                        "label": "Enviar a revisión",
+                        "from": "borrador",
+                        "to": "en_revision",
+                        "roles": [
+                            "REGISTRADOR"
+                        ]
+                    },
+                    {
+                        "name": "observar",
+                        "label": "Observar",
+                        "from": "en_revision",
+                        "to": "observada",
+                        "roles": [
+                            "REVISOR"
+                        ]
+                    },
+                    {
+                        "name": "subsanar",
+                        "label": "Subsanar observaciones",
+                        "from": "observada",
+                        "to": "en_revision",
+                        "roles": [
+                            "REGISTRADOR"
+                        ]
+                    },
+                    {
+                        "name": "aprobar",
+                        "label": "Aprobar",
+                        "from": "en_revision",
+                        "to": "aprobada",
+                        "roles": [
+                            "REVISOR"
+                        ]
+                    },
+                    {
+                        "name": "rechazar",
+                        "label": "Rechazar",
+                        "from": "en_revision",
+                        "to": "rechazada",
+                        "roles": [
+                            "REVISOR"
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "statePaths": {
+        "borrador": [],
+        "en_revision": [
+            "enviar"
+        ],
+        "observada": [
+            "enviar",
+            "observar"
+        ],
+        "aprobada": [
+            "enviar",
+            "observar",
+            "subsanar",
+            "aprobar"
+        ],
+        "rechazada": [
+            "enviar",
+            "rechazar"
+        ]
+    },
+    "documentTypes": [
+        {
+            "objectName": "licencia",
+            "name": "certificado",
+            "label": "Certificado de licencia",
+            "prefix": "CLF",
+            "template": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "heading",
+                        "attrs": {
+                            "level": 2
+                        },
+                        "content": [
+                            {
+                                "type": "platformValue",
+                                "attrs": {
+                                    "value": "documentName"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": " "
+                            },
+                            {
+                                "type": "platformValue",
+                                "attrs": {
+                                    "value": "documentNumber"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "La Subgerencia de Licencias Comerciales del Distrito Demo certifica que el establecimiento "
+                            },
+                            {
+                                "type": "objectField",
+                                "attrs": {
+                                    "field": "razon_social"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": ", expediente "
+                            },
+                            {
+                                "type": "objectField",
+                                "attrs": {
+                                    "field": "codigo"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": ", cuenta con licencia de funcionamiento para el giro "
+                            },
+                            {
+                                "type": "objectField",
+                                "attrs": {
+                                    "field": "giro"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "."
+                            }
+                        ]
+                    },
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Área autorizada: "
+                            },
+                            {
+                                "type": "objectField",
+                                "attrs": {
+                                    "field": "area_local"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": " m²."
+                            }
+                        ]
+                    },
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Emitido el "
+                            },
+                            {
+                                "type": "platformValue",
+                                "attrs": {
+                                    "value": "today"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": ". Documento de demostración sin validez legal."
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "automations": [
+        {
+            "objectName": "licencia",
+            "name": "certificar-aprobada",
+            "label": "Emitir certificado al aprobar",
+            "enabled": true,
+            "definition": {
+                "trigger": {
+                    "type": "STATE_ENTERED",
+                    "state": "aprobada"
+                },
+                "conditions": [],
+                "actions": [
+                    {
+                        "type": "GENERATE_DOCUMENT",
+                        "documentType": "certificado"
+                    },
+                    {
+                        "type": "UPDATE_FIELD",
+                        "field": "resultado",
+                        "value": "Aprobada el {{today}}"
+                    }
+                ]
+            }
+        },
+        {
+            "objectName": "licencia",
+            "name": "avisar-revision",
+            "label": "Avisar a revisores",
+            "enabled": true,
+            "definition": {
+                "trigger": {
+                    "type": "STATE_ENTERED",
+                    "state": "en_revision"
+                },
+                "conditions": [],
+                "actions": [
+                    {
+                        "type": "NOTIFY",
+                        "to": "role:REVISOR",
+                        "kind": "INFO",
+                        "title": "Licencia {{codigo}} pendiente de revisión",
+                        "body": "{{razon_social}} espera revisión técnica."
+                    }
+                ]
+            }
+        }
+    ],
+    "views": [
+        {
+            "objectName": "licencia",
+            "name": "bandeja",
+            "label": "Bandeja de licencias",
+            "isDefault": true,
+            "definition": {
+                "columns": [
+                    "codigo",
+                    "razon_social",
+                    "giro",
+                    "area_local",
+                    "fecha_solicitud",
+                    "resultado"
+                ],
+                "filters": {},
+                "sort": {
+                    "field": "codigo",
+                    "direction": "ASC"
+                },
+                "pageSize": 25
+            }
+        },
+        {
+            "objectName": "licencia",
+            "name": "restaurantes",
+            "label": "Restaurantes",
+            "isDefault": false,
+            "definition": {
+                "columns": [
+                    "codigo",
+                    "razon_social",
+                    "area_local",
+                    "fecha_solicitud"
+                ],
+                "filters": {
+                    "giro": "RESTAURANTE"
+                },
+                "sort": {
+                    "field": "fecha_solicitud",
+                    "direction": "DESC"
+                },
+                "pageSize": 25
+            }
+        },
+        {
+            "objectName": "predio",
+            "name": "comerciales",
+            "label": "Predios comerciales",
+            "isDefault": false,
+            "definition": {
+                "columns": [
+                    "codigo",
+                    "direccion",
+                    "area",
+                    "valor_autovaluo"
+                ],
+                "filters": {
+                    "uso": "COMERCIAL"
+                },
+                "sort": {
+                    "field": "codigo",
+                    "direction": "ASC"
+                },
+                "pageSize": 25
+            }
+        }
+    ],
+    "forms": [
+        {
+            "objectName": "licencia",
+            "name": "solicitud",
+            "label": "Solicitud de licencia",
+            "definition": {
+                "sections": [
+                    {
+                        "title": "Identificación",
+                        "fields": [
+                            "codigo",
+                            "razon_social",
+                            "giro",
+                            "solicitante",
+                            "predio"
+                        ]
+                    },
+                    {
+                        "title": "Local",
+                        "fields": [
+                            "area_local",
+                            "fecha_solicitud",
+                            "fecha_inspeccion"
+                        ]
+                    },
+                    {
+                        "title": "Evaluación",
+                        "fields": [
+                            "observaciones",
+                            "resultado"
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "pages": [
+        {
+            "name": "licencia-detalle",
+            "label": "Licencia",
+            "objectName": "licencia",
+            "kind": "RECORD_DETAIL",
+            "template": "main-and-right-sidebar",
+            "definition": {
+                "page": {
+                    "type": "PAGE",
+                    "children": [
+                        {
+                            "type": "REGION",
+                            "region": "MAIN",
+                            "children": [
+                                {
+                                    "type": "TABS",
+                                    "children": [
+                                        {
+                                            "type": "TAB",
+                                            "title": "Solicitud",
+                                            "key": "SOLICITUD",
+                                            "children": [
+                                                {
+                                                    "type": "FORM",
+                                                    "form": "solicitud"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "type": "TAB",
+                                            "title": "Predio y solicitante",
+                                            "key": "RELACIONES",
+                                            "children": [
+                                                {
+                                                    "type": "RELATED_LIST",
+                                                    "title": "Predio",
+                                                    "relationship": "licencia_predio"
+                                                },
+                                                {
+                                                    "type": "RELATED_LIST",
+                                                    "title": "Solicitante",
+                                                    "relationship": "licencia_solicitante"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "type": "TAB",
+                                            "title": "Historial",
+                                            "key": "HISTORIAL",
+                                            "children": [
+                                                {
+                                                    "type": "HISTORY"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "REGION",
+                            "region": "RIGHT",
+                            "children": [
+                                {
+                                    "type": "WORKFLOW",
+                                    "title": "Estado del trámite"
+                                },
+                                {
+                                    "type": "TEXT",
+                                    "content": "Toda modificación de una licencia exige indicar el motivo, que queda registrado en el historial."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "notifications": [
+        {
+            "kind": "INFO",
+            "title": "Horario de atención de la Subgerencia de Licencias",
+            "body": "Atención al público de lunes a viernes, de 8:30 a 16:30.",
+            "audience": [
+                {
+                    "type": "ALL"
+                }
+            ]
+        }
+    ],
+    "records": {
+        "contribuyentes": [
+            {
+                "codigo": "C-0001",
+                "nombre": "Ana Cáceres Castillo",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "53470582",
+                "email": "ana.caceres.castillo@correo.example",
+                "telefono": "919605159",
+                "direccion": "Av. El Sol 865, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0002",
+                "nombre": "Pedro Torres Paredes",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "76581643",
+                "email": "pedro.torres.paredes@correo.example",
+                "telefono": "902577483",
+                "direccion": "Av. Los Próceres 193, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0003",
+                "nombre": "Comercial Andina S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20198737142",
+                "email": "comercial.andina.s.a.c@correo.example",
+                "telefono": "958476538",
+                "direccion": "Jr. Las Begonias 561, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0004",
+                "nombre": "José Flores Paredes",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "39768829",
+                "email": "jose.flores.paredes@correo.example",
+                "telefono": "976430319",
+                "direccion": "Jr. Las Begonias 330, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0005",
+                "nombre": "Sofía Mamani Vargas",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "49276830",
+                "email": "sofia.mamani.vargas@correo.example",
+                "telefono": "988196682",
+                "direccion": "Calle Las Gardenias 359, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0006",
+                "nombre": "Inversiones Rímac S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20588030075",
+                "email": "inversiones.rimac.s.a.c@correo.example",
+                "telefono": "946024059",
+                "direccion": "Jr. Las Begonias 434, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0007",
+                "nombre": "María Quispe Chávez",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "63440664",
+                "email": "maria.quispe.chavez@correo.example",
+                "telefono": "975292336",
+                "direccion": "Av. Primavera 635, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0008",
+                "nombre": "Lucía Salazar Huamán",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "91261268",
+                "email": "lucia.salazar.huaman@correo.example",
+                "telefono": "986069130",
+                "direccion": "Calle Las Gardenias 696, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0009",
+                "nombre": "Servicios Pachacútec S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20712579845",
+                "email": "servicios.pachacutec.s.a@correo.example",
+                "telefono": "951383995",
+                "direccion": "Av. Primavera 528, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0010",
+                "nombre": "Jorge Rojas Cáceres",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "13302271",
+                "email": "jorge.rojas.caceres@correo.example",
+                "telefono": "950711371",
+                "direccion": "Av. Primavera 458, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0011",
+                "nombre": "Sofía Torres Vargas",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "92784996",
+                "email": "sofia.torres.vargas@correo.example",
+                "telefono": "916509497",
+                "direccion": "Av. Los Próceres 882, Distrito Demo",
+                "activo": false
+            },
+            {
+                "codigo": "C-0012",
+                "nombre": "Distribuidora Los Olivos S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20214096236",
+                "email": "distribuidora.los.olivos@correo.example",
+                "telefono": "963973882",
+                "direccion": "Av. Primavera 436, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0013",
+                "nombre": "Miguel Salazar Salazar",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "90530009",
+                "email": "miguel.salazar.salazar@correo.example",
+                "telefono": "994015895",
+                "direccion": "Jr. Huallaga 706, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0014",
+                "nombre": "Elena Vargas Salazar",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "50338974",
+                "email": "elena.vargas.salazar@correo.example",
+                "telefono": "990082418",
+                "direccion": "Av. El Sol 210, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0015",
+                "nombre": "Grupo Miraflores S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20113177719",
+                "email": "grupo.miraflores.s.a.c@correo.example",
+                "telefono": "977424244",
+                "direccion": "Calle Las Gardenias 127, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0016",
+                "nombre": "Teresa Flores Vargas",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "54042236",
+                "email": "teresa.flores.vargas@correo.example",
+                "telefono": "931307053",
+                "direccion": "Av. El Sol 110, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0017",
+                "nombre": "Carmen Vargas Huamán",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "14217143",
+                "email": "carmen.vargas.huaman@correo.example",
+                "telefono": "960644310",
+                "direccion": "Jr. Ica 833, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0018",
+                "nombre": "Textiles del Sur S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20612908744",
+                "email": "textiles.del.sur.s.a.c@correo.example",
+                "telefono": "910430526",
+                "direccion": "Calle Las Gardenias 851, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0019",
+                "nombre": "Ana Cáceres Torres",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "34362300",
+                "email": "ana.caceres.torres@correo.example",
+                "telefono": "970351778",
+                "direccion": "Av. Primavera 958, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0020",
+                "nombre": "Jorge Chávez Ramos",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "65345762",
+                "email": "jorge.chavez.ramos@correo.example",
+                "telefono": "923794305",
+                "direccion": "Calle Las Gardenias 392, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0021",
+                "nombre": "Agroindustrias Chancay S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20149039149",
+                "email": "agroindustrias.chancay.s@correo.example",
+                "telefono": "948570039",
+                "direccion": "Av. Primavera 337, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0022",
+                "nombre": "Jorge Paredes Mamani",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "14078129",
+                "email": "jorge.paredes.mamani@correo.example",
+                "telefono": "973623900",
+                "direccion": "Jr. Las Begonias 394, Distrito Demo",
+                "activo": false
+            },
+            {
+                "codigo": "C-0023",
+                "nombre": "Lucía Castillo Cáceres",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "65782490",
+                "email": "lucia.castillo.caceres@correo.example",
+                "telefono": "975600492",
+                "direccion": "Av. Los Próceres 830, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0024",
+                "nombre": "Ferretería El Progreso S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20508010339",
+                "email": "ferreteria.el.progreso.s@correo.example",
+                "telefono": "924149560",
+                "direccion": "Av. Primavera 680, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0025",
+                "nombre": "Luis Medina Flores",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "76568545",
+                "email": "luis.medina.flores@correo.example",
+                "telefono": "925641834",
+                "direccion": "Av. Primavera 857, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0026",
+                "nombre": "Raúl Rojas Paredes",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "48322125",
+                "email": "raul.rojas.paredes@correo.example",
+                "telefono": "923651563",
+                "direccion": "Av. El Sol 376, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0027",
+                "nombre": "Botica Santa Rosa S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20764438533",
+                "email": "botica.santa.rosa.s.a.c@correo.example",
+                "telefono": "977216433",
+                "direccion": "Av. Los Próceres 436, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0028",
+                "nombre": "María Quispe Salazar",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "99179682",
+                "email": "maria.quispe.salazar@correo.example",
+                "telefono": "949009322",
+                "direccion": "Av. Los Próceres 784, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0029",
+                "nombre": "Víctor Chávez Cáceres",
+                "tipo": "PERSONA_NATURAL",
+                "documento": "60959642",
+                "email": "victor.chavez.caceres@correo.example",
+                "telefono": "954207550",
+                "direccion": "Jr. Huallaga 765, Distrito Demo",
+                "activo": true
+            },
+            {
+                "codigo": "C-0030",
+                "nombre": "Restaurante La Huerta S.A.C.",
+                "tipo": "PERSONA_JURIDICA",
+                "documento": "20175875079",
+                "email": "restaurante.la.huerta.s.@correo.example",
+                "telefono": "943254604",
+                "direccion": "Calle Las Gardenias 395, Distrito Demo",
+                "activo": true
+            }
+        ],
+        "predios": [
+            {
+                "codigo": "P-0001",
+                "direccion": "Calle Los Pinos 749, Distrito Demo",
+                "area": 517.43,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 214470,
+                "titular": "C-0008",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.053873,
+                                -12.069435
+                            ],
+                            [
+                                -77.052051,
+                                -12.069435
+                            ],
+                            [
+                                -77.052051,
+                                -12.067613
+                            ],
+                            [
+                                -77.053873,
+                                -12.067613
+                            ],
+                            [
+                                -77.053873,
+                                -12.069435
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0002",
+                "direccion": "Jr. Huallaga 439, Distrito Demo",
+                "area": 746.24,
+                "uso": "INDUSTRIAL",
+                "valor_autovaluo": 832299,
+                "titular": "C-0015",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.047293,
+                                -12.069888
+                            ],
+                            [
+                                -77.04593,
+                                -12.069888
+                            ],
+                            [
+                                -77.04593,
+                                -12.068525
+                            ],
+                            [
+                                -77.047293,
+                                -12.068525
+                            ],
+                            [
+                                -77.047293,
+                                -12.069888
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0003",
+                "direccion": "Calle Los Pinos 357, Distrito Demo",
+                "area": 1354.36,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 1060325,
+                "titular": "C-0022",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.041495,
+                                -12.069005
+                            ],
+                            [
+                                -77.039557,
+                                -12.069005
+                            ],
+                            [
+                                -77.039557,
+                                -12.067068
+                            ],
+                            [
+                                -77.041495,
+                                -12.067068
+                            ],
+                            [
+                                -77.041495,
+                                -12.069005
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0004",
+                "direccion": "Jr. Ica 102, Distrito Demo",
+                "area": 964.09,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 580952,
+                "titular": "C-0029",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.035286,
+                                -12.06908
+                            ],
+                            [
+                                -77.033408,
+                                -12.06908
+                            ],
+                            [
+                                -77.033408,
+                                -12.067203
+                            ],
+                            [
+                                -77.035286,
+                                -12.067203
+                            ],
+                            [
+                                -77.035286,
+                                -12.06908
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0005",
+                "direccion": "Jr. Huallaga 605, Distrito Demo",
+                "area": 507.75,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 535148,
+                "titular": "C-0006",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.059278,
+                                -12.063937
+                            ],
+                            [
+                                -77.057678,
+                                -12.063937
+                            ],
+                            [
+                                -77.057678,
+                                -12.062337
+                            ],
+                            [
+                                -77.059278,
+                                -12.062337
+                            ],
+                            [
+                                -77.059278,
+                                -12.063937
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0006",
+                "direccion": "Calle Las Gardenias 643, Distrito Demo",
+                "area": 1770.61,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 1328326,
+                "titular": "C-0013",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.053141,
+                                -12.063653
+                            ],
+                            [
+                                -77.051691,
+                                -12.063653
+                            ],
+                            [
+                                -77.051691,
+                                -12.062203
+                            ],
+                            [
+                                -77.053141,
+                                -12.062203
+                            ],
+                            [
+                                -77.053141,
+                                -12.063653
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0007",
+                "direccion": "Av. El Sol 699, Distrito Demo",
+                "area": 1772.56,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 1137952,
+                "titular": "C-0020",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.047202,
+                                -12.063289
+                            ],
+                            [
+                                -77.045682,
+                                -12.063289
+                            ],
+                            [
+                                -77.045682,
+                                -12.061769
+                            ],
+                            [
+                                -77.047202,
+                                -12.061769
+                            ],
+                            [
+                                -77.047202,
+                                -12.063289
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0008",
+                "direccion": "Jr. Las Begonias 298, Distrito Demo",
+                "area": 960.08,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 361546,
+                "titular": "C-0027",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.041975,
+                                -12.063179
+                            ],
+                            [
+                                -77.040587,
+                                -12.063179
+                            ],
+                            [
+                                -77.040587,
+                                -12.061791
+                            ],
+                            [
+                                -77.041975,
+                                -12.061791
+                            ],
+                            [
+                                -77.041975,
+                                -12.063179
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0009",
+                "direccion": "Jr. Huallaga 967, Distrito Demo",
+                "area": 117.55,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 43085,
+                "titular": "C-0004",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.035438,
+                                -12.063454
+                            ],
+                            [
+                                -77.034162,
+                                -12.063454
+                            ],
+                            [
+                                -77.034162,
+                                -12.062178
+                            ],
+                            [
+                                -77.035438,
+                                -12.062178
+                            ],
+                            [
+                                -77.035438,
+                                -12.063454
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0010",
+                "direccion": "Calle Los Pinos 762, Distrito Demo",
+                "area": 742.57,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 270433,
+                "titular": "C-0011",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.059588,
+                                -12.057979
+                            ],
+                            [
+                                -77.058266,
+                                -12.057979
+                            ],
+                            [
+                                -77.058266,
+                                -12.056657
+                            ],
+                            [
+                                -77.059588,
+                                -12.056657
+                            ],
+                            [
+                                -77.059588,
+                                -12.057979
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0011",
+                "direccion": "Av. Los Próceres 684, Distrito Demo",
+                "area": 1516.68,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 1352004,
+                "titular": "C-0018",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.053032,
+                                -12.057493
+                            ],
+                            [
+                                -77.051282,
+                                -12.057493
+                            ],
+                            [
+                                -77.051282,
+                                -12.055743
+                            ],
+                            [
+                                -77.053032,
+                                -12.055743
+                            ],
+                            [
+                                -77.053032,
+                                -12.057493
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0012",
+                "direccion": "Jr. Las Begonias 621, Distrito Demo",
+                "area": 943.27,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 631574,
+                "titular": "C-0025",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.047307,
+                                -12.057598
+                            ],
+                            [
+                                -77.045806,
+                                -12.057598
+                            ],
+                            [
+                                -77.045806,
+                                -12.056097
+                            ],
+                            [
+                                -77.047307,
+                                -12.056097
+                            ],
+                            [
+                                -77.047307,
+                                -12.057598
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0013",
+                "direccion": "Jr. Ica 667, Distrito Demo",
+                "area": 535.14,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 264870,
+                "titular": "C-0002",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.041288,
+                                -12.057783
+                            ],
+                            [
+                                -77.039685,
+                                -12.057783
+                            ],
+                            [
+                                -77.039685,
+                                -12.05618
+                            ],
+                            [
+                                -77.041288,
+                                -12.05618
+                            ],
+                            [
+                                -77.041288,
+                                -12.057783
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0014",
+                "direccion": "Calle Las Gardenias 530, Distrito Demo",
+                "area": 781.83,
+                "uso": "INDUSTRIAL",
+                "valor_autovaluo": 778204,
+                "titular": "C-0009",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.035948,
+                                -12.057261
+                            ],
+                            [
+                                -77.034508,
+                                -12.057261
+                            ],
+                            [
+                                -77.034508,
+                                -12.05582
+                            ],
+                            [
+                                -77.035948,
+                                -12.05582
+                            ],
+                            [
+                                -77.035948,
+                                -12.057261
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0015",
+                "direccion": "Av. Los Próceres 735, Distrito Demo",
+                "area": 1972.1,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 1491161,
+                "titular": "C-0016",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.059439,
+                                -12.051462
+                            ],
+                            [
+                                -77.057648,
+                                -12.051462
+                            ],
+                            [
+                                -77.057648,
+                                -12.049671
+                            ],
+                            [
+                                -77.059439,
+                                -12.049671
+                            ],
+                            [
+                                -77.059439,
+                                -12.051462
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0016",
+                "direccion": "Av. El Sol 726, Distrito Demo",
+                "area": 292.98,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 232678,
+                "titular": "C-0023",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.053827,
+                                -12.051729
+                            ],
+                            [
+                                -77.052073,
+                                -12.051729
+                            ],
+                            [
+                                -77.052073,
+                                -12.049976
+                            ],
+                            [
+                                -77.053827,
+                                -12.049976
+                            ],
+                            [
+                                -77.053827,
+                                -12.051729
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0017",
+                "direccion": "Calle Las Gardenias 853, Distrito Demo",
+                "area": 1290.66,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 1033290,
+                "titular": "C-0030",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.047984,
+                                -12.051121
+                            ],
+                            [
+                                -77.046557,
+                                -12.051121
+                            ],
+                            [
+                                -77.046557,
+                                -12.049694
+                            ],
+                            [
+                                -77.047984,
+                                -12.049694
+                            ],
+                            [
+                                -77.047984,
+                                -12.051121
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0018",
+                "direccion": "Jr. Huallaga 718, Distrito Demo",
+                "area": 332.08,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 118655,
+                "titular": "C-0007",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.041524,
+                                -12.05128
+                            ],
+                            [
+                                -77.039837,
+                                -12.05128
+                            ],
+                            [
+                                -77.039837,
+                                -12.049593
+                            ],
+                            [
+                                -77.041524,
+                                -12.049593
+                            ],
+                            [
+                                -77.041524,
+                                -12.05128
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0019",
+                "direccion": "Calle Las Gardenias 401, Distrito Demo",
+                "area": 534.78,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 459436,
+                "titular": "C-0014",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.035782,
+                                -12.05192
+                            ],
+                            [
+                                -77.03383,
+                                -12.05192
+                            ],
+                            [
+                                -77.03383,
+                                -12.049968
+                            ],
+                            [
+                                -77.035782,
+                                -12.049968
+                            ],
+                            [
+                                -77.035782,
+                                -12.05192
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0020",
+                "direccion": "Calle Los Pinos 398, Distrito Demo",
+                "area": 443.38,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 181879,
+                "titular": "C-0021",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.059855,
+                                -12.045786
+                            ],
+                            [
+                                -77.058313,
+                                -12.045786
+                            ],
+                            [
+                                -77.058313,
+                                -12.044244
+                            ],
+                            [
+                                -77.059855,
+                                -12.044244
+                            ],
+                            [
+                                -77.059855,
+                                -12.045786
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0021",
+                "direccion": "Av. El Sol 604, Distrito Demo",
+                "area": 1930.83,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 821033,
+                "titular": "C-0028",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.053889,
+                                -12.04512
+                            ],
+                            [
+                                -77.05236,
+                                -12.04512
+                            ],
+                            [
+                                -77.05236,
+                                -12.043591
+                            ],
+                            [
+                                -77.053889,
+                                -12.043591
+                            ],
+                            [
+                                -77.053889,
+                                -12.04512
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0022",
+                "direccion": "Jr. Huallaga 522, Distrito Demo",
+                "area": 1279.64,
+                "uso": "RESIDENCIAL",
+                "valor_autovaluo": 1141856,
+                "titular": "C-0005",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.047793,
+                                -12.045487
+                            ],
+                            [
+                                -77.046187,
+                                -12.045487
+                            ],
+                            [
+                                -77.046187,
+                                -12.043881
+                            ],
+                            [
+                                -77.047793,
+                                -12.043881
+                            ],
+                            [
+                                -77.047793,
+                                -12.045487
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0023",
+                "direccion": "Jr. Huallaga 590, Distrito Demo",
+                "area": 1178.95,
+                "uso": "INDUSTRIAL",
+                "valor_autovaluo": 1135897,
+                "titular": "C-0012",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.041566,
+                                -12.045899
+                            ],
+                            [
+                                -77.03992,
+                                -12.045899
+                            ],
+                            [
+                                -77.03992,
+                                -12.044253
+                            ],
+                            [
+                                -77.041566,
+                                -12.044253
+                            ],
+                            [
+                                -77.041566,
+                                -12.045899
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0024",
+                "direccion": "Av. Los Próceres 650, Distrito Demo",
+                "area": 597.14,
+                "uso": "COMERCIAL",
+                "valor_autovaluo": 270557,
+                "titular": "C-0019",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.035787,
+                                -12.045816
+                            ],
+                            [
+                                -77.033996,
+                                -12.045816
+                            ],
+                            [
+                                -77.033996,
+                                -12.044025
+                            ],
+                            [
+                                -77.035787,
+                                -12.044025
+                            ],
+                            [
+                                -77.035787,
+                                -12.045816
+                            ]
+                        ]
+                    ]
+                }
+            },
+            {
+                "codigo": "P-0025",
+                "direccion": "Calle Las Gardenias 406, Distrito Demo",
+                "area": 501.33,
+                "uso": "INDUSTRIAL",
+                "valor_autovaluo": 361940,
+                "titular": "C-0026",
+                "lote": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                -77.059844,
+                                -12.039415
+                            ],
+                            [
+                                -77.05785,
+                                -12.039415
+                            ],
+                            [
+                                -77.05785,
+                                -12.037421
+                            ],
+                            [
+                                -77.059844,
+                                -12.037421
+                            ],
+                            [
+                                -77.059844,
+                                -12.039415
+                            ]
+                        ]
+                    ]
+                }
+            }
+        ],
+        "licencias": [
+            {
+                "codigo": "LF-2026-0001",
+                "razon_social": "Bodega Mamani 1",
+                "giro": "RESTAURANTE",
+                "area_local": 228.3,
+                "fecha_solicitud": "2026-07-04",
+                "solicitante": "C-0012",
+                "predio": "P-0004",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0002",
+                "razon_social": "Bodega Vargas 2",
+                "giro": "FARMACIA",
+                "area_local": 196.4,
+                "fecha_solicitud": "2026-07-07",
+                "solicitante": "C-0023",
+                "predio": "P-0007",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0003",
+                "razon_social": "Estudio Chávez 3",
+                "giro": "FERRETERIA",
+                "area_local": 53,
+                "fecha_solicitud": "2026-07-10",
+                "solicitante": "C-0004",
+                "predio": "P-0010",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0004",
+                "razon_social": "Taller Castillo 4",
+                "giro": "OFICINA",
+                "area_local": 264.6,
+                "fecha_solicitud": "2026-07-13",
+                "solicitante": "C-0015",
+                "predio": "P-0013",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0005",
+                "razon_social": "Restaurante Huamán 5",
+                "giro": "TALLER",
+                "area_local": 53.5,
+                "fecha_solicitud": "2026-07-16",
+                "solicitante": "C-0026",
+                "predio": "P-0016",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0006",
+                "razon_social": "Restaurante Vargas 6",
+                "giro": "BODEGA",
+                "area_local": 185.5,
+                "fecha_solicitud": "2026-07-19",
+                "solicitante": "C-0007",
+                "predio": "P-0019",
+                "observaciones": null,
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0007",
+                "razon_social": "Taller Rojas 7",
+                "giro": "RESTAURANTE",
+                "area_local": 107.2,
+                "fecha_solicitud": "2026-07-22",
+                "solicitante": "C-0018",
+                "predio": "P-0022",
+                "observaciones": null,
+                "estado": "rechazada"
+            },
+            {
+                "codigo": "LF-2026-0008",
+                "razon_social": "Estudio Castillo 8",
+                "giro": "FARMACIA",
+                "area_local": 260.3,
+                "fecha_solicitud": "2026-07-25",
+                "solicitante": "C-0029",
+                "predio": "P-0025",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0009",
+                "razon_social": "Estudio Quispe 9",
+                "giro": "FERRETERIA",
+                "area_local": 151.7,
+                "fecha_solicitud": "2026-07-01",
+                "solicitante": "C-0010",
+                "predio": "P-0003",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0010",
+                "razon_social": "Taller Flores 10",
+                "giro": "OFICINA",
+                "area_local": 281.1,
+                "fecha_solicitud": "2026-07-04",
+                "solicitante": "C-0021",
+                "predio": "P-0006",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0011",
+                "razon_social": "Estudio Mamani 11",
+                "giro": "TALLER",
+                "area_local": 100.2,
+                "fecha_solicitud": "2026-07-07",
+                "solicitante": "C-0002",
+                "predio": "P-0009",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0012",
+                "razon_social": "Botica Paredes 12",
+                "giro": "BODEGA",
+                "area_local": 105.2,
+                "fecha_solicitud": "2026-07-10",
+                "solicitante": "C-0013",
+                "predio": "P-0012",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0013",
+                "razon_social": "Botica Vargas 13",
+                "giro": "RESTAURANTE",
+                "area_local": 156.1,
+                "fecha_solicitud": "2026-08-13",
+                "solicitante": "C-0024",
+                "predio": "P-0015",
+                "observaciones": null,
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0014",
+                "razon_social": "Taller Castillo 14",
+                "giro": "FARMACIA",
+                "area_local": 221.7,
+                "fecha_solicitud": "2026-08-16",
+                "solicitante": "C-0005",
+                "predio": "P-0018",
+                "observaciones": null,
+                "estado": "rechazada"
+            },
+            {
+                "codigo": "LF-2026-0015",
+                "razon_social": "Restaurante Torres 15",
+                "giro": "FERRETERIA",
+                "area_local": 208.2,
+                "fecha_solicitud": "2026-08-19",
+                "solicitante": "C-0016",
+                "predio": "P-0021",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0016",
+                "razon_social": "Taller Castillo 16",
+                "giro": "OFICINA",
+                "area_local": 170.6,
+                "fecha_solicitud": "2026-08-22",
+                "solicitante": "C-0027",
+                "predio": "P-0024",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0017",
+                "razon_social": "Taller Ramos 17",
+                "giro": "TALLER",
+                "area_local": 245.3,
+                "fecha_solicitud": "2026-08-25",
+                "solicitante": "C-0008",
+                "predio": "P-0002",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0018",
+                "razon_social": "Estudio Torres 18",
+                "giro": "BODEGA",
+                "area_local": 260.4,
+                "fecha_solicitud": "2026-08-01",
+                "solicitante": "C-0019",
+                "predio": "P-0005",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0019",
+                "razon_social": "Restaurante Torres 19",
+                "giro": "RESTAURANTE",
+                "area_local": 208.7,
+                "fecha_solicitud": "2026-08-04",
+                "solicitante": "C-0030",
+                "predio": "P-0008",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0020",
+                "razon_social": "Estudio Medina 20",
+                "giro": "FARMACIA",
+                "area_local": 158.5,
+                "fecha_solicitud": "2026-08-07",
+                "solicitante": "C-0011",
+                "predio": "P-0011",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0021",
+                "razon_social": "Taller Chávez 21",
+                "giro": "FERRETERIA",
+                "area_local": 21.9,
+                "fecha_solicitud": "2026-08-10",
+                "solicitante": "C-0022",
+                "predio": "P-0014",
+                "observaciones": null,
+                "estado": "rechazada"
+            },
+            {
+                "codigo": "LF-2026-0022",
+                "razon_social": "Restaurante Ramos 22",
+                "giro": "OFICINA",
+                "area_local": 105.8,
+                "fecha_solicitud": "2026-08-13",
+                "solicitante": "C-0003",
+                "predio": "P-0017",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0023",
+                "razon_social": "Botica Salazar 23",
+                "giro": "TALLER",
+                "area_local": 284.7,
+                "fecha_solicitud": "2026-08-16",
+                "solicitante": "C-0014",
+                "predio": "P-0020",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0024",
+                "razon_social": "Restaurante Rojas 24",
+                "giro": "BODEGA",
+                "area_local": 76.6,
+                "fecha_solicitud": "2026-08-19",
+                "solicitante": "C-0025",
+                "predio": "P-0023",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0025",
+                "razon_social": "Botica Medina 25",
+                "giro": "RESTAURANTE",
+                "area_local": 104.7,
+                "fecha_solicitud": "2026-09-22",
+                "solicitante": "C-0006",
+                "predio": "P-0001",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0026",
+                "razon_social": "Restaurante Quispe 26",
+                "giro": "FARMACIA",
+                "area_local": 107.5,
+                "fecha_solicitud": "2026-09-25",
+                "solicitante": "C-0017",
+                "predio": "P-0004",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0027",
+                "razon_social": "Botica Chávez 27",
+                "giro": "FERRETERIA",
+                "area_local": 252.6,
+                "fecha_solicitud": "2026-09-01",
+                "solicitante": "C-0028",
+                "predio": "P-0007",
+                "observaciones": null,
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0028",
+                "razon_social": "Estudio Paredes 28",
+                "giro": "OFICINA",
+                "area_local": 27.1,
+                "fecha_solicitud": "2026-09-04",
+                "solicitante": "C-0009",
+                "predio": "P-0010",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "rechazada"
+            },
+            {
+                "codigo": "LF-2026-0029",
+                "razon_social": "Restaurante Cáceres 29",
+                "giro": "TALLER",
+                "area_local": 210.7,
+                "fecha_solicitud": "2026-09-07",
+                "solicitante": "C-0020",
+                "predio": "P-0013",
+                "observaciones": null,
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0030",
+                "razon_social": "Restaurante Ramos 30",
+                "giro": "BODEGA",
+                "area_local": 120.1,
+                "fecha_solicitud": "2026-09-10",
+                "solicitante": "C-0001",
+                "predio": "P-0016",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0031",
+                "razon_social": "Ferretería Flores 31",
+                "giro": "RESTAURANTE",
+                "area_local": 228.7,
+                "fecha_solicitud": "2026-09-13",
+                "solicitante": "C-0012",
+                "predio": "P-0019",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0032",
+                "razon_social": "Botica Vargas 32",
+                "giro": "FARMACIA",
+                "area_local": 218.9,
+                "fecha_solicitud": "2026-09-16",
+                "solicitante": "C-0023",
+                "predio": "P-0022",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0033",
+                "razon_social": "Ferretería Medina 33",
+                "giro": "FERRETERIA",
+                "area_local": 155.7,
+                "fecha_solicitud": "2026-09-19",
+                "solicitante": "C-0004",
+                "predio": "P-0025",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0034",
+                "razon_social": "Ferretería Vargas 34",
+                "giro": "OFICINA",
+                "area_local": 288.8,
+                "fecha_solicitud": "2026-09-22",
+                "solicitante": "C-0015",
+                "predio": "P-0003",
+                "observaciones": null,
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0035",
+                "razon_social": "Taller Salazar 35",
+                "giro": "TALLER",
+                "area_local": 119.8,
+                "fecha_solicitud": "2026-09-25",
+                "solicitante": "C-0026",
+                "predio": "P-0006",
+                "observaciones": null,
+                "estado": "rechazada"
+            },
+            {
+                "codigo": "LF-2026-0036",
+                "razon_social": "Estudio Vargas 36",
+                "giro": "BODEGA",
+                "area_local": 193.8,
+                "fecha_solicitud": "2026-09-01",
+                "solicitante": "C-0007",
+                "predio": "P-0009",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "en_revision"
+            },
+            {
+                "codigo": "LF-2026-0037",
+                "razon_social": "Estudio Ramos 37",
+                "giro": "RESTAURANTE",
+                "area_local": 59.2,
+                "fecha_solicitud": "2026-10-04",
+                "solicitante": "C-0018",
+                "predio": "P-0012",
+                "observaciones": null,
+                "estado": "aprobada"
+            },
+            {
+                "codigo": "LF-2026-0038",
+                "razon_social": "Estudio Flores 38",
+                "giro": "FARMACIA",
+                "area_local": 179.4,
+                "fecha_solicitud": "2026-10-07",
+                "solicitante": "C-0029",
+                "predio": "P-0015",
+                "observaciones": null,
+                "estado": "borrador"
+            },
+            {
+                "codigo": "LF-2026-0039",
+                "razon_social": "Ferretería Mamani 39",
+                "giro": "FERRETERIA",
+                "area_local": 73.3,
+                "fecha_solicitud": "2026-10-10",
+                "solicitante": "C-0010",
+                "predio": "P-0018",
+                "observaciones": null,
+                "estado": "observada"
+            },
+            {
+                "codigo": "LF-2026-0040",
+                "razon_social": "Taller Vargas 40",
+                "giro": "OFICINA",
+                "area_local": 229.2,
+                "fecha_solicitud": "2026-10-13",
+                "solicitante": "C-0021",
+                "predio": "P-0021",
+                "observaciones": "Presentar plano de distribución actualizado y certificado de defensa civil.",
+                "estado": "borrador"
+            }
+        ]
+    }
+}

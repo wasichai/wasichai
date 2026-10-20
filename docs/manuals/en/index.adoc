@@ -1,0 +1,24 @@
+= Wasichai documentation
+:description: User, administrator and system manuals for Wasichai.
+include::../attributes.adoc[]
+include::locale.adoc[]
+:doctype: article
+:sectnums!:
+:toc!:
+:nofooter:
+
+Version {product-version} · {doc-edition-label} {edition-date} · link:../es/index.html[Español]
+
+[.manuals-grid]
+* *link:user-manual.html[User manual]* +
+  Sign in, find and record information, move cases forward, issue documents and look at maps. +
+  link:../pdf/wasichai-user-manual-en.pdf[PDF]
+* *link:admin-manual.html[Administrator manual]* +
+  Data model, users and permissions, configurable screens, workflows, automation, audit. +
+  link:../pdf/wasichai-admin-manual-en.pdf[PDF]
+* *link:system-manual.html[System manual]* +
+  Architecture, installation, configuration, security, operation, backups and recovery. +
+  link:../pdf/wasichai-system-manual-en.pdf[PDF]
+
+The development reference (REST API, modules, architecture decisions) is in the repository:
+{repo-url}/docs/api/rest.md[REST API] · {repo-url}/docs/modules/README.md[Modules] · {adr-index}[ADR].

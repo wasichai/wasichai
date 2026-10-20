@@ -1,0 +1,95 @@
+{
+    "artifact": "database/backups/wasichai-demo.sql",
+    "sha256": "b04a299707ef45a5df77fd797c44f37c922e2d83733abacf6208cde1a567aa41",
+    "generatedAt": "2026-10-20T09:42:26+00:00",
+    "source": {
+        "database": "wasichai_demo",
+        "server": "18.6",
+        "postgis": "3.6.4"
+    },
+    "application": {
+        "wasichai": "1.3.0",
+        "app": "full-sample (all starters but agent)",
+        "flywayVersions": {
+            "automation": "2",
+            "core": "18",
+            "core_seed": "1",
+            "documents": "1",
+            "files": "2",
+            "forms": "1",
+            "gis": "1",
+            "notifications": "2",
+            "pages": "1",
+            "views": "1",
+            "workflow": "1"
+        }
+    },
+    "dataset": "database/fixtures/demo-dataset.json, loaded by scripts/seed-demo.mjs",
+    "restore": {
+        "order": [
+            "create an empty database",
+            "psql -v ON_ERROR_STOP=1 -f database/backups/wasichai-demo.sql",
+            "psql -f database/verify.sql"
+        ],
+        "script": "scripts/restore-demo-db.sh",
+        "requires": [
+            "PostgreSQL 18",
+            "PostGIS 3.6 available to CREATE EXTENSION",
+            "a role allowed to create extensions and schemas"
+        ]
+    },
+    "notIncluded": [
+        "WASICHAI_JWT_SECRET (configuration)",
+        "files of the files module's store (the demo uses none)",
+        "GeoServer state"
+    ],
+    "rowCounts": {
+        "app_data.contribuyente__00000000": 30,
+        "app_data.licencia__00000000": 40,
+        "app_data.predio__00000000": 25,
+        "wasichai.audit_log": 215,
+        "wasichai.automation_runs": 54,
+        "wasichai.automations": 2,
+        "wasichai.custom_fields": 25,
+        "wasichai.custom_objects": 3,
+        "wasichai.document_counters": 1,
+        "wasichai.document_types": 1,
+        "wasichai.documents": 11,
+        "wasichai.field_permissions": 2,
+        "wasichai.flyway_history_automation": 3,
+        "wasichai.flyway_history_core": 18,
+        "wasichai.flyway_history_core_seed": 2,
+        "wasichai.flyway_history_documents": 2,
+        "wasichai.flyway_history_files": 3,
+        "wasichai.flyway_history_forms": 2,
+        "wasichai.flyway_history_gis": 2,
+        "wasichai.flyway_history_notifications": 3,
+        "wasichai.flyway_history_pages": 2,
+        "wasichai.flyway_history_views": 2,
+        "wasichai.flyway_history_workflow": 2,
+        "wasichai.forms": 1,
+        "wasichai.idempotency_keys": 0,
+        "wasichai.notification_deliveries": 0,
+        "wasichai.notification_preferences": 0,
+        "wasichai.notification_receipts": 0,
+        "wasichai.notification_rules": 0,
+        "wasichai.notification_source_runs": 0,
+        "wasichai.notification_targets": 33,
+        "wasichai.notifications": 33,
+        "wasichai.object_actions": 0,
+        "wasichai.org_units": 2,
+        "wasichai.organizations": 1,
+        "wasichai.pages": 1,
+        "wasichai.permissions": 20,
+        "wasichai.relationships": 3,
+        "wasichai.roles": 4,
+        "wasichai.service_accounts": 1,
+        "wasichai.stored_files": 0,
+        "wasichai.user_org_units": 3,
+        "wasichai.user_preferences": 0,
+        "wasichai.user_roles": 5,
+        "wasichai.users": 5,
+        "wasichai.views": 3,
+        "wasichai.workflows": 1
+    }
+}

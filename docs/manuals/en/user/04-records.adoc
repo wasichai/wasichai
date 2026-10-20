@@ -1,0 +1,228 @@
+[[user-records]]
+== Working with records
+
+Almost all daily work consists of finding records, looking at them and changing them. This chapter uses the object
+_Licencia de funcionamiento_ (business licence) as its example.
+
+[[user-open-list]]
+=== Opening the record list of an object
+
+.Objective
+See the records of an object.
+
+.Prerequisites
+Read permission (`READ`) on the object.
+
+.Procedure
+. In *Home*, click the card of the object. You can also go to menu:Data[Objects] and click *View records* in the
+  row of the object.
+
+.Expected result
+The list opens (<<user-fig-list>>). The header shows the plural name of the object and its description; at the top
+right, the view selector (if the object has saved views) and *New record*. The table shows 25 records per page,
+unless the view sets another amount, and at the top right the total number of results.
+
+[[user-fig-list]]
+.List of licences with the view "Bandeja de licencias"
+image::screenshots/{lang}/user/03-record-list.png[Table of licences with the columns Expediente, Establecimiento, Giro, Área del local, Fecha de solicitud and Resultado,pdfwidth=100%]
+
+.Special cases
+* Click any row to open the record (<<user-detail>>).
+* The checkboxes in the first column only mark rows: the counter shows how many are marked, but the interface
+  offers no actions on several rows at once.
+* A column that references another record (for example, _Solicitante_) shows the internal identifier of that
+  record, not its name. Open the record to see the link with its code.
+* If the object is marked _append-only_ or _application only_, a notice above the table explains which writes are
+  not available.
+
+[[user-search]]
+=== Searching
+
+.Objective
+Find records that contain a text.
+
+.Procedure
+. Type the text in the *Search* box, above the table.
+
+.Expected result
+The table updates as you type and shows only the records that contain that text in one of their text fields. The
+total number of results changes accordingly (<<user-fig-search>>).
+
+[[user-fig-search]]
+.Search for the text "Restaurante"
+image::screenshots/{lang}/user/04-record-search.png[The list filtered by the text Restaurante,pdfwidth=100%]
+
+.Special cases
+* The search ignores case and finds the text in any position: `rest` finds _Restaurante_.
+* It only searches fields of type text, long text, options, email and URL. It does not search numbers, dates,
+  checkboxes or references.
+* The search is combined with the filter of the active view.
+
+[[user-sort]]
+=== Sorting
+
+.Procedure
+. Click the title of a column. An arrow next to the title shows the order: pointing up, ascending; pointing down,
+  descending.
+. Click the same title again to reverse the order.
+
+[[user-fig-sort]]
+.List sorted by application date
+image::screenshots/{lang}/user/05-record-sort.png[The list sorted in ascending order by Fecha de solicitud,pdfwidth=100%]
+
+.Special cases
+* The order you pick lasts while you are on the screen. The saved view keeps its own.
+* Records with the same value are sorted among themselves in a stable way, so when you change page none is
+  repeated or skipped.
+
+[[user-views]]
+=== Using a saved view
+
+A view is a way of listing prepared by the administrator: it picks the columns, a filter, the order and the page
+size. If the object has views, a selector appears in the header of the list.
+
+.Procedure
+. Open the view selector (top right) and pick a view.
+
+.Expected result
+The table changes its columns, filter and order. In the example, the view *Restaurantes* shows only the licences
+with line of business _RESTAURANTE_, sorted from the most recent application to the oldest (<<user-fig-view>>).
+
+[[user-fig-view]]
+.The view "Restaurantes"
+image::screenshots/{lang}/user/06-record-view.png[The list with the view Restaurantes: seven licences, columns Expediente, Establecimiento, Área del local and Fecha de solicitud,pdfwidth=100%]
+
+NOTE: The filters of a view are exact equality (for example, _Giro = RESTAURANTE_). The interface offers no free
+per-column filters: for other combinations, ask the administrator for a new view or use the search.
+
+[[user-paging]]
+=== Changing page
+
+At the foot of the table there is *Page _n_ of _m_* with the buttons *Previous page* and *Next page*
+(<<user-fig-pager>>). The page size is 25 records, or the one the view sets (up to 200).
+
+[[user-fig-pager]]
+.Foot of the table with the pagination
+image::screenshots/{lang}/user/07-record-pager.png[The last rows of the table and the foot with the text Page 1 of 2 and the previous and next buttons,pdfwidth=100%]
+
+TIP: The interface does not export lists to a file. If you need the data outside the application, ask a technical
+administrator for an extraction through the API (chapter _REST API_ of the _System manual_).
+
+[[user-create]]
+=== Creating a record
+
+.Objective
+Add a new record, for example a licence application.
+
+.Prerequisites
+* Create permission (`CREATE`) on the object.
+* The required data, marked with a red asterisk.
+* If the object asks for a reason, the reason for the creation.
+
+.Procedure
+. In the list of the object, click *New record*.
+. Fill in the fields (<<user-fig-new>>). Reference fields (*Solicitante*, *Predio*) are picked from a drop-down list
+  with the records you can read.
+. If the *Reason* field appears, write why you are creating the record (up to 500 characters).
+. Click *Save*. *Cancel* goes back to the list without saving.
+
+[[user-fig-new]]
+.Creation form of a licence
+image::screenshots/{lang}/user/08-record-new.png[New record form with the fields of the licence, the Reason field and the Save and Cancel buttons,pdfwidth=100%]
+
+.Expected result
+The detail page of the created record opens. If the object has a workflow, the record starts in its initial state
+(in the example, _Borrador_).
+
+.Verification
+The record appears in the list and its history tab shows a *Create* entry with your user and your reason.
+
+.Special cases
+* If a required piece of data is missing, the form is not sent and marks each missing field in red
+  (<<user-fig-validation>>).
+* A field marked _unique_ does not accept a value that another record already has: the server rejects the creation
+  and names the field.
+* A field with a default value that you leave empty is filled with that value on saving.
+* Some automation rules act after saving (for example, they fill in a field). Their effects may take a few seconds
+  to show; reload the page.
+
+[[user-fig-validation]]
+.Required fields not filled in
+image::screenshots/{lang}/user/21-validation-errors.png[The creation form with the fields Expediente, Establecimiento, Giro and Reason marked in red,pdfwidth=100%]
+
+[[user-detail]]
+=== Looking at a record
+
+When you open a record you see its *detail page*. The administrator decides its layout; in the example
+(<<user-fig-detail>>) it has three tabs (*Solicitud*, *Predio y solicitante*, *Historial*) and, on the right, the
+state of the case with the available transitions and a note.
+
+[[user-fig-detail]]
+.Detail page of a licence in review
+image::screenshots/{lang}/user/09-record-detail.png[Detail of the licence with the tabs, the form in the sections Identificación, Local and Evaluación, and the Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar,pdfwidth=100%]
+
+* The header shows the object and the internal identifier of the record; *Back* returns to the list of the object.
+* An object with no configured page shows a generated page with the tabs *Details*, *Related*, *History* and, if it
+  has geometry, *Map*.
+* The *Issued documents* panel may appear below the page (<<user-documents>>).
+* The fields your role cannot read do not appear. Those it can read but not change are shown without being
+  editable.
+
+[[user-edit]]
+=== Changing a record
+
+.Objective
+Correct or complete the data of a record.
+
+.Prerequisites
+Update permission (`UPDATE`) on the object.
+
+.Procedure
+. Open the record.
+. Change the fields in the form of the main tab.
+. If the *Reason* field appears, explain the change.
+. Click *Save*, at the foot of the form.
+
+.Expected result
+The form keeps the saved values and the *Reason* field is emptied. The interface shows no confirmation notice: the
+verification is the history.
+
+.Verification
+In the history tab, the most recent *Update* entry lists each changed field with its previous value and the new
+one, your user and your reason.
+
+.Special cases
+* If your role does not have `UPDATE`, the *Save* button stays visible but the server rejects the change with the
+  message *Missing permission UPDATE* and nothing is saved (<<user-roles>>).
+* A record of an _append-only_ object cannot be changed or deleted, not even by an administrator.
+* If the object is disabled, its records can be read but not created, changed or deleted.
+
+CAUTION: If two people edit the same record at once from the web interface, the last one to save wins: the
+interface does not warn that someone else changed it in the meantime. The history keeps both changes. Before an
+important correction, reload the record.
+
+[[user-delete]]
+=== Deleting a record
+
+.Objective
+Remove a record that must not exist.
+
+.Prerequisites
+Delete permission (`DELETE`) on the object.
+
+.Procedure
+. In the list of the object, click the trash can icon of the row (column *Actions*).
+. Confirm the deletion. If the object asks for a reason, the *Reason for the change* dialog serves as the
+  confirmation: write the reason and click *Continue*.
+
+.Expected result
+The record disappears from the list.
+
+.Special cases
+* A record that a record of an _append-only_ object points to cannot be deleted; the server rejects it and explains
+  the reason above the table.
+* Deleting a record empties the references other records had to it.
+
+WARNING: Deletion is final: the interface has no trash and no undo. The audit log keeps the evidence that the record
+existed and who deleted it, but it does not allow recovering it. If a record should only stop being used, ask the
+administrator whether a workflow state (for example, _Rechazada_) would be better than deleting it.

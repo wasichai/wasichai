@@ -1,0 +1,18 @@
+flowchart TB
+    user(["Usuario<br/>navegador web"])
+    svc(["Sistema externo<br/>cuenta de servicio"])
+    subgraph app["Aplicación Wasichai (por ejemplo full-sample)"]
+        direction LR
+        web["Web<br/>React 19 + paquetes @wasichai/*<br/>(wasichai-ui)"]
+        api["Servidor<br/>Spring Boot 4 WebFlux<br/>starters wasichai-*"]
+        web -->|"REST /api<br/>JWT bearer"| api
+    end
+    user -->|HTTPS| web
+    svc -->|"POST /api/auth/token<br/>REST /api"| api
+    db[("PostgreSQL 18<br/>+ PostGIS 3.6 con gis")]
+    gs["GeoServer<br/>WMS / WFS, opcional"]
+    ext["API de Anthropic (agent) · SMTP (correo)<br/>opcionales"]
+    api -->|"R2DBC consultas<br/>JDBC migraciones Flyway"| db
+    api -->|"REST: publicar capas"| gs
+    gs -->|JDBC| db
+    api -.-> ext

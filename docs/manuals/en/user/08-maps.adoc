@@ -1,0 +1,35 @@
+[[user-maps]]
+== Looking at maps
+
+If the application includes the GIS module, objects with geometry fields (points, lines or polygons) can be seen on
+a map. Geometries always travel in WGS 84 geographic coordinates (EPSG:4326).
+
+[[user-map-tab]]
+=== The geometry of a record
+
+On the detail page of an object with geometry, the *Map* tab draws the geometry of the record
+(<<user-fig-map-tab>>). When you create or change a record, the form offers a drawing tool to trace the geometry on
+the map.
+
+[[user-fig-map-tab]]
+.Map tab of a plot
+image::screenshots/{lang}/user/14-predio-map-tab.png[Detail of a plot with the Map tab open and the polygon of the lot,pdfwidth=100%]
+
+[[user-map-page]]
+=== The map of an object
+
+.Procedure
+. Go to menu:GIS[Maps].
+. Pick the object in the selector of the header. If the object has several geometries, also pick which one to draw.
+. Click a geometry to see its attributes in the *Attributes* panel.
+
+[[user-fig-map]]
+.Map of the sample plots
+image::screenshots/{lang}/user/15-map.png[Map page with 25 plot polygons drawn on a plain background and the empty Attributes panel,pdfwidth=100%]
+
+The header shows how many features were drawn. Use the *+* and *−* buttons or the mouse wheel to zoom in and out;
+the scale appears at the bottom left.
+
+NOTE: The base map is served by an external provider; by default, OpenStreetMap. The screenshots in this manual
+were taken in an environment without access to that provider, and that is why the geometries appear on a plain
+background. In an installation with Internet access the base map is seen under the geometries.

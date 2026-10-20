@@ -1,0 +1,72 @@
+[[user-interface]]
+== Recorrido por la interfaz
+
+[[user-fig-home]]
+.Página Inicio de un administrador
+image::screenshots/{lang}/user/02-home.png[Página Inicio con el menú lateral oscuro a la izquierda y tarjetas con el número de objetos y un acceso a cada objeto,pdfwidth=100%]
+
+=== Estructura de la pantalla
+
+La interfaz tiene dos zonas:
+
+Menú lateral (izquierda)::
+Fondo oscuro, siempre visible. Arriba, el nombre de la aplicación. Debajo, las secciones del menú. Al pie, su nombre
+y su correo, el selector de *Tema*, el botón de idioma y *Cerrar sesión*.
+Área de trabajo (derecha)::
+Cada pantalla tiene un encabezado con su título, una línea de descripción y, a la derecha, las acciones principales
+(por ejemplo, *Nuevo registro*). Debajo va el contenido: tablas, formularios o tarjetas.
+
+=== Secciones del menú
+
+El menú agrupa las pantallas por tema. Cuáles aparecen depende de los módulos que tenga instalados su aplicación:
+
+[cols="1,2,3",options="header"]
+|===
+|Sección |Entradas |Para qué sirve
+|(sin título) |Inicio |Resumen y acceso directo a cada objeto.
+|Datos |Objetos, Registros, Relaciones |*Objetos* lista los tipos de información y lleva a sus registros. *Registros*
+aparece siempre desactivado: a los registros se llega desde un objeto. *Relaciones* es una pantalla de
+administración.
+|GIS |Mapas, Capas, Vistas de mapa |*Mapas* muestra las geometrías de un objeto. *Capas* es de administración.
+*Vistas de mapa* está reservado y aparece desactivado.
+|App Builder |Páginas, Formularios, Documentos, Vistas |Herramientas de configuración para el administrador.
+|Automatización |Workflows, Reglas, Ejecuciones |Configuración de flujos y reglas; *Ejecuciones* muestra lo que
+hicieron las reglas.
+|Administración |Usuarios, Roles, Cuentas de servicio, Permisos, Auditoría |Gestión de cuentas y permisos, y el
+registro de auditoría.
+|===
+
+IMPORTANT: El menú muestra todas las secciones a cualquier persona que haya iniciado sesión, tenga o no permiso
+para usarlas. Si abre una pantalla para la que no tiene permiso, la pantalla aparece vacía o el servidor rechaza la
+acción con un mensaje (<<user-roles>>). Que una entrada esté en el menú no significa que usted pueda usarla.
+
+=== La página Inicio
+
+*Inicio* muestra cuántos objetos hay en la organización y, si la aplicación tiene el módulo GIS, cuántos tienen
+geometría. Debajo hay una tarjeta por objeto; pulse una tarjeta para abrir la lista de sus registros. Debajo del
+nombre de cada objeto se indica si tiene geometría (por ejemplo, `POLYGON · EPSG:4326`) o *Sin geometría*.
+
+Solo aparecen los objetos que usted puede leer.
+
+[[user-preferences]]
+=== Tema e idioma
+
+.Objetivo
+Cambiar el aspecto (claro u oscuro) o el idioma de la interfaz.
+
+.Procedimiento
+. Para el tema, elija una opción en el selector *Tema* del pie del menú: *Sistema* (sigue la configuración de su
+  equipo), *Claro* u *Oscuro*. Su aplicación puede ofrecer temas propios.
+. Para el idioma, pulse el botón con el código del otro idioma (*EN* cuando la interfaz está en español, *ES* cuando
+  está en inglés).
+
+.Resultado esperado
+La interfaz cambia en el acto, sin recargar la página.
+
+.Verificación
+Cierre la sesión y vuelva a entrar, o entre desde otro equipo: se mantienen el tema y el idioma elegidos.
+
+.Casos especiales
+* La preferencia se guarda en el servidor, asociada a su cuenta, y por eso le sigue a cualquier equipo.
+* El idioma cambia los textos de la interfaz, no los datos ni los nombres que escribió el administrador. Algunos
+  mensajes que envía el servidor llegan siempre en inglés (<<user-messages>>).

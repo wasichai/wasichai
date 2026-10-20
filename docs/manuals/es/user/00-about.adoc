@@ -1,0 +1,49 @@
+[preface]
+[[user-about]]
+== Acerca de este manual
+
+Este manual explica cómo trabajar con una aplicación construida sobre {product-name}: entrar, encontrar
+información, registrar y modificar datos, hacer avanzar un trámite, emitir documentos y consultar mapas. Está escrito
+para las personas que usan la aplicación a diario y no necesitan saber cómo está construida por dentro.
+
+Público::
+Personal operativo y de consulta: quien registra solicitudes, quien las revisa, quien solo consulta.
+Alcance::
+Las pantallas comunes que ofrece la interfaz web de {product-name} ({product-name} UI {ui-version}) sobre la
+versión {product-version} de la plataforma. La configuración de objetos, roles y automatizaciones se explica en el
+_Manual del administrador_; la instalación y la operación, en el _Manual técnico del sistema_.
+Fuera de alcance::
+Las pantallas propias que una aplicación concreta añada por su cuenta. Cada aplicación debe documentarlas aparte.
+
+=== Cómo leer los procedimientos
+
+Cada tarea importante sigue el mismo esquema: *Objetivo* (qué se consigue), *Requisitos previos* (permisos e
+información necesarios), *Procedimiento* (pasos numerados), *Resultado esperado*, *Verificación* (cómo comprobar
+que la operación terminó bien) y *Casos especiales* (validaciones, errores y restricciones).
+
+Los nombres de botones, menús y campos aparecen en *negrita*, tal como se leen en pantalla. Una secuencia de menús
+se escribe así: menu:Datos[Objetos].
+
+Los avisos tienen cuatro niveles, cada uno con su etiqueta, para no depender del color:
+
+NOTE: Información complementaria.
+
+TIP: Una recomendación o una forma más rápida de hacer algo.
+
+CAUTION: Una precaución: la acción puede tener efectos que conviene conocer antes.
+
+WARNING: Una operación destructiva o irreversible.
+
+=== Sobre las figuras y los datos de ejemplo
+
+Todas las figuras son capturas reales de la aplicación de ejemplo `full-sample`, tomadas automáticamente con
+Playwright sobre una base de datos de demostración. Esa base describe un municipio ficticio, el _Distrito Demo_, que
+tramita *licencias de funcionamiento* de establecimientos comerciales sobre sus *predios* y sus *contribuyentes*.
+Todos los nombres, documentos de identidad, correos y direcciones son sintéticos.
+
+Su aplicación tendrá otros objetos y otros nombres, pero las pantallas funcionan igual: lo que cambia es la
+configuración, no el programa.
+
+NOTE: Las capturas muestran la interfaz en español. La interfaz también está disponible en inglés
+(<<user-preferences>>). Los textos que escribe un administrador (nombres de objetos, de campos, de pestañas) se
+muestran tal como se escribieron, en cualquier idioma.

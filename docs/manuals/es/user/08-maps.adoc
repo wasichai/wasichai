@@ -1,0 +1,35 @@
+[[user-maps]]
+== Consultar mapas
+
+Si la aplicación incluye el módulo GIS, los objetos con campos de geometría (puntos, líneas o polígonos) se pueden ver
+en un mapa. Las geometrías viajan siempre en coordenadas geográficas WGS 84 (EPSG:4326).
+
+[[user-map-tab]]
+=== La geometría de un registro
+
+En la página de detalle de un objeto con geometría, la pestaña *Mapa* dibuja la geometría del registro
+(<<user-fig-map-tab>>). Al crear o modificar un registro, el formulario ofrece una herramienta de dibujo para trazar
+la geometría sobre el mapa.
+
+[[user-fig-map-tab]]
+.Pestaña Mapa de un predio
+image::screenshots/{lang}/user/14-predio-map-tab.png[Detalle de un predio con la pestaña Mapa abierta y el polígono del lote,pdfwidth=100%]
+
+[[user-map-page]]
+=== El mapa de un objeto
+
+.Procedimiento
+. Vaya a menu:GIS[Mapas].
+. Elija el objeto en el selector del encabezado. Si el objeto tiene varias geometrías, elija también cuál dibujar.
+. Pulse una geometría para ver sus atributos en el panel *Atributos*.
+
+[[user-fig-map]]
+.Mapa de los predios del ejemplo
+image::screenshots/{lang}/user/15-map.png[Página Mapa con 25 polígonos de predios dibujados sobre un fondo liso y el panel Atributos vacío,pdfwidth=100%]
+
+El encabezado indica cuántas entidades se dibujaron. Use los botones *+* y *−* o la rueda del ratón para acercar y
+alejar; la escala aparece abajo a la izquierda.
+
+NOTE: El fondo cartográfico lo sirve un proveedor externo; por defecto, OpenStreetMap. Las capturas de este manual se
+tomaron en un entorno sin acceso a ese proveedor, y por eso las geometrías aparecen sobre un fondo liso. En una
+instalación con acceso a Internet se ve el mapa base debajo de las geometrías.

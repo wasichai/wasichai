@@ -1,0 +1,28 @@
+// shared by every book, both languages. one place for the product version and the edition date.
+:product-name: Wasichai
+:product-version: 1.3.0
+:ui-version: 1.0.0
+:edition-date: 2026-10-20
+:revnumber: {product-version}
+:revdate: {edition-date}
+:doctype: book
+:experimental:
+:icons: font
+:sectanchors:
+:sectlinks:
+:sectnums:
+:sectnumlevels: 3
+:toclevels: 3
+:xrefstyle: short
+:source-highlighter: rouge
+:rouge-style: github
+:imagesdir: ../assets
+:pdf-themesdir: {docdir}/../theme/pdf
+:pdf-theme: wasichai
+:title-logo-image: image:branding/emblem.svg[width=64]
+// repository links: the markdown reference stays canonical for api, modules and decisions (ADR-070)
+:repo-url: https://github.com/wasichai/wasichai/blob/main
+:ui-repo-url: https://github.com/wasichai/wasichai-ui/blob/main
+:sample-repo-url: https://github.com/wasichai/full-sample
+:rest-doc: {repo-url}/docs/api/rest.md
+:adr-index: {repo-url}/docs/adr/README.md

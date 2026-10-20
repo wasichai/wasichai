@@ -1,0 +1,42 @@
+[[admin-role]]
+== Funciones y responsabilidades
+
+=== Quién es administrador
+
+No hay un único «administrador»: hay permisos que habilitan cada tarea, y el rol especial `ADMIN`, que los reúne.
+
+[cols="2,4",options="header"]
+|===
+|Permiso o rol |Habilita
+|`ADMIN` |Todo dentro de la organización. Omite las comprobaciones de permisos (no las reglas _solo anexado_ ni _solo por
+la aplicación_). No se puede eliminar. Nunca se aplica a una cuenta de servicio.
+|`MANAGE_METADATA` |Objetos, campos, relaciones, acciones propias, vistas, formularios, páginas, tipos de documento,
+flujos de trabajo y reglas de automatización.
+|`MANAGE_ORGANIZATION` |Usuarios, roles, permisos, cuentas de servicio, unidades organizativas, notificaciones,
+nombre de la organización y lectura de las entradas de administración de la auditoría.
+|`MANAGE_TENANTS` |Crear y eliminar organizaciones (inquilinos). Por defecto lo tiene quien tiene
+`MANAGE_ORGANIZATION`; con `wasichai.organizations.separate-provisioning=true`, solo una concesión explícita.
+|===
+
+`MANAGE_METADATA` y `MANAGE_ORGANIZATION` se conceden «para todos los objetos» (la fila *Todos los objetos* de la
+matriz de permisos, <<admin-permissions>>).
+
+=== Primer acceso de un entorno
+
+La plataforma no crea ningún administrador en producción. Hay dos caminos:
+
+* *Entorno de desarrollo o demostración*: con `wasichai.seed.dev=true`, la primera migración crea la organización
+  _Demo_ (`demo`), el rol `ADMIN` y el usuario `admin@wasichai.local` con contraseña `admin`. Solo para desarrollo.
+* *Producción*: un operador que ya tiene `MANAGE_TENANTS` crea la organización y su primer administrador con
+  `POST /api/organizations` (<<admin-tenants>>). El primer titular de ese permiso se concede fuera de la aplicación,
+  como describe la guía _Build your app_ del repositorio.
+
+WARNING: No active `wasichai.seed.dev` en producción: crea una cuenta con una contraseña pública conocida.
+
+=== Responsabilidades habituales
+
+* Mantener el modelo de datos al día con el trabajo de la organización.
+* Dar de alta y de baja a las personas, y revisar periódicamente sus roles.
+* Conceder a cada rol solo lo que necesita (mínimo privilegio).
+* Revisar la auditoría ante incidencias.
+* Coordinar con el equipo técnico las copias de seguridad, las actualizaciones y las restauraciones.

@@ -1,0 +1,281 @@
+# wasichai manuals, printable books. colours from wasichai-ui's light theme (packages/ui/src/theme.css)
+extends: default
+font:
+  catalog:
+    merge: true
+    IBM Plex Sans:
+      normal: IBMPlexSans-Regular.ttf
+      italic: IBMPlexSans-Italic.ttf
+      bold: IBMPlexSans-SemiBold.ttf
+      bold_italic: IBMPlexSans-SemiBoldItalic.ttf
+    IBM Plex Sans Light:
+      normal: IBMPlexSans-Light.ttf
+      italic: IBMPlexSans-Italic.ttf
+      bold: IBMPlexSans-Medium.ttf
+      bold_italic: IBMPlexSans-SemiBoldItalic.ttf
+    IBM Plex Sans Bold:
+      normal: IBMPlexSans-Bold.ttf
+      italic: IBMPlexSans-BoldItalic.ttf
+      bold: IBMPlexSans-Bold.ttf
+      bold_italic: IBMPlexSans-BoldItalic.ttf
+    IBM Plex Mono:
+      normal: IBMPlexMono-Regular.ttf
+      italic: IBMPlexMono-Italic.ttf
+      bold: IBMPlexMono-SemiBold.ttf
+      bold_italic: IBMPlexMono-BoldItalic.ttf
+    # bundled with asciidoctor-pdf (pdf-fontsdir names its folder): glyphs plex lacks, arrows and check marks
+    M+ 1p Fallback:
+      normal: mplus1p-regular-fallback.ttf
+      italic: mplus1p-regular-fallback.ttf
+      bold: mplus1p-regular-fallback.ttf
+      bold_italic: mplus1p-regular-fallback.ttf
+    Noto Emoji:
+      normal: notoemoji-subset.ttf
+      italic: notoemoji-subset.ttf
+      bold: notoemoji-subset.ttf
+      bold_italic: notoemoji-subset.ttf
+  fallbacks: [M+ 1p Fallback, Noto Emoji]
+base:
+  font-family: IBM Plex Sans
+  font-color: '#1b1f29'
+  font-size: 10
+  line-height-length: 15
+  line-height: $base-line-height-length / $base-font-size
+  border-color: '#dfe1e5'
+  border-radius: 3
+role:
+  muted:
+    font-color: '#656972'
+  ui:
+    font-family: IBM Plex Sans
+    font-style: bold
+    font-color: '#1649ae'
+page:
+  size: A4
+  layout: portrait
+  margin: [24mm, 20mm, 22mm, 22mm]
+  margin-inner: 24mm
+  margin-outer: 18mm
+  numbering:
+    start-at: toc
+vertical-rhythm: $base-line-height-length
+link:
+  font-color: '#1649ae'
+title-page:
+  background-image: image:../../assets/branding/cover-background.svg[fit=fill]
+  align: left
+  logo:
+    image: image:../../assets/branding/emblem.svg[width=64]
+    top: 9%
+    align: left
+  title:
+    top: 18%
+    font-family: IBM Plex Sans Bold
+    font-size: 30
+    font-color: '#ffffff'
+    line-height: 1.15
+  subtitle:
+    font-family: IBM Plex Sans Light
+    font-size: 15
+    font-color: '#c7cfdd'
+    margin-top: 10
+  authors:
+    margin-top: 300
+    font-size: 11
+    font-color: '#1b1f29'
+  revision:
+    margin-top: 6
+    font-size: 10
+    font-color: '#656972'
+heading:
+  font-family: IBM Plex Sans
+  font-style: bold
+  font-color: '#181f2e'
+  line-height: 1.2
+  margin-top: $vertical-rhythm * 0.6
+  margin-bottom: $vertical-rhythm * 0.5
+  min-height-after: auto
+  h1-font-size: 24
+  h2-font-size: 19
+  h3-font-size: 14.5
+  h4-font-size: 12
+  h5-font-size: 10.5
+  h6-font-size: 10
+  chapter:
+    break-before: always
+  h2:
+    font-color: '#181f2e'
+    border-width: [0, 0, 1.2, 0]
+    border-color: '#3263c3'
+    padding: [0, 0, 5, 0]
+  h3:
+    font-color: '#1649ae'
+abstract:
+  font-color: '#3b4150'
+  font-size: 11
+  line-height: 1.5
+  font-style: normal
+  first-line:
+    font-style: bold
+sidebar:
+  background-color: '#f3f5f8'
+  border-color: '#dfe1e5'
+  border-radius: 4
+  padding: [10, 14, 10, 14]
+  title:
+    font-color: '#181f2e'
+    font-style: bold
+example:
+  border-color: '#dfe1e5'
+  border-radius: 4
+  background-color: '#fbfcfd'
+  padding: [10, 14, 10, 14]
+admonition:
+  column-rule-color: '#dfe1e5'
+  column-rule-width: 1.5
+  padding: [2, 12, 2, 12]
+  label:
+    font-family: IBM Plex Sans
+    font-style: bold
+    text-transform: uppercase
+    font-size: 8.5
+  icon:
+    note:
+      name: fas-info-circle
+      stroke-color: '#3263c3'
+    tip:
+      name: fas-lightbulb
+      stroke-color: '#007e46'
+    important:
+      name: fas-exclamation-circle
+      stroke-color: '#1649ae'
+    caution:
+      name: fas-exclamation-triangle
+      stroke-color: '#a15c00'
+    warning:
+      name: fas-radiation
+      stroke-color: '#c92f33'
+code:
+  font-family: IBM Plex Mono
+  font-size: 8.6
+  font-color: '#1b1f29'
+  line-height: 1.4
+  background-color: '#f3f5f8'
+  border-color: '#dfe1e5'
+  border-radius: 4
+  border-width: 0.6
+  padding: [8, 10, 8, 10]
+  linenum-font-color: '#9ea5b2'
+callout-list:
+  margin-top-after-code: -4
+conum:
+  font-family: M+ 1mn
+  font-color: '#3263c3'
+codespan:
+  font-family: IBM Plex Mono
+  font-size: 0.92em
+  font-color: '#1649ae'
+  background-color: '#f3f5f8'
+  border-radius: 2
+  border-offset: 1.5
+kbd:
+  font-family: IBM Plex Mono
+  background-color: '#f3f5f8'
+  border-color: '#9ea5b2'
+  border-offset: 1.5
+table:
+  font-size: 9
+  border-color: '#dfe1e5'
+  border-width: 0.6
+  grid-color: '#dfe1e5'
+  grid-width: 0.6
+  cell-padding: [4, 6, 4, 6]
+  head:
+    background-color: '#181f2e'
+    font-color: '#ffffff'
+    font-style: bold
+    border-bottom-width: 0
+  body:
+    stripe-background-color: '#f3f5f8'
+  caption:
+    font-style: bold
+    font-color: '#3b4150'
+# block titles: the procedure labels (Objetivo, Procedimiento…) read as small headings
+caption:
+  font-style: bold
+  font-size: 9.5
+  font-color: '#1649ae'
+  margin-inside: 3
+  margin-outside: 0
+image:
+  caption:
+    end: bottom
+    align: center
+    font-style: italic
+    font-size: 9
+    font-color: '#3b4150'
+    margin-inside: 6
+description-list:
+  term-font-style: bold
+  term-font-color: '#181f2e'
+  description-indent: 14
+list:
+  indent: 16
+  item-spacing: 3
+  marker-font-color: '#3263c3'
+toc:
+  font-color: '#1b1f29'
+  dot-leader:
+    content: '. '
+    font-color: '#9ea5b2'
+    levels: 2
+  h2-font-style: bold
+  indent: 14
+  line-height: 1.5
+  title:
+    font-size: 20
+    font-color: '#181f2e'
+thematic-break:
+  border-color: '#dfe1e5'
+quote:
+  font-color: '#3b4150'
+  border-color: '#3263c3'
+  border-left-width: 3
+header:
+  height: 14mm
+  line-height: 1
+  font-size: 8
+  font-color: '#656972'
+  border-color: '#dfe1e5'
+  border-width: 0.5
+  vertical-align: bottom
+  padding: [0, 0, 4, 0]
+  recto:
+    left:
+      content: '{manual-title}'
+    right:
+      content: '{section-or-chapter-title}'
+  verso:
+    left:
+      content: '{section-or-chapter-title}'
+    right:
+      content: '{manual-title}'
+footer:
+  height: 12mm
+  line-height: 1
+  font-size: 8
+  font-color: '#656972'
+  border-color: '#dfe1e5'
+  border-width: 0.5
+  vertical-align: top
+  padding: [4, 0, 0, 0]
+  recto:
+    left:
+      content: '{product-name} {product-version} · {doc-edition-label} {edition-date}'
+    right:
+      content: '*{page-number}*'
+  verso:
+    left:
+      content: '*{page-number}*'
+    right:
+      content: '{product-name} {product-version} · {doc-edition-label} {edition-date}'

@@ -1,0 +1,6 @@
+flowchart LR
+    m["Base vacía<br/>*_demo"] -->|"arranque de la app:<br/>migraciones Flyway + seed dev"| s["Esquema + admin"]
+    s -->|"seed-demo.mjs<br/>API REST"| d["Datos de demostración"]
+    d -->|"export-demo-db.sh<br/>pg_dump (SQL plano)"| f[["backups/wasichai-demo.sql<br/>+ manifiesto"]]
+    f -->|"restore-demo-db.sh<br/>psql + verify.sql"| r["*_demo_restore"]
+    r -->|"arranque de la app:<br/>Flyway valida, nada pendiente"| ok["La misma demo"]

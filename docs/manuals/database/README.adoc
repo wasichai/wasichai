@@ -1,0 +1,33 @@
+= Demo database
+
+A synthetic dataset of a fictitious municipality, the _Distrito Demo_: taxpayers, parcels and business licences with
+their workflow, documents, rules, users and roles. No real person, company or address; mails use `.example`.
+
+[cols="1,3"]
+|===
+|`fixtures/demo-dataset.json` |The dataset, the canonical source. Loaded through the REST API by
+`../scripts/seed-demo.mjs`, so the platform builds the objects' tables itself.
+|`backups/wasichai-demo.sql` |Full plain-SQL copy of the `wasichai` and `app_data` schemas plus `pgcrypto` and
+`postgis`: structure, data (one `INSERT` per row), sequences, triggers, Flyway histories. Deterministic.
+|`manifests/demo-manifest.json` |PostgreSQL/PostGIS versions, migration versions per module, SHA-256 of the SQL,
+restore order, row count per table.
+|`verify.sql` |Integrity checks: extensions, audit triggers, a table per object, no orphan foreign key, sequences
+ahead of their columns, geometry SRIDs.
+|===
+
+Rebuild from an empty `*_demo` database with full-sample running against it, then export and restore:
+
+[source,bash]
+----
+# from the repository root
+export WASICHAI_DEMO_PASSWORD='Demo-2026!'                  # the demo users' password, local only
+yarn docs:db:seed                                            # 127 created; a rerun creates 0
+WASICHAI_DB_NAME=wasichai_demo yarn docs:db:export
+WASICHAI_DB_NAME=wasichai_demo_restore yarn docs:db:restore  # add --replace to drop and recreate it
+----
+
+The scripts read `WASICHAI_DB_HOST`, `_PORT`, `_NAME`, `_USERNAME`, `_PASSWORD` as the app does and refuse any database
+not named `*_demo` (restore: also `*_demo_restore`). Credentials: `admin@wasichai.local` / `admin` (the dev seed) and
+`registrador@`, `revisor@`, `consulta@demo.example` with `WASICHAI_DEMO_PASSWORD`. Not in the copy: the JWT secret, the
+service account's secret (rotate it), files, GeoServer. The full procedure and the recorded proof are in the system
+manual, chapter _Base de datos de demostración reproducible_ / _Reproducible demo database_.

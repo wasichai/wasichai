@@ -1,0 +1,19 @@
+flowchart BT
+    %% continua: dependencia obligatoria · punteada: integración opcional
+    core["wasichai-core<br/>objetos · campos · registros · identidad · auditoría"]
+    views[wasichai-views] --> core
+    forms[wasichai-forms] --> core
+    pages[wasichai-pages] --> core
+    pages --> forms
+    workflow[wasichai-workflow] --> core
+    automation[wasichai-automation] --> core
+    documents[wasichai-documents] --> core
+    gis[wasichai-gis] --> core
+    files[wasichai-files] --> core
+    notifications[wasichai-notifications] --> core
+    agent[wasichai-agent] --> core
+    workflow -.-> pages
+    gis -.-> pages
+    documents -.-> automation
+    notifications -.-> automation
+    agent -.-> workflow

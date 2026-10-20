@@ -1,0 +1,56 @@
+[[user-messages]]
+== Common messages and errors
+
+The interface translates its own texts, but many error messages are written by the server, always in English,
+whatever the interface language. The table collects the most common ones, with their meaning and what to do.
+
+[cols="3,3,3",options="header"]
+|===
+|Message |What it means |What to do
+
+|*Invalid email or password*
+|The email or the password does not match, or the account is disabled.
+|Check what you typed (case matters in the password). If it persists, ask an administrator to check your account.
+
+|*Too many sign-in attempts, try again later*
+|Your organization limits failed attempts and you went over the limit. While the block lasts even the right
+password is rejected.
+|Wait (by default, up to 15 minutes) and try again.
+
+|The application sends you back to the sign-in screen
+|Your session expired, or an administrator disabled your account or changed your password.
+|Sign in again. What was not saved is lost.
+
+|A field marked in red with *required* or *Required*
+|A required piece of data is missing. Nothing was sent to the server.
+|Fill in the marked fields and save again.
+
+|*Write the reason for the change*
+|The object asks for a reason for each change and the *Reason* field is empty.
+|Write the reason (up to 500 characters).
+
+|*Missing permission UPDATE* (or `CREATE`, `DELETE`, `READ`)
+|Your role does not allow that action on the object. Nothing was saved.
+|Ask the administrator for the permission, if it is part of your work.
+
+|*Another record already has this …*, with the field marked *must be unique*
+|Another record already has the value of a unique field (for example, a repeated code).
+|Use another value or look for the record that already exists.
+
+|*requires role …* under a transition button
+|The transition is reserved to another role.
+|Ask a person with that role to apply it.
+
+|*Record … changed since you read it*
+|Another person or a process changed the record since you opened it. You will see it mostly in API integrations;
+the web interface saves without this check.
+|Reload the record and repeat the change.
+
+|*You are not allowed to see this*
+|The screen needs a permission you do not have.
+|Go back to *Home*.
+|===
+
+NOTE: Behind every server message there is an HTTP status code (400 invalid data, 401 not authenticated, 403 no
+permission, 404 does not exist, 409 conflict, 412 outdated version, 429 too many attempts). If you contact support,
+give the exact message, the screen and the time: the technical team can find the request in the server logs.

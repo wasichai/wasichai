@@ -1,0 +1,22 @@
+[[sys-background]]
+== Procesos en segundo plano
+
+[cols="2,2,3",options="header"]
+|===
+|Proceso |Frecuencia |Qué hace
+|Migraciones Flyway |Al arrancar |Aplica las migraciones pendientes de cada módulo.
+|`DeclaredIndexReconciler` |Al arrancar |Crea los índices declarados que falten.
+|`AutomationDrain` |`wasichai.automation.poll-interval` (1 s) |Toma ejecuciones `PENDING` (`FOR UPDATE SKIP LOCKED`)
+y ejecuta sus acciones.
+|`IdempotencyKeyPurge` |`wasichai.idempotency.purge-interval` (1 h) |Borra claves de idempotencia vencidas.
+|`StoredFileCleanup` |`wasichai.files.cleanup.interval` (1 h) |Borra los archivos que ya ningún campo `FILE`/`IMAGE`
+nombra (reemplazados, de registros borrados…) y más antiguos que `cleanup.delay`.
+|`NotificationLoop` |`wasichai.notifications.tick` (30 s) |Fuentes, reglas de aviso, entregas por correo y purga
+diaria.
+|Escucha `LISTEN/NOTIFY` |Continua |Empuja cambios de notificaciones al flujo SSE.
+|===
+
+Los procesos periódicos de varias instancias se coordinan con un bloqueo de clúster en PostgreSQL (ADR-039): solo
+una instancia ejecuta cada ciclo. Trabajan como _la plataforma_, sin usuario, y recorren las organizaciones mediante
+un directorio de inquilinos (ADR-057). Se detienen poniendo su intervalo a `0s` (así lo hacen las pruebas de
+integración).

@@ -1,0 +1,70 @@
+[[user-interface]]
+== A tour of the interface
+
+[[user-fig-home]]
+.Home page of an administrator
+image::screenshots/{lang}/user/02-home.png[Home page with the dark side menu on the left and cards with the number of objects and a shortcut to each object,pdfwidth=100%]
+
+=== Screen layout
+
+The interface has two areas:
+
+Side menu (left)::
+Dark background, always visible. At the top, the name of the application. Below, the menu sections. At the foot,
+your name and your email, the *Theme* selector, the language button and *Sign out*.
+Workspace (right)::
+Each screen has a header with its title, a line of description and, on the right, the main actions (for example,
+*New record*). Below comes the content: tables, forms or cards.
+
+=== Menu sections
+
+The menu groups the screens by topic. Which ones appear depends on the modules installed in your application:
+
+[cols="1,2,3",options="header"]
+|===
+|Section |Entries |What it is for
+|(no title) |Home |Summary and a direct shortcut to each object.
+|Data |Objects, Records, Relationships |*Objects* lists the kinds of information and leads to their records. *Records*
+is always shown disabled: records are reached from an object. *Relationships* is an administration screen.
+|GIS |Maps, Layers, Map views |*Maps* shows the geometries of an object. *Layers* is for administration.
+*Map views* is reserved and is shown disabled.
+|App Builder |Pages, Forms, Documents, Views |Configuration tools for the administrator.
+|Automation |Workflows, Rules, Runs |Configuration of workflows and rules; *Runs* shows what the rules did.
+|Administration |Users, Roles, Service accounts, Permissions, Audit |Management of accounts and permissions, and the
+audit log.
+|===
+
+IMPORTANT: The menu shows every section to anyone who has signed in, whether or not they have permission to use
+it. If you open a screen you have no permission for, the screen appears empty or the server rejects the action with
+a message (<<user-roles>>). An entry being in the menu does not mean you can use it.
+
+=== The Home page
+
+*Home* shows how many objects there are in the organization and, if the application has the GIS module, how many
+have geometry. Below there is one card per object; click a card to open the list of its records. Under the name of
+each object it says whether it has geometry (for example, `POLYGON · EPSG:4326`) or *No geometry*.
+
+Only the objects you can read appear.
+
+[[user-preferences]]
+=== Theme and language
+
+.Objective
+Change the look (light or dark) or the language of the interface.
+
+.Procedure
+. For the theme, pick an option in the *Theme* selector at the foot of the menu: *System* (follows the setting of
+  your computer), *Light* or *Dark*. Your application may offer its own themes.
+. For the language, click the button with the code of the other language (*ES* when the interface is in English,
+  *EN* when it is in Spanish).
+
+.Expected result
+The interface changes at once, without reloading the page.
+
+.Verification
+Sign out and sign in again, or sign in from another computer: the chosen theme and language are kept.
+
+.Special cases
+* The preference is stored on the server, tied to your account, and so it follows you to any computer.
+* The language changes the texts of the interface, not the data or the names the administrator wrote. Some
+  messages the server sends are always in English (<<user-messages>>).

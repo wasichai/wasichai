@@ -1,0 +1,63 @@
+[[sys-operation]]
+== Operación diaria
+
+=== Iniciar, detener y reiniciar
+
+El servidor es un proceso Java. Cómo se gestiona (systemd, contenedor, orquestador) lo decide cada instalación; la
+plataforma no lo impone.
+
+[cols="1,3",options="header"]
+|===
+|Acción |Comando de referencia (`full-sample`, desde `full-sample/`)
+|Iniciar |`java -jar server/build/libs/server.jar` con las variables de <<sys-configuration>>
+|Detener |Señal `SIGTERM` al proceso (Spring Boot cierra ordenadamente)
+|Reiniciar |Detener e iniciar. No hace falta detener la base de datos.
+|===
+
+Varias instancias pueden convivir sobre la misma base: las ejecuciones de reglas se reparten con
+`FOR UPDATE SKIP LOCKED` y los procesos periódicos con un bloqueo de clúster (<<sys-background>>).
+
+=== Comprobar el estado
+
+[source,bash]
+----
+curl -s http://localhost:8090/api/health            # {"status":"UP","application":"wasichai"}
+curl -s http://localhost:8090/actuator/health        # {"groups":["liveness","readiness"],"status":"UP"}
+----
+
+Ambas rutas son públicas. Para un balanceador o un orquestador use `/actuator/health/liveness` y
+`/actuator/health/readiness`. Sin `management.endpoint.health.show-details`, Actuator solo devuelve el estado
+agregado.
+
+=== Registros (logs)
+
+El servidor escribe en la salida estándar con el formato de Spring Boot. Cada línea de una petición lleva el
+`correlationId` (MDC), el mismo que la respuesta devuelve en `X-Correlation-Id` y que guarda la auditoría.
+
+[cols="2,3",options="header"]
+|===
+|Síntoma |Qué buscar
+|No arranca |Las últimas líneas: `secret` del JWT ausente o corto, base inaccesible, migración fallida (`FlywayException`).
+|Errores 5xx |Las líneas con el `correlationId` que dio la respuesta.
+|Reglas que no actúan |menu:Automatización[Ejecuciones] y las líneas de `AutomationRunner`.
+|Capas que no se publican |Respuestas de GeoServer en las líneas de `wasichai.gis`.
+|Correos que no llegan |`notification_deliveries` y las líneas del canal de correo.
+|===
+
+=== Pruebas de humo tras un despliegue o una restauración
+
+. `GET /api/health` devuelve `UP`.
+. El inicio de sesión de una cuenta conocida funciona.
+. `GET /api/objects` lista los objetos esperados.
+. Una lista de registros devuelve el total esperado.
+. Una página de detalle abre en la interfaz.
+. Si hay reglas, una ejecución reciente aparece como hecha.
+
+`full-sample` incluye `e2e/smoke.sh` (bash, curl y jq), que crea un objeto propio y recorre todos los módulos por la
+API. Escribe datos: úsela en entornos de prueba.
+
+[source,bash]
+----
+# desde full-sample/
+BASE_URL=http://localhost:8090 e2e/smoke.sh       # termina con: smoke passed against http://localhost:8090
+----

@@ -1,0 +1,58 @@
+[[user-messages]]
+== Mensajes y errores frecuentes
+
+La interfaz traduce sus propios textos, pero muchos mensajes de error los redacta el servidor y llegan en inglés. La
+tabla recoge los más comunes, con su significado y qué hacer.
+
+[cols="3,3,3",options="header"]
+|===
+|Mensaje |Qué significa |Qué hacer
+
+|*Invalid email or password*
+|El correo o la contraseña no coinciden, o la cuenta está desactivada.
+|Revise lo escrito (las mayúsculas cuentan en la contraseña). Si persiste, pida a un administrador que revise su
+cuenta.
+
+|*Too many sign-in attempts, try again later*
+|Su organización limita los intentos fallidos y usted superó el límite. Mientras dure el bloqueo se rechaza incluso
+la contraseña correcta.
+|Espere (por defecto, hasta 15 minutos) y vuelva a intentarlo.
+
+|La aplicación le devuelve a la pantalla de acceso
+|Su sesión caducó, o un administrador desactivó su cuenta o cambió su contraseña.
+|Inicie sesión de nuevo. Lo no guardado se perdió.
+
+|Un campo marcado en rojo con *required* o *Obligatorio*
+|Falta un dato obligatorio. No se envió nada al servidor.
+|Complete los campos marcados y guarde otra vez.
+
+|*Escribe el motivo del cambio*
+|El objeto pide un motivo para cada cambio y el campo *Motivo* está vacío.
+|Escriba el motivo (hasta 500 caracteres).
+
+|*Missing permission UPDATE* (o `CREATE`, `DELETE`, `READ`)
+|Su rol no permite esa acción sobre el objeto. No se guardó nada.
+|Pida al administrador el permiso, si corresponde a su trabajo.
+
+|*Another record already has this …*, con el campo marcado *must be unique*
+|El valor de un campo único ya lo tiene otro registro (por ejemplo, un código repetido).
+|Use otro valor o busque el registro que ya existe.
+
+|*requires role …* bajo un botón de transición
+|La transición está reservada a otro rol.
+|Pida a una persona con ese rol que la aplique.
+
+|*Record … changed since you read it*
+|Otra persona o un proceso modificó el registro desde que usted lo abrió. Lo verá sobre todo en integraciones por
+API; la interfaz web guarda sin esta comprobación.
+|Recargue el registro y repita el cambio.
+
+|*No tienes permiso para ver esto*
+|La pantalla necesita un permiso que usted no tiene.
+|Vuelva a *Inicio*.
+|===
+
+NOTE: Detrás de cada mensaje del servidor hay un código de estado HTTP (400 dato inválido, 401 no autenticado, 403
+sin permiso, 404 no existe, 409 conflicto, 412 versión desactualizada, 429 demasiados intentos). Si contacta con
+soporte, indique el mensaje exacto, la pantalla y la hora: el equipo técnico puede localizar la petición en los
+registros del servidor.

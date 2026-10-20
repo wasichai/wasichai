@@ -1,0 +1,62 @@
+[[sys-data-model]]
+== Data model
+
+[[sys-fig-data-model]]
+.Main metadata entities
+image::diagrams/en-data-model.png[Entity-relationship diagram: organizations with users, roles, custom_objects, org_units, service_accounts and audit_log; custom_objects with their fields, relationships, data table and the configuration of each module,pdfwidth=100%,role=diagram]
+
+=== Schemas
+
+`wasichai` (`wasichai.database.metadata-schema`)::
+Metadata, identity, audit and the configuration of the modules. The migrations create it.
+`app_data` (`wasichai.database.data-schema`)::
+One table per object and organization, created and altered at runtime by `ObjectSchemaManager`:
+`app_data.<object>__<org8>`, where `org8` is the first 8 hexadecimal characters of the organization id.
+Many-to-many relationships use `rel_<relationship>__<org8>` tables.
+
+=== Columns of each object table
+
+`id` (uuid), `organization_id`, `created_at`, `updated_at`, `created_by`, `updated_by` and, with a workflow,
+`workflow_state`. Each field is a column of its matching SQL type (table _Field types_ of the _Administrator
+manual_); a `RELATION` is a `uuid` with an `ON DELETE SET NULL` foreign key and an index of its own; a `GEOMETRY`
+is a PostGIS column with its type and SRID.
+
+=== Metadata tables per module
+
+[cols="1,4",options="header"]
+|===
+|Module |Tables in the `wasichai` schema
+|core |`organizations`, `users`, `roles`, `user_roles`, `permissions`, `field_permissions`, `custom_objects`,
+`custom_fields`, `relationships`, `object_actions`, `service_accounts`, `org_units`, `user_org_units`,
+`user_preferences`, `idempotency_keys`, `audit_log`
+|views / forms / pages |`views` / `forms` / `pages`
+|workflow |`workflows`
+|automation |`automations`, `automation_runs`
+|documents |`document_types`, `document_counters`, `documents`
+|files |`stored_files`
+|notifications |`notifications`, `notification_targets`, `notification_receipts`, `notification_rules`,
+`notification_source_runs`, `notification_deliveries`, `notification_preferences`
+|(each module) |`flyway_history_<module>`: history of its migrations; `flyway_history_core_seed` for the
+development seed.
+|===
+
+=== Migrations
+
+Each module has its migrations in `src/main/resources/db/wasichai/<module>/` and its own history table, so that an
+application can add or remove modules without conflicts (ADR-026). Those of core go from `V1` to `V18` (`V11` and
+`V14` are missing from the sequence) plus the repeatable `R__audit_purge_role.sql`. The GIS migration runs
+`CREATE EXTENSION postgis`.
+
+=== Relevant constraints
+
+* `audit_log` has _triggers_ that prevent `UPDATE`, `DELETE` and `TRUNCATE` (`audit_log_append_only`,
+  `audit_log_no_truncate`); only the purge role can delete entries.
+* The email of a user is unique within its organization.
+* At most one `VALID` document per type and record (partial unique index).
+* One default view per object.
+
+=== Size of the demo database
+
+After loading the data of the _Distrito Demo_, the database has 47 tables in the two schemas with 566 rows: 30
+taxpayers, 25 plots, 40 licences, 215 audit entries, 54 rule runs, 11 documents and 33 notifications
+(<<sys-demo-db>>; the exact figures are in `database/manifests/demo-manifest.json`).

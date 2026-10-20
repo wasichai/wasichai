@@ -1,0 +1,50 @@
+[preface]
+[[user-about]]
+== About this manual
+
+This manual explains how to work with an application built on {product-name}: sign in, find information, record and
+change data, move a case forward, issue documents and look at maps. It is written for the people who use the
+application every day and do not need to know how it is built inside.
+
+Audience::
+Operational and read-only staff: whoever records applications, whoever reviews them, whoever only looks them up.
+Scope::
+The common screens of the {product-name} web interface ({product-name} UI {ui-version}) on version
+{product-version} of the platform. The configuration of objects, roles and automations is explained in the
+_Administrator manual_; installation and operation, in the _System manual_.
+Out of scope::
+The custom screens that a particular application adds on its own. Each application must document them separately.
+
+=== How to read the procedures
+
+Every important task follows the same outline: *Objective* (what is achieved), *Prerequisites* (permissions and
+information needed), *Procedure* (numbered steps), *Expected result*, *Verification* (how to check that the
+operation ended well) and *Special cases* (validations, errors and restrictions).
+
+The names of buttons, menus and fields appear in *bold*, exactly as they read on screen. A sequence of menus is
+written like this: menu:Data[Objects].
+
+Notices have four levels, each with its label, so as not to depend on color:
+
+NOTE: Additional information.
+
+TIP: A recommendation or a quicker way to do something.
+
+CAUTION: A precaution: the action may have effects worth knowing beforehand.
+
+WARNING: A destructive or irreversible operation.
+
+=== About the figures and the sample data
+
+All figures are real screenshots of the sample application `full-sample`, taken automatically with Playwright on a
+demo database. That database describes a fictitious municipality, the _Distrito Demo_ (demo district), which
+processes *business licences* (_licencias de funcionamiento_) for commercial establishments on its *plots*
+(_predios_) and its *taxpayers* (_contribuyentes_). All names, identity documents, emails and addresses are
+synthetic.
+
+Your application will have other objects and other names, but the screens work the same way: what changes is the
+configuration, not the program.
+
+NOTE: The screenshots show the interface in English. The interface is also available in Spanish
+(<<user-preferences>>). The texts an administrator writes (names of objects, fields, tabs) are shown as they were
+written, in whatever language: in the demo data they are in Spanish.

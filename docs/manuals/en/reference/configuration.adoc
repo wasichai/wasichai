@@ -1,0 +1,135 @@
+[[sys-configuration]]
+== Configuration
+
+The application is configured with Spring Boot properties (`application.yml`, environment variables, arguments).
+No module ships an `application.yml`: the defaults are in the `@ConfigurationProperties` classes and in
+`WasichaiEnvironmentPostProcessor`, which supplies, with the lowest priority, the database connection from the
+`WASICHAI_DB_*` variables. Spring accepts the environment variable form of any property:
+`wasichai.gis.geoserver.enabled` → `WASICHAI_GIS_GEOSERVER_ENABLED`.
+
+=== Environment variables
+
+[cols="2,1,3",options="header"]
+|===
+|Variable |Default |Use
+|`WASICHAI_DB_HOST` |`localhost` |PostgreSQL server.
+|`WASICHAI_DB_PORT` |`5432` |Port.
+|`WASICHAI_DB_NAME` |`wasichai` |Database.
+|`WASICHAI_DB_USERNAME` |`wasichai` |User.
+|`WASICHAI_DB_PASSWORD` |`wasichai` |Password. *Secret.*
+|`WASICHAI_JWT_SECRET` |_(none)_ |HMAC key of the JWTs, at least 32 bytes. Without it the application does not
+start. *Secret.*
+|`ANTHROPIC_API_KEY` |_(empty)_ |Key of the assistant (agent module). Without it the assistant is disabled.
+*Secret.*
+|`PORT` |`8090` |HTTP port of `full-sample` (defined in its `application.yml`).
+|===
+
+Secrets are supplied by the runtime environment (secret manager, protected CI variables); they are never written in
+`application.yml` or in the repository. The database defaults are for development.
+
+=== Core properties
+
+[cols="3,2,4",options="header"]
+|===
+|Property |Default |Description
+|`wasichai.database.host`, `.port`, `.name`, `.username`, `.password` |from `WASICHAI_DB_*` |Connection.
+|`wasichai.database.metadata-schema` |`wasichai` |Metadata schema.
+|`wasichai.database.data-schema` |`app_data` |Schema of the object tables.
+|`wasichai.database.migrate` |`true` |Apply the Flyway migrations on startup.
+|`wasichai.security.jwt.secret` |`${WASICHAI_JWT_SECRET}` |HS256 key (≥ 32 bytes).
+|`wasichai.security.jwt.issuer` |`wasichai` |Token issuer.
+|`wasichai.security.jwt.ttl` |`8h` |Session length of a person.
+|`wasichai.security.jwt.service-account-ttl` |`15m` |Token length of a service account.
+|`wasichai.security.jwt.revocation` |`false` |Invalidate tokens on sign-out, disabling, password or role change.
+|`wasichai.security.jwt.revocation-cache` |`5s` |Maximum delay with which another node sees a revocation.
+|`wasichai.security.login.enabled` |`false` |Limit failed sign-in attempts.
+|`wasichai.security.login.max-attempts` |`5` |Per email and IP address.
+|`wasichai.security.login.account-max-attempts` |`20` |Per email, from any address.
+|`wasichai.security.login.window` |`15m` |Window of the count.
+|`wasichai.security.password.min-length` |`8` |Minimum length.
+|`wasichai.security.password.require-uppercase`, `-lowercase`, `-digit`, `-symbol` |`false` |Required character
+classes.
+|`wasichai.security.password.not-equal-email` |`false` |Forbid it from matching the email.
+|`wasichai.organizations.separate-provisioning` |`false` |`MANAGE_TENANTS` only by explicit grant.
+|`wasichai.audit.purge-role` |_(none)_ |Database role allowed to purge the audit log.
+|`wasichai.idempotency.ttl` |`24h` |Life of an `Idempotency-Key`.
+|`wasichai.idempotency.purge-interval` |`1h` |How often expired keys are purged.
+|`wasichai.metadata.cache.ttl` |`5s` |Definition cache; a model change takes up to this long to show on other
+nodes.
+|`wasichai.metadata.reconcile-indexes` |`true` |Create the missing declared indexes on startup.
+|`wasichai.web.problem-base-uri` |`https://wasichai.dev/problems` |Prefix of the `type` field of errors.
+|`wasichai.web.cors-allowed-origin-patterns` |`http://localhost:*` |Allowed CORS origins.
+|`wasichai.seed.dev` |_(off)_ |`true` creates the _Demo_ organization and `admin@wasichai.local`/`admin`.
+Development only.
+|===
+
+=== Module properties
+
+Each module has `wasichai.<module>.enabled` (default `true`): `views`, `forms`, `pages`, `workflow`,
+`automation`, `documents`, `files`, `gis`, `notifications`, `agent`.
+
+[cols="3,2,4",options="header"]
+|===
+|Property |Default |Description
+|`wasichai.automation.poll-interval` |`1s` |Frequency of the queue; `0s` stops it.
+|`wasichai.automation.batch-size` |`20` |Runs per cycle (1–200).
+|`wasichai.automation.max-depth` |`3` |Maximum depth of chained rules (1–10).
+|`wasichai.automation.webhook-timeout` |`10s` |Maximum time of a webhook.
+|`wasichai.automation.allow-private-webhooks` |`false` |Allow webhooks to private addresses.
+|`wasichai.files.max-bytes` |`10MB` |Maximum file size.
+|`wasichai.files.store` |`LOCAL` |`LOCAL` or `S3`.
+|`wasichai.files.local.path` |`wasichai-files` |Folder of the local store.
+|`wasichai.files.s3.bucket`, `.endpoint`, `.region` (`us-east-1`), `.access-key`, `.secret-key`,
+`.path-style-access` (`false`), `.prefix` |— |S3 store. The keys are *secrets*.
+|`wasichai.files.cleanup.interval` / `.delay` |`1h` / `24h` |Cleanup of orphan files.
+|`wasichai.gis.geoserver.enabled` |`true` |Publishing to GeoServer.
+|`wasichai.gis.geoserver.url` |`http://localhost:8081/geoserver` |Address of GeoServer.
+|`wasichai.gis.geoserver.username` / `.password` |`admin` / `geoserver` |GeoServer credentials. *Secret*: change
+the defaults.
+|`wasichai.gis.geoserver.workspace` |`wasichai` |Workspace.
+|`wasichai.gis.geoserver.datastore.*` |`wasichai-postgis`, `localhost`, `5432`, `wasichai`, data schema,
+`wasichai`/`wasichai` |How GeoServer reaches PostGIS (from the GeoServer network).
+|`wasichai.notifications.tick` |`30s` |Cycle of the notification process; `0s` stops it.
+|`wasichai.notifications.rule-interval` |`15m` |Frequency of the notice rules.
+|`wasichai.notifications.rule-max-notifications` |`100` |Maximum per rule run.
+|`wasichai.notifications.retention` |`90d` |Retention of finished notices.
+|`wasichai.notifications.snooze-max` |`30d` |Maximum snooze.
+|`wasichai.notifications.listen` |`true` |Listen to PostgreSQL `LISTEN/NOTIFY` for the SSE stream.
+|`wasichai.notifications.stream-refresh` / `-heartbeat` / `-debounce` |`60s` / `25s` / `500ms` |SSE stream.
+|`wasichai.notifications.zone` / `.date-pattern` |_(system zone)_ / `dd/MM/yyyy` |Date format in the texts.
+|`wasichai.notifications.delivery-interval` / `-max-attempts` / `-backoff` / `-batch` |`1m` / `5` / `1m` / `100`
+|Delivery through channels (email).
+|`wasichai.notifications.email.enabled` / `.from` / `.subject-prefix` |`false` / — / `""` |Email channel (requires
+`spring-boot-starter-mail` and `spring.mail.*`).
+|`wasichai.agent.api-key` |`${ANTHROPIC_API_KEY:}` |Anthropic key. *Secret.*
+|`wasichai.agent.model` |`claude-haiku-4-5` |Model.
+|`wasichai.agent.max-tokens` / `.max-iterations` |`16000` / `8` |Limits per query.
+|===
+
+=== Example production configuration
+
+[source,yaml]
+----
+# application-prod.yml of your own application. Secrets arrive through environment variables.
+server:
+  port: 8080
+wasichai:
+  security:
+    jwt:
+      secret: ${WASICHAI_JWT_SECRET}
+      ttl: 4h
+      revocation: true
+    login:
+      enabled: true
+    password:
+      min-length: 12
+      require-digit: true
+      not-equal-email: true
+  web:
+    cors-allowed-origin-patterns: [ "https://licencias.example.org" ]
+  gis:
+    geoserver:
+      url: https://geoserver.internal.example.org/geoserver
+      username: ${GEOSERVER_USER}
+      password: ${GEOSERVER_PASSWORD}
+----

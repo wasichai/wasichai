@@ -1,0 +1,55 @@
+[[user-workflow]]
+== Avanzar un trámite: flujos de trabajo
+
+Cuando un objeto tiene un flujo de trabajo, cada registro está siempre en uno de sus estados y solo cambia de estado
+mediante una *transición*. El estado no es un campo que se pueda editar en el formulario.
+
+=== Dónde se ve el estado
+
+En la página de detalle, el panel del flujo (en el ejemplo, *Trámite de licencia*) muestra el estado actual en una
+etiqueta y, debajo, un botón por cada transición que sale de ese estado. Cada botón indica a qué estado lleva:
+*Aprobar → Aprobada* (<<user-fig-transitions-ok>>).
+
+En un estado final (como _Aprobada_ o _Rechazada_) el panel indica *No hay transiciones desde este estado*.
+
+[[user-transition]]
+=== Aplicar una transición
+
+.Objetivo
+Mover un registro al estado siguiente, por ejemplo aprobar una licencia en revisión.
+
+.Requisitos previos
+* Permiso de modificación (`UPDATE`) sobre el objeto.
+* Si la transición está reservada a ciertos roles, tener uno de ellos. En el ejemplo, *Aprobar*, *Observar* y
+  *Rechazar* son del rol _Revisor técnico_; *Enviar a revisión* y *Subsanar observaciones*, del _Registrador_.
+* Si el objeto pide motivo, el motivo del cambio.
+
+.Procedimiento
+. Abra el registro.
+. En el panel del flujo, pulse el botón de la transición.
+. Si se abre el diálogo *Motivo del cambio*, escriba el motivo y pulse *Continuar*.
+
+[[user-fig-transitions-ok]]
+.Transiciones disponibles para el revisor
+image::screenshots/{lang}/user/16-transitions-revisor.png[Panel Trámite de licencia en estado En revisión con los botones Observar, Aprobar y Rechazar activos,pdfwidth=45%]
+
+.Resultado esperado
+La etiqueta muestra el estado nuevo y aparecen los botones de las transiciones que salen de él.
+
+.Verificación
+El historial muestra una entrada *Modificación* con el cambio de `state` y el motivo.
+
+.Casos especiales
+* Una transición que su rol no puede aplicar aparece desactivada, con la razón debajo, por ejemplo
+  *requires role REVISOR* (<<user-fig-transitions-denied>>). El texto lo envía el servidor y llega en inglés.
+* Si otra persona movió el registro mientras usted lo tenía abierto, la transición se rechaza porque el registro ya
+  no está en el estado de partida. Recargue la página.
+* Una transición puede desencadenar reglas automáticas. En el ejemplo, al entrar en _Aprobada_ se emite el
+  certificado y se rellena el campo _Resultado_; al entrar en _En revisión_ se avisa a los revisores. Estos efectos
+  se ejecutan en segundo plano y pueden tardar unos segundos en verse.
+
+[[user-fig-transitions-denied]]
+.Las mismas transiciones vistas por el registrador
+image::screenshots/{lang}/user/17-transitions-registrador.png[Panel Trámite de licencia con los botones Observar, Aprobar y Rechazar desactivados y el texto requires role REVISOR bajo cada uno,pdfwidth=45%]
+
+TIP: Si un flujo está desactivado por el administrador, el panel no muestra botones de transición.

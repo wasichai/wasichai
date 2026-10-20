@@ -1,0 +1,31 @@
+[[admin-gis]]
+== Capas GIS
+
+Con el módulo GIS, cada campo de geometría puede publicarse en GeoServer como una capa WMS/WFS para otras
+herramientas cartográficas. menu:GIS[Capas] lista una fila por geometría de cada objeto, con su tipo, su sistema de
+coordenadas (CRS), su estado y los enlaces de la capa (<<admin-fig-layers>>).
+
+[[admin-fig-layers]]
+.Capas GIS con GeoServer deshabilitado
+image::screenshots/{lang}/admin/18-gis-layers.png[Pantalla Capas GIS con el aviso GeoServer no está configurado y la fila predio.lote Sin publicar,pdfwidth=100%]
+
+.Objetivo
+Publicar la geometría de un objeto en GeoServer.
+
+.Requisitos previos
+* `MANAGE_METADATA`.
+* GeoServer configurado y accesible por el servidor (`wasichai.gis.geoserver.*`, ver el _Manual técnico del
+  sistema_).
+
+.Procedimiento
+. En menu:GIS[Capas], pulse *Publicar* en la fila de la geometría.
+
+.Resultado esperado
+El estado pasa a publicado y aparecen el nombre de la capa y los enlaces WMS/WFS.
+
+.Casos especiales
+* Publicar es idempotente; despublicar retira la capa.
+* Si GeoServer no está configurado o está caído, la pantalla lo indica (*GeoServer no está configurado*) y solo
+  falla la publicación: los objetos, los registros y el mapa siguen funcionando. Las capturas de este manual se
+  tomaron así.
+* Eliminar un objeto despublica antes su capa.

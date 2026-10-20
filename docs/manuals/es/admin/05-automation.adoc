@@ -1,0 +1,94 @@
+[[admin-automation]]
+== Flujos de trabajo y automatización
+
+[[admin-workflows]]
+=== Flujos de trabajo
+
+Un objeto puede tener un flujo: estados y transiciones. menu:Automatización[Workflows] los dibuja en un lienzo
+(<<admin-fig-workflow>>).
+
+[[admin-fig-workflow]]
+.Lienzo del flujo «Trámite de licencia»
+image::screenshots/{lang}/admin/15-workflow-canvas.png[Lienzo con los estados Borrador, En revisión, Observada, Aprobada y Rechazada unidos por transiciones, y el panel Detalles,pdfwidth=100%]
+
+.Objetivo
+Definir el ciclo de vida de los registros de un objeto.
+
+.Procedimiento
+. Elija el *Objeto*. Si no tiene flujo, la pantalla ofrece una plantilla inicial (borrador → revisión →
+  aprobado/rechazado).
+. *Añadir estado* crea un estado; en el panel *Detalles* indique su nombre técnico, su etiqueta y su tipo: *Inicial*
+  (exactamente uno), *Intermedio* o *Final*.
+. Para crear una transición, arrastre desde el punto de un estado hasta otro. Selecciónela y complete nombre,
+  etiqueta y los *roles* que pueden aplicarla (vacío: cualquiera con `UPDATE`).
+. Seleccione el lienzo vacío para editar el nombre técnico y la etiqueta del flujo, y la casilla *Activo*.
+. *Recolocar* ordena el dibujo automáticamente. Pulse *Guardar flujo*.
+
+.Resultado esperado
+La página de detalle de los registros muestra el estado y los botones de transición.
+
+.Casos especiales
+* Un flujo inactivo no muestra botones en el registro.
+* Los registros nuevos empiezan en el estado inicial. Los que ya existían cuando se añadió el flujo no tienen estado
+  guardado y se tratan como si estuvieran en el inicial: muestran sus transiciones.
+* Cada transición queda en la auditoría y puede disparar reglas (_Al entrar en un estado_, _Al aplicar una
+  transición_).
+
+WARNING: *Eliminar flujo* borra la definición. Los registros conservan en la base el último estado que tenían, pero
+no se pueden aplicar transiciones hasta que el objeto tenga un flujo nuevo.
+
+[[admin-rules]]
+=== Reglas de automatización
+
+Una regla dice: _cuando_ pase algo a un registro, _si_ se cumplen unas condiciones, _haz_ unas acciones.
+menu:Automatización[Reglas] (<<admin-fig-rules>>).
+
+[[admin-fig-rules]]
+.La regla «Emitir certificado al aprobar»
+image::screenshots/{lang}/admin/16-automation-rules.png[Editor de una regla: nombre técnico, etiqueta, casilla habilitada, disparador Al entrar en un estado Aprobada, sin condiciones, y la acción Emitir un documento,pdfwidth=100%]
+
+Disparadores (*Cuándo*)::
+Al crear, al modificar o al eliminar un registro; al aplicar una transición (opcionalmente una concreta); al entrar
+en un estado concreto.
+Condiciones::
+Sobre un campo o sobre el estado: igual, distinto, mayor que, menor que, contiene, vacío, no vacío, ha cambiado. Sin
+condiciones, la regla actúa siempre que ocurre el disparador.
+Acciones::
+* *Escribir un campo* del registro.
+* *Crear un registro* en otro objeto.
+* *Webhook*: una llamada HTTP a una URL pública (no se admiten direcciones privadas).
+* *Emitir un documento* de un tipo del objeto.
+* *Notificar* a personas: ids o correos de usuario, `role:NOMBRE` o `unit:CÓDIGO` (requiere el módulo de
+  notificaciones).
+
+En los textos se puede leer el registro con dobles llaves: `{{codigo}}`, y además `{{id}}`, `{{state}}`,
+`{{user}}`, `{{today}}` y `{{now}}`.
+
+.Procedimiento
+. Elija el *Objeto*, pulse *Nueva regla* y complete *Nombre técnico*, *Etiqueta* y *Habilitada*.
+. Configure *Cuándo*, *Condiciones* (*Añadir condición*) y *Acciones* (*Añadir acción*).
+. Pulse *Guardar regla*.
+
+.Casos especiales
+* Las acciones se ejecutan en segundo plano, poco después del cambio (por defecto, el proceso revisa la cola cada
+  segundo), y actúan como la plataforma, no como la persona: en el historial figuran como *Sistema* con el motivo
+  `automation '<nombre>'`.
+* Una regla puede disparar otras; la cadena se corta a los 3 niveles de profundidad.
+* Un campo que usa una regla no se puede eliminar hasta quitarlo de la regla.
+
+[[admin-runs]]
+=== Ejecuciones
+
+menu:Automatización[Ejecuciones] muestra qué se disparó, qué no y por qué (<<admin-fig-runs>>). Se puede filtrar por
+*Estado* y por cantidad.
+
+[[admin-fig-runs]]
+.Ejecuciones de las reglas del ejemplo
+image::screenshots/{lang}/admin/17-automation-runs.png[Tabla de ejecuciones con estado Hecho, regla, disparador, fecha y el detalle de cada acción,pdfwidth=100%]
+
+Cada fila indica el estado (hecha, omitida con su razón, fallida), la regla, el disparador, cuándo ocurrió y el
+detalle de cada acción. Leer las ejecuciones solo requiere `READ` sobre el objeto, para que quien vio cambiar un
+registro pueda saber por qué.
+
+NOTE: En la versión {ui-version} de la interfaz, el detalle de la acción _Notificar_ aparece con la clave sin
+traducir `automations.actionTypes.NOTIFY`. Es un defecto de textos de la interfaz, no un error de ejecución.

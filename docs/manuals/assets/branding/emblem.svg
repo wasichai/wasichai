@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="Wasichai documentation emblem">
+  <!-- docs emblem, not a product logo: a roof (wasi) over three blocks, the modules an app assembles -->
+  <rect x="0" y="0" width="96" height="96" rx="20" fill="#181f2e"/>
+  <path d="M18 46 L48 20 L78 46" fill="none" stroke="#6f95e6" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="25" y="52" width="13" height="22" rx="3" fill="#3263c3"/>
+  <rect x="41.5" y="52" width="13" height="22" rx="3" fill="#ebf2ff"/>
+  <rect x="58" y="52" width="13" height="22" rx="3" fill="#3263c3"/>
+</svg>

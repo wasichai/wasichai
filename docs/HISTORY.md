@@ -2,6 +2,20 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-20 — User, administrator and system manuals, in Spanish and English
+
+`docs/manuals/` holds three manuals, each in Spanish and English, written in AsciiDoc and built to an HTML site and
+six PDF books ([ADR-070](adr/0070-manuals-in-asciidoc-beside-the-markdown-reference.md)): working with records, views,
+workflows, documents and maps; administering the model, users, roles, permissions, service accounts, the builders,
+automation, GIS layers and the audit, with the API-only functions (org units, notifications, tenants) as curl
+procedures; and the architecture, configuration of every `wasichai.*` property, data model, security, operation,
+backup, restore, disaster recovery and troubleshooting. The 80 screenshots are taken by Playwright
+(`yarn docs:screenshots`) from full-sample's new web on a synthetic demo database, the Distrito Demo, which
+`yarn docs:db:seed` loads through the REST API and `docs:db:export` / `docs:db:restore` turn into a verified plain-SQL
+copy with its manifest and integrity checks. `yarn docs:build` and `yarn docs:validate` build and check them; CI runs
+both. No library or REST change. New tests: none; `docs:validate` checks references, images, language parity and
+hygiene.
+
 ## 2026-10-20 — An optional Ant Design theme for wasichai-ui
 
 wasichai-ui ships a second optional theme, `ant-design`, light only

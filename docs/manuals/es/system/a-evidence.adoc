@@ -1,0 +1,37 @@
+[[sys-evidence]]
+== Matriz de evidencias
+
+Relación entre cada función documentada y su evidencia. _Captura_: figura tomada de la aplicación real. _Ejecución_:
+comprobado al ejecutar la aplicación, la API o los scripts durante la preparación de estos manuales. _Código_:
+leído en el código fuente, sin ejecutar.
+
+[cols="3,4,2",options="header"]
+|===
+|Función |Código |Evidencia
+|Inicio y cierre de sesión |`wasichai-core/…/identity/AuthController.kt`, `wasichai-ui/packages/core/src/auth` |Captura, ejecución
+|Lista, búsqueda, orden, paginación, vistas |`…/data/RecordController.kt`, `PhysicalTableRecordStore.kt`,
+`RecordListPage.tsx` |Captura, ejecución
+|Alta, edición con motivo, validaciones |`RecordService`, `DynamicForm.tsx`, `ReasonDialog.tsx` |Captura, ejecución
+|Unicidad (409), versión (412), motivo (400) |`RecordController.kt`, rest.md |Ejecución (API)
+|Relaciones y listas relacionadas |`RelatedRecordController.kt`, `RelatedList` |Captura
+|Historial y auditoría |`audit/AuditController.kt`, `AuditPage.tsx` |Captura
+|Flujos y transiciones por rol |`wasichai-workflow/…/WorkflowService.kt` |Captura (3 roles), ejecución
+|Documentos: emisión, congelado, impresión |`wasichai-documents`, `RecordDocuments.tsx`, `PrintableDocumentPage.tsx`
+|Captura, ejecución
+|Mapas y geometrías |`wasichai-gis`, `MapPage.tsx` |Captura (sin mapa base)
+|Capas GeoServer |`LayerService.kt` |Captura (GeoServer deshabilitado); publicación no ejecutada
+|Modelo: objetos, campos, relaciones |`metadata/MetadataController.kt`, `ObjectEditorPage.tsx` |Captura, ejecución
+(carga de datos)
+|Usuarios, roles, permisos de campo |`admin/AdminController.kt`, páginas de administración |Captura, ejecución
+|Cuentas de servicio |`ServiceAccountAdmin.kt` |Captura, ejecución (alta)
+|Unidades organizativas y notificaciones |`OrgUnitAdmin.kt`, `NotificationAdmin.kt` |Ejecución (API); sin pantalla
+|Reglas y ejecuciones |`wasichai-automation` |Captura, ejecución (54 ejecuciones)
+|Constructores de vistas, formularios, páginas, documentos |paquetes `views`, `forms`, `pages`, `documents` |Captura
+|Seguridad: revocación, límite de intentos, política |`WasichaiSecurityAutoConfiguration.kt`, `LoginThrottle.kt`
+|Código (desactivados por defecto en `full-sample`)
+|Organizaciones (alta y baja) |`OrganizationController.kt` |Código
+|Copia, restauración y verificación |`scripts/*.sh`, `database/verify.sql` |Ejecución
+|Procesos en segundo plano |autoconfiguraciones de cada módulo |Código; la cola de reglas, por ejecución
+|Asistente de IA |`wasichai-agent` |Código; no incluido en `full-sample`
+|Archivos (`FILE`, `IMAGE`) |`wasichai-files` |Ejecución en `e2e/smoke.sh` (API); sin pantalla de subida
+|===

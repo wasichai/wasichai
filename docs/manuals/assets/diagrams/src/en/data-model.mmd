@@ -1,0 +1,22 @@
+erDiagram
+    organizations ||--o{ users : has
+    organizations ||--o{ roles : has
+    users }o--o{ roles : "user_roles"
+    roles ||--o{ permissions : grants
+    roles ||--o{ field_permissions : restricts
+    organizations ||--o{ custom_objects : defines
+    custom_objects ||--o{ custom_fields : has
+    custom_objects ||--o{ relationships : "source / target"
+    custom_objects ||--o{ object_actions : declares
+    organizations ||--o{ org_units : has
+    users }o--o{ org_units : "user_org_units"
+    organizations ||--o{ service_accounts : has
+    organizations ||--o{ audit_log : records
+    custom_objects ||--|| DATA_TABLE : "app_data.name__org8"
+    custom_objects ||--o{ views : "views module"
+    custom_objects ||--o{ forms : "forms module"
+    custom_objects ||--o{ pages : "pages module"
+    custom_objects ||--o| workflows : "workflow module"
+    custom_objects ||--o{ automations : "automation module"
+    custom_objects ||--o{ document_types : "documents module"
+    document_types ||--o{ documents : issues

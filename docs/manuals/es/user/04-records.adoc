@@ -1,0 +1,229 @@
+[[user-records]]
+== Trabajar con registros
+
+Casi todo el trabajo diario consiste en encontrar registros, consultarlos y modificarlos. Este capítulo usa como
+ejemplo el objeto _Licencia de funcionamiento_.
+
+[[user-open-list]]
+=== Abrir la lista de registros de un objeto
+
+.Objetivo
+Ver los registros de un objeto.
+
+.Requisitos previos
+Permiso de lectura (`READ`) sobre el objeto.
+
+.Procedimiento
+. En *Inicio*, pulse la tarjeta del objeto. También puede ir a menu:Datos[Objetos] y pulsar *Ver registros* en la
+  fila del objeto.
+
+.Resultado esperado
+Se abre la lista (<<user-fig-list>>). El encabezado muestra el nombre del objeto en plural y su descripción; arriba a
+la derecha, el selector de vista (si el objeto tiene vistas guardadas) y *Nuevo registro*. La tabla muestra 25
+registros por página, salvo que la vista indique otra cantidad, y arriba a la derecha el total de resultados.
+
+[[user-fig-list]]
+.Lista de licencias con la vista «Bandeja de licencias»
+image::screenshots/{lang}/user/03-record-list.png[Tabla de licencias con columnas Expediente, Establecimiento, Giro, Área del local, Fecha de solicitud y Resultado,pdfwidth=100%]
+
+.Casos especiales
+* Pulse cualquier fila para abrir el registro (<<user-detail>>).
+* Las casillas de la primera columna solo marcan filas: el contador muestra cuántas lleva marcadas, pero la
+  interfaz no ofrece acciones sobre varias filas a la vez.
+* Una columna de referencia a otro registro (por ejemplo, _Solicitante_) muestra el identificador interno de ese
+  registro, no su nombre. Abra el registro para ver el vínculo con su código.
+* Si el objeto está marcado como _solo anexado_ o _solo por la aplicación_, un aviso encima de la tabla explica qué
+  escrituras no están disponibles.
+
+[[user-search]]
+=== Buscar
+
+.Objetivo
+Encontrar registros que contengan un texto.
+
+.Procedimiento
+. Escriba el texto en el cuadro *Buscar*, encima de la tabla.
+
+.Resultado esperado
+La tabla se actualiza mientras escribe y muestra solo los registros que contienen ese texto en alguno de sus campos de
+texto. El total de resultados cambia en consecuencia (<<user-fig-search>>).
+
+[[user-fig-search]]
+.Búsqueda del texto «Restaurante»
+image::screenshots/{lang}/user/04-record-search.png[La lista filtrada por el texto Restaurante,pdfwidth=100%]
+
+.Casos especiales
+* La búsqueda no distingue mayúsculas de minúsculas y encuentra el texto en cualquier posición: `rest` encuentra
+  _Restaurante_.
+* Solo busca en los campos de tipo texto, texto largo, opciones, correo y URL. No busca en números, fechas,
+  casillas ni referencias.
+* La búsqueda se combina con el filtro de la vista activa.
+
+[[user-sort]]
+=== Ordenar
+
+.Procedimiento
+. Pulse el título de una columna. Una flecha junto al título indica el orden: hacia arriba, ascendente; hacia abajo,
+  descendente.
+. Pulse otra vez el mismo título para invertir el orden.
+
+[[user-fig-sort]]
+.Lista ordenada por fecha de solicitud
+image::screenshots/{lang}/user/05-record-sort.png[La lista ordenada de forma ascendente por Fecha de solicitud,pdfwidth=100%]
+
+.Casos especiales
+* El orden que elija dura mientras esté en la pantalla. La vista guardada conserva el suyo.
+* Los registros con el mismo valor se ordenan entre sí de forma estable, así que al pasar de página no se repite ni
+  se salta ninguno.
+
+[[user-views]]
+=== Usar una vista guardada
+
+Una vista es una forma de listar preparada por el administrador: elige las columnas, un filtro, el orden y el tamaño
+de página. Si el objeto tiene vistas, aparece un selector en el encabezado de la lista.
+
+.Procedimiento
+. Abra el selector de vista (arriba a la derecha) y elija una vista.
+
+.Resultado esperado
+La tabla cambia de columnas, de filtro y de orden. En el ejemplo, la vista *Restaurantes* muestra solo las licencias
+con giro _RESTAURANTE_, ordenadas de la solicitud más reciente a la más antigua (<<user-fig-view>>).
+
+[[user-fig-view]]
+.La vista «Restaurantes»
+image::screenshots/{lang}/user/06-record-view.png[La lista con la vista Restaurantes: siete licencias, columnas Expediente, Establecimiento, Área del local y Fecha de solicitud,pdfwidth=100%]
+
+NOTE: Los filtros de una vista son de igualdad exacta (por ejemplo, _Giro = RESTAURANTE_). La interfaz no ofrece
+filtros libres por columna: para otras combinaciones, pida al administrador una vista nueva o use la búsqueda.
+
+[[user-paging]]
+=== Pasar de página
+
+Al pie de la tabla aparece *Página _n_ de _m_* con los botones *Página anterior* y *Página siguiente*
+(<<user-fig-pager>>). El tamaño de página es de 25 registros, o el que indique la vista (hasta 200).
+
+[[user-fig-pager]]
+.Pie de la tabla con la paginación
+image::screenshots/{lang}/user/07-record-pager.png[Las últimas filas de la tabla y el pie con el texto Página 1 de 2 y los botones anterior y siguiente,pdfwidth=100%]
+
+TIP: La interfaz no exporta listas a archivo. Si necesita los datos fuera de la aplicación, pida a un administrador
+técnico una extracción por la API (capítulo _API REST_ del _Manual técnico del sistema_).
+
+[[user-create]]
+=== Crear un registro
+
+.Objetivo
+Dar de alta un registro nuevo, por ejemplo una solicitud de licencia.
+
+.Requisitos previos
+* Permiso de creación (`CREATE`) sobre el objeto.
+* Los datos obligatorios, marcados con un asterisco rojo.
+* Si el objeto pide motivo, el motivo del alta.
+
+.Procedimiento
+. En la lista del objeto, pulse *Nuevo registro*.
+. Complete los campos (<<user-fig-new>>). Los campos de referencia (*Solicitante*, *Predio*) se eligen de una lista
+  desplegable con los registros que usted puede leer.
+. Si aparece el campo *Motivo*, escriba por qué da de alta el registro (hasta 500 caracteres).
+. Pulse *Guardar*. *Cancelar* vuelve a la lista sin guardar.
+
+[[user-fig-new]]
+.Formulario de alta de una licencia
+image::screenshots/{lang}/user/08-record-new.png[Formulario Nuevo registro con los campos de la licencia, el campo Motivo y los botones Guardar y Cancelar,pdfwidth=100%]
+
+.Resultado esperado
+Se abre la página de detalle del registro creado. Si el objeto tiene un flujo de trabajo, el registro empieza en su
+estado inicial (en el ejemplo, _Borrador_).
+
+.Verificación
+El registro aparece en la lista y su pestaña de historial muestra una entrada *Creación* con su usuario y su motivo.
+
+.Casos especiales
+* Si falta un dato obligatorio, el formulario no se envía y marca en rojo cada campo que falta
+  (<<user-fig-validation>>).
+* Un campo marcado como _único_ no admite un valor que ya tenga otro registro: el servidor rechaza el alta e indica
+  el campo.
+* Un campo con valor por defecto que usted deje vacío se rellena con ese valor al guardar.
+* Algunas reglas de automatización actúan después de guardar (por ejemplo, rellenan un campo). Sus efectos pueden
+  tardar unos segundos en verse; recargue la página.
+
+[[user-fig-validation]]
+.Campos obligatorios sin completar
+image::screenshots/{lang}/user/21-validation-errors.png[El formulario de alta con los campos Expediente, Establecimiento, Giro y Motivo marcados en rojo,pdfwidth=100%]
+
+[[user-detail]]
+=== Consultar un registro
+
+Al abrir un registro se ve su *página de detalle*. Su composición la decide el administrador; en el ejemplo
+(<<user-fig-detail>>) tiene tres pestañas (*Solicitud*, *Predio y solicitante*, *Historial*) y, a la derecha, el
+estado del trámite con las transiciones disponibles y una nota.
+
+[[user-fig-detail]]
+.Página de detalle de una licencia en revisión
+image::screenshots/{lang}/user/09-record-detail.png[Detalle de la licencia con las pestañas, el formulario por secciones Identificación, Local y Evaluación, y el panel Trámite de licencia con los botones Observar, Aprobar y Rechazar,pdfwidth=100%]
+
+* El encabezado muestra el objeto y el identificador interno del registro; *Volver* regresa a la lista del objeto.
+* Un objeto sin página configurada muestra una página generada con las pestañas *Detalles*, *Relacionados*,
+  *Historial* y, si tiene geometría, *Mapa*.
+* Debajo de la página puede aparecer el panel *Documentos emitidos* (<<user-documents>>).
+* Los campos que su rol no puede leer no aparecen. Los que puede leer pero no modificar se muestran sin poder
+  editarse.
+
+[[user-edit]]
+=== Modificar un registro
+
+.Objetivo
+Corregir o completar los datos de un registro.
+
+.Requisitos previos
+Permiso de modificación (`UPDATE`) sobre el objeto.
+
+.Procedimiento
+. Abra el registro.
+. Cambie los campos en el formulario de la pestaña principal.
+. Si aparece el campo *Motivo*, explique el cambio.
+. Pulse *Guardar*, al pie del formulario.
+
+.Resultado esperado
+El formulario queda con los valores guardados y el campo *Motivo* se vacía. La interfaz no muestra un aviso de
+confirmación: la verificación es el historial.
+
+.Verificación
+En la pestaña de historial, la entrada *Modificación* más reciente lista cada campo cambiado con su valor anterior y
+el nuevo, su usuario y su motivo.
+
+.Casos especiales
+* Si su rol no tiene `UPDATE`, el botón *Guardar* sigue visible pero el servidor rechaza el cambio con el mensaje
+  *Missing permission UPDATE* y no se guarda nada (<<user-roles>>).
+* Un registro de un objeto _solo anexado_ no se puede modificar ni eliminar, ni siquiera por un administrador.
+* Si el objeto está desactivado, sus registros se pueden leer pero no crear, modificar ni eliminar.
+
+CAUTION: Si dos personas editan el mismo registro a la vez desde la interfaz web, prevalece el último que guarda: la
+interfaz no avisa de que otra persona lo modificó entretanto. El historial conserva ambos cambios. Antes de una
+corrección importante, recargue el registro.
+
+[[user-delete]]
+=== Eliminar un registro
+
+.Objetivo
+Borrar un registro que no debe existir.
+
+.Requisitos previos
+Permiso de eliminación (`DELETE`) sobre el objeto.
+
+.Procedimiento
+. En la lista del objeto, pulse el icono de papelera de la fila (columna *Acciones*).
+. Confirme la eliminación. Si el objeto pide motivo, el diálogo *Motivo del cambio* sirve de confirmación: escriba el
+  motivo y pulse *Continuar*.
+
+.Resultado esperado
+El registro desaparece de la lista.
+
+.Casos especiales
+* No se puede eliminar un registro al que apunta un registro de un objeto _solo anexado_; el servidor lo rechaza y
+  explica el motivo encima de la tabla.
+* Eliminar un registro vacía las referencias que otros registros tenían hacia él.
+
+WARNING: La eliminación es definitiva: la interfaz no tiene papelera ni deshacer. El registro de auditoría conserva
+la constancia de que existió y quién lo borró, pero no permite recuperarlo. Si un registro solo debe dejar de usarse,
+pregunte al administrador si conviene un estado del flujo (por ejemplo, _Rechazada_) en lugar de borrarlo.

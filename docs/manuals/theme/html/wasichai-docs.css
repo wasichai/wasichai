@@ -1,0 +1,136 @@
+/* wasichai manuals, web edition. builds on asciidoctor's default sheet; colours from wasichai-ui's light theme */
+@import url('asciidoctor-default.css');
+
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-style: normal; font-display: swap; src: url('fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-style: italic; font-display: swap; src: url('fonts/IBMPlexSans-Italic.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 600; font-style: normal; font-display: swap; src: url('fonts/IBMPlexSans-SemiBold.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 700; font-style: normal; font-display: swap; src: url('fonts/IBMPlexSans-Bold.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 400; font-style: normal; font-display: swap; src: url('fonts/IBMPlexMono-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 700; font-style: normal; font-display: swap; src: url('fonts/IBMPlexMono-Bold.woff2') format('woff2'); }
+
+:root {
+  --brand: #3263c3;
+  --brand-strong: #1649ae;
+  --brand-soft: #ebf2ff;
+  --shell: #181f2e;
+  --shell-muted: #9ea5b2;
+  --surface: #fbfcfd;
+  --surface-muted: #f3f5f8;
+  --border: #dfe1e5;
+  --ink: #1b1f29;
+  --ink-muted: #656972;
+  --danger: #c92f33;
+  --success: #007e46;
+  --warning: #a15c00;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+html { background: #fff; }
+body { font-family: var(--sans); color: var(--ink); font-size: 16px; line-height: 1.6; text-rendering: optimizeLegibility; }
+p, li, dd, td { font-family: var(--sans); }
+#content, #footnotes, #header, #footer { max-width: 60rem; }
+#content p, #content li { max-width: 46rem; }
+
+/* the shell band: the same dark colour as the app's sidebar and login */
+#header { padding-top: 0; }
+#header > h1:first-child {
+  font-family: var(--sans); font-weight: 700; color: #fff; background: var(--shell); margin: 0 -1rem 0; padding: 2.2rem 1.25rem 1.6rem;
+  border-bottom: 5px solid var(--brand); letter-spacing: -0.01em; line-height: 1.15;
+}
+#header > h1:first-child::before {
+  content: ''; display: inline-block; width: 1.6em; height: 1.6em; margin-right: 0.6em; vertical-align: -0.35em;
+  background: url('../assets/branding/emblem.svg') center / contain no-repeat;
+}
+#header .details { border-bottom: 1px solid var(--border); color: var(--ink-muted); font-family: var(--sans); padding: 0.9rem 0; }
+#header .details span.author, #header .details span#revnumber { color: var(--ink); }
+#header .details br + span.author { color: var(--ink-muted); }
+
+h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6 { font-family: var(--sans); color: var(--shell); font-weight: 600; letter-spacing: -0.005em; }
+h2 { border-bottom: 2px solid var(--brand); padding-bottom: 0.3rem; }
+h3 { color: var(--brand-strong); }
+.sect1 + .sect1 { border-top: 0; }
+a { color: var(--brand-strong); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover, a:focus { color: var(--brand); }
+a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* left table of contents */
+#toc.toc2 { background: var(--surface-muted); border-right: 1px solid var(--border); }
+#toc a { color: var(--ink); text-decoration: none; }
+#toc a:hover { color: var(--brand-strong); text-decoration: underline; }
+#toctitle { color: var(--shell); font-size: 1.1rem; }
+#toc ul.sectlevel1 > li > a { font-weight: 600; }
+
+code, kbd, pre, .literalblock pre, .listingblock > .content > pre { font-family: var(--mono); }
+:not(pre):not([class^='L']) > code { color: var(--brand-strong); background: var(--surface-muted); border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }
+.literalblock pre, .listingblock > .content > pre:not(.highlight), .listingblock > .content > pre[class='highlight'], .listingblock > .content > pre[class^='highlight '] {
+  background: var(--surface-muted); border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; line-height: 1.5;
+}
+.listingblock > .title, .imageblock > .title, .tableblock > caption, .exampleblock > .title { font-family: var(--sans); font-style: italic; color: #3b4150; }
+
+/* admonitions: a label and an icon on every kind, so colour is never the only signal */
+.admonitionblock > table { border-left: 4px solid var(--border); background: var(--surface); border-radius: 0 6px 6px 0; }
+.admonitionblock > table td.icon { width: 6.5rem; padding: 0.6rem 0.8rem; text-align: left; vertical-align: top; }
+.admonitionblock > table td.icon .title { font-family: var(--sans); font-weight: 700; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.admonitionblock > table td.icon .title::before { display: inline-block; width: 1.4em; font-size: 1rem; text-transform: none; }
+.admonitionblock > table td.content { border-left: 0; color: var(--ink); padding: 0.6rem 1rem 0.6rem 0.4rem; }
+.admonitionblock.note > table { border-left-color: var(--brand); }
+.admonitionblock.note td.icon .title { color: var(--brand-strong); }
+.admonitionblock.note td.icon .title::before { content: 'ℹ'; }
+.admonitionblock.tip > table { border-left-color: var(--success); }
+.admonitionblock.tip td.icon .title { color: var(--success); }
+.admonitionblock.tip td.icon .title::before { content: '✓'; }
+.admonitionblock.important > table { border-left-color: var(--brand-strong); background: var(--brand-soft); }
+.admonitionblock.important td.icon .title { color: var(--brand-strong); }
+.admonitionblock.important td.icon .title::before { content: '!'; font-weight: 700; }
+.admonitionblock.caution > table { border-left-color: var(--warning); background: #fff8eb; }
+.admonitionblock.caution td.icon .title { color: var(--warning); }
+.admonitionblock.caution td.icon .title::before { content: '⚠'; }
+.admonitionblock.warning > table { border-left-color: var(--danger); background: #fdf1f1; }
+.admonitionblock.warning td.icon .title { color: var(--danger); }
+.admonitionblock.warning td.icon .title::before { content: '⛔'; }
+
+/* tables */
+table.tableblock { border: 1px solid var(--border); border-radius: 6px; border-collapse: separate; border-spacing: 0; overflow: hidden; font-size: 0.92rem; }
+table.tableblock > thead > tr > th { background: var(--shell); color: #fff; font-family: var(--sans); font-weight: 600; border-color: var(--shell); }
+table.tableblock > tbody > tr:nth-of-type(even) > * { background: var(--surface-muted); }
+th.tableblock, td.tableblock { border-color: var(--border) !important; }
+p.tableblock { font-size: inherit; }
+.tableblock-wrap { overflow-x: auto; }
+
+/* figures: the real screen, framed lightly so a white page does not melt into the paper */
+.imageblock { margin: 1.4rem 0 1.8rem; }
+.imageblock .content img { border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 1px 2px rgba(24, 31, 46, 0.06), 0 6px 18px rgba(24, 31, 46, 0.08); background: #fff; }
+.imageblock.diagram .content img, .imageblock.emblem .content img { border: 0; box-shadow: none; }
+.imageblock > .title { text-align: center; margin-top: 0.6rem; }
+
+.sidebarblock { background: var(--surface-muted); border-color: var(--border); border-radius: 6px; }
+.exampleblock > .content { border-color: var(--border); border-radius: 6px; background: var(--surface); }
+.quoteblock { border-left-color: var(--brand); }
+kbd { background: var(--surface-muted); border-color: var(--shell-muted); }
+.menuseq b, .menuref { color: var(--brand-strong); }
+.conum[data-value] { background: var(--brand); }
+
+/* procedure headings: objective, prerequisites, procedure, result, verification, special cases */
+.procedure > .title, .dlist.procedure dt { color: var(--brand-strong); font-weight: 600; }
+
+#footer { background: var(--shell); border-top: 5px solid var(--brand); }
+#footer-text { color: var(--shell-muted); font-family: var(--sans); }
+
+/* landing page */
+.manuals-grid ul { list-style: none; margin-left: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.manuals-grid li { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; background: var(--surface); }
+.manuals-grid li p { margin: 0; }
+
+@media screen and (max-width: 768px) {
+  body { font-size: 15px; }
+  #header > h1:first-child { margin: 0 -0.5rem; }
+}
+
+@media print {
+  #toc.toc2, #footer { display: none; }
+  body { font-size: 11pt; }
+  #header > h1:first-child { background: none; color: var(--shell); border-bottom-width: 2px; }
+  .imageblock .content img { box-shadow: none; }
+  a { color: inherit; }
+}

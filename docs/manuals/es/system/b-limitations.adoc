@@ -1,0 +1,28 @@
+[[sys-limitations]]
+== Limitaciones conocidas
+
+Comportamiento real de la versión documentada que conviene conocer. No son errores de los manuales.
+
+Interfaz web ({ui-version})::
+* No hay pantallas para unidades organizativas, notificaciones (ni bandeja), organizaciones ni subida de archivos;
+  se administran por la API.
+* No hay exportación de listas ni filtros libres por columna (solo vistas con filtros de igualdad).
+* Las columnas de referencia muestran el identificador interno del registro relacionado.
+* El menú y los botones no se ocultan según los permisos; el servidor rechaza lo no permitido.
+* La edición no envía `If-Match`: si dos personas guardan el mismo registro, prevalece la última.
+* Algunos mensajes del servidor llegan en inglés aunque la interfaz esté en español (credenciales incorrectas,
+  permiso que falta, motivo de una transición denegada, valor duplicado).
+* El detalle de la acción _Notificar_ en *Ejecuciones* aparece como `automations.actionTypes.NOTIFY`.
+* El alta de un registro usa el formulario generado, no el formulario guardado del objeto.
+
+Servidor ({product-version})::
+* Los intentos de inicio de sesión se cuentan en la memoria de cada nodo salvo que la aplicación aporte otro
+  almacén.
+* Sin la revocación activada, cerrar sesión no invalida la credencial en el servidor.
+
+Entorno de las capturas::
+* Sin acceso a OpenStreetMap: los mapas aparecen sin mapa base.
+* Sin GeoServer: no se pudo mostrar ni comprobar la publicación de capas.
+* `full-sample` no incluye el asistente de IA (no es compatible con la imagen nativa, ADR-068), y no se configuró
+  correo: el asistente y la entrega por correo no tienen capturas ni se comprobaron.
+* Solo se probó con Chromium.

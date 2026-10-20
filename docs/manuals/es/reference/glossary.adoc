@@ -1,0 +1,42 @@
+[[user-glossary]]
+== Glosario
+
+[glossary]
+ADMIN:: Rol que administra la organización. Omite todas las comprobaciones de permisos, salvo las reglas de
+escritura de los objetos (_solo anexado_, _solo por la aplicación_). No se puede eliminar.
+API REST:: Interfaz de programación (_Application Programming Interface_) por HTTP que usan la interfaz web y los
+sistemas externos. Toda operación de la interfaz pasa por ella.
+Auditoría:: Registro de solo anexado de todos los cambios de registros y de administración, con usuario, hora,
+motivo y valores anterior y nuevo.
+Campo:: Un dato de un objeto, con un tipo (texto, número, fecha, opciones, referencia, geometría…).
+Campo de sistema:: Campo que la plataforma mantiene en todo registro: `id`, `organization_id`, `created_at`,
+`updated_at`, `created_by`, `updated_by` y, con un flujo, `workflow_state`.
+Cuenta de servicio:: Identidad de un sistema externo que llama a la API con un id de cliente y un secreto, en lugar
+de un correo y una contraseña.
+Documento:: Escrito numerado que se emite desde un registro con una plantilla y queda congelado.
+EPSG:4326:: Código del sistema de coordenadas geográficas WGS 84 (latitud y longitud), en el que la API entrega
+siempre las geometrías.
+Estado:: Situación de un registro dentro de su flujo de trabajo. Puede ser inicial, intermedio o final.
+Formulario:: Organización de los campos de un objeto en secciones con título.
+GeoServer:: Servidor de mapas externo que publica capas WMS/WFS a partir de las tablas de la base de datos.
+JWT:: _JSON Web Token_, la credencial firmada que el servidor entrega al iniciar sesión.
+Motivo:: Explicación de un cambio que se guarda en la auditoría. Obligatorio en los objetos que lo piden.
+Objeto:: Tipo de información definido por el administrador; equivale a una tabla.
+Organización:: Unidad aislada de datos, usuarios y configuración (_tenant_). Ninguna ve los datos de otra.
+Página de detalle:: Pantalla de un registro, compuesta por pestañas, secciones y componentes.
+Permiso de campo:: Restricción de lectura o escritura de un campo concreto para un rol.
+Registro:: Elemento concreto de un objeto; equivale a una fila.
+Relación:: Vínculo entre dos objetos: uno a uno, uno a muchos, muchos a uno o muchos a muchos.
+Regla de automatización:: Disparador, condiciones y acciones que la plataforma ejecuta en segundo plano cuando cambia
+un registro.
+Rol:: Conjunto de permisos que se asigna a usuarios y cuentas de servicio.
+Solo anexado:: Regla de escritura de un objeto: sus registros se crean y nunca se modifican ni se eliminan.
+Solo por la aplicación:: Regla de escritura de un objeto: la API genérica no lo escribe; solo el código propio de la
+aplicación.
+Tenant:: Véase _Organización_.
+Transición:: Paso de un estado a otro en un flujo de trabajo, que puede estar reservado a ciertos roles.
+Unidad organizativa:: Nodo del organigrama (gerencia, subgerencia, área) al que pertenecen personas. Sirve para
+dirigir notificaciones; no concede permisos.
+Vista:: Configuración guardada de una lista: columnas, filtros de igualdad, orden y tamaño de página.
+Workflow:: Véase _Flujo de trabajo_.
+Flujo de trabajo:: Conjunto de estados y transiciones por los que pasa un registro de un objeto.

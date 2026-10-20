@@ -1,0 +1,106 @@
+[[sys-architecture]]
+== Arquitectura
+
+=== Contexto
+
+{product-name} no es una aplicación sino un conjunto de *bibliotecas*: _starters_ de Spring Boot para el servidor y
+paquetes npm `@wasichai/*` para la interfaz. Una aplicación concreta (como `full-sample`, o las aplicaciones de una
+organización) declara su propia clase principal con `@WasichaiApplication`, añade los starters de los módulos que
+necesita y monta `<WasichaiApp>` con los módulos de interfaz correspondientes (ADR-024, ADR-028). Los metadatos que
+definen los administradores generan en tiempo de ejecución el esquema, la API y las pantallas: no se genera código
+por objeto (ADR-003).
+
+[[sys-fig-context]]
+.Contexto del sistema
+image::diagrams/es-context.png[Diagrama de contexto: navegador y sistemas externos llaman a la web y al servidor; el servidor usa PostgreSQL, GeoServer y servicios opcionales,pdfwidth=85%,role=diagram]
+
+=== Componentes
+
+[cols="1,2,3",options="header"]
+|===
+|Componente |Tecnología |Responsabilidad
+|Servidor |Kotlin 2.4, Spring Boot 4.1 WebFlux (reactivo), JDK 25 |API REST bajo `/api`, seguridad JWT, metadatos,
+DDL dinámico, procesos en segundo plano.
+|Interfaz web |React 19, Vite 8, Tailwind CSS 4, MapLibre GL JS |Pantallas genéricas sobre la API; se compila dentro
+de cada aplicación.
+|Base de datos |PostgreSQL 18; PostGIS 3.6 con el módulo GIS; pgvector opcional |Metadatos (esquema `wasichai`) y
+datos de los objetos (esquema `app_data`).
+|GeoServer |Opcional |Publica capas WMS/WFS/WMTS desde PostGIS.
+|Servicios externos |Opcionales |API de Anthropic (asistente), SMTP (correo de notificaciones), S3 (archivos).
+|===
+
+El servidor no usa JPA ni repositorios de Spring Data: todas las consultas son SQL por `DatabaseClient` (R2DBC) con
+valores enlazados; las migraciones usan Flyway sobre JDBC. Los identificadores dinámicos se validan y entrecomillan
+con `SqlIdentifier`, y todo DDL de objetos pasa por `ObjectSchemaManager`.
+
+[[sys-modules]]
+=== Módulos
+
+[[sys-fig-modules]]
+.Dependencias entre módulos del servidor
+image::diagrams/es-modules.png[Diagrama de módulos: todos dependen de wasichai-core; pages depende de forms; integraciones opcionales punteadas,pdfwidth=90%,role=diagram]
+
+Las flechas continuas son dependencias obligatorias; las punteadas, integraciones opcionales que se activan si el
+otro módulo está presente. `wasichai-core` no depende de ningún módulo (lo comprueba `CoreArchitectureTest`); los
+módulos lo extienden por sus SPI: tipos de campo, contribuidores de consulta, _listeners_, componentes de página y
+puertos.
+
+[cols="1,1,3",options="header"]
+|===
+|Módulo |Starter |Qué añade
+|core |`wasichai-spring-boot-starter` |Objetos, campos, relaciones, registros, identidad (usuarios, roles, permisos,
+cuentas de servicio, unidades), organizaciones, auditoría, preferencias.
+|views |`…-starter-views` |Vistas de lista guardadas.
+|forms |`…-starter-forms` |Formularios por secciones.
+|pages |`…-starter-pages` |Páginas de detalle en árbol con plantillas (requiere forms).
+|workflow |`…-starter-workflow` |Estados y transiciones por objeto.
+|automation |`…-starter-automation` |Reglas disparador → condiciones → acciones, en cola.
+|documents |`…-starter-documents` |Tipos de documento, emisión numerada y congelada.
+|files |`…-starter-files` |Campos `FILE` e `IMAGE`, almacén local o S3.
+|gis |`…-starter-gis` |Campos `GEOMETRY`, consultas por `bbox`, publicación en GeoServer.
+|notifications |`…-starter-notifications` |Avisos, bandeja, reglas de aviso, entrega por correo, SSE.
+|agent |`…-starter-agent` |Asistente con IA sobre la API (Embabel + Anthropic).
+|===
+
+Cada módulo trae su autoconfiguración, su interruptor `wasichai.<módulo>.enabled` (por defecto `true`), sus
+propiedades y sus migraciones Flyway con su propia tabla de historial (ADR-024 a ADR-026). Una ruta de un módulo no
+instalado responde `404`.
+
+[[sys-request-flow]]
+=== Flujo de una petición
+
+[[sys-fig-request]]
+.Modificación de un registro
+image::diagrams/es-request-flow.png[Diagrama de secuencia de una petición PUT: filtro JWT, permisos, actualización con If-Match, auditoría y cola de automatizaciones,pdfwidth=100%,role=diagram]
+
+. El filtro de seguridad valida el JWT (HS256) y resuelve el usuario y su organización (_claim_ `org`).
+. El servicio de registros comprueba la acción sobre el objeto, los permisos de campo y las reglas de escritura.
+. La escritura filtra siempre por `organization_id`; con `If-Match`, compara también `updated_at` en la misma
+  sentencia (`412` si no coincide).
+. En la misma transacción se escribe la entrada de auditoría y se evalúan las reglas de automatización, que quedan
+  en `automation_runs` como `PENDING`; un proceso las ejecuta después (ADR-016).
+. La respuesta lleva el registro, su nuevo `ETag` y el `X-Correlation-Id`.
+
+=== Multiinquilino
+
+Cada fila de metadatos lleva `organization_id`, y cada objeto tiene una tabla física por organización:
+`app_data.<objeto>__<8 primeros caracteres hex del id de la organización>`. Toda consulta filtra por la
+organización del JWT. No hay ruta que liste todas las organizaciones.
+
+=== Decisiones relevantes
+
+[cols="1,4",options="header"]
+|===
+|ADR |Decisión
+|003, 004 |Metadatos en tiempo de ejecución; una tabla física por objeto.
+|010, 059 |JWT propio; revocación, límites de inicio de sesión y política de contraseñas.
+|016, 039 |Automatizaciones en cola; trabajo en segundo plano como la plataforma, con bloqueo de clúster.
+|024 a 027 |Bibliotecas y starters, SPI de extensión, migraciones por módulo, GIS opcional.
+|031 |Diferencias deliberadas con la aplicación original.
+|033 |Ejemplos e infraestructura en repositorios propios.
+|049, 050, 054 |Auditoría de administración, correlation id y origen; auditoría de solo anexado en la base.
+|051, 058 |Bloqueo optimista con ETag/If-Match; Idempotency-Key en altas.
+|070 |Manuales en AsciiDoc junto a la referencia Markdown.
+|===
+
+El índice completo está en {adr-index}[docs/adr/README.md].

@@ -1,0 +1,62 @@
+[[sys-security]]
+== Seguridad
+
+=== Autenticación
+
+* *Personas*: `POST /api/auth/login` con correo y contraseña devuelve un JWT HS256 firmado con
+  `wasichai.security.jwt.secret`, con `sub`, `jti`, `iss`, `iat`, `exp`, `org`, `email` y `roles`. Dura
+  `wasichai.security.jwt.ttl` (8 h). No hay _refresh token_: al caducar se vuelve a iniciar sesión.
+* *Cuentas de servicio*: `POST /api/auth/token` con `clientId` y `clientSecret` devuelve un JWT de 15 minutos con
+  el _claim_ `service_account`. El servidor guarda solo la huella del secreto.
+* Las contraseñas se guardan con BCrypt.
+* Rutas públicas: `/api/auth/login`, `/api/auth/token`, `/api/health`, `/actuator/health/**` y `OPTIONS`. Todo lo
+  demás exige `Authorization: Bearer`.
+
+=== Revocación, límites y política de contraseñas
+
+* Con `revocation=true`, cada usuario tiene un instante `tokens_valid_after`: el cierre de sesión, la desactivación,
+  el cambio de contraseña o de roles y la eliminación lo mueven, y los tokens anteriores reciben `401` (en otros
+  nodos, en un máximo de `revocation-cache`).
+* Con `login.enabled=true`, los intentos fallidos se cuentan por (correo, IP) y por correo; al superar el límite la
+  respuesta es `429` con `Retry-After`. El recuento se guarda en memoria de cada nodo salvo que la aplicación aporte
+  su propio `LoginAttemptStore`: con varios nodos, el límite efectivo se multiplica por el número de nodos.
+* La política de contraseñas se aplica al crear usuarios, al cambiar una contraseña y al crear una organización.
+
+=== Autorización
+
+* La organización sale siempre del token; nunca de un parámetro.
+* Cada servicio comprueba la acción (`READ`, `CREATE`, `UPDATE`, `DELETE`, acciones propias, `MANAGE_*`) sobre el
+  objeto; la interfaz solo oculta lo que `GET /api/auth/me/permissions` le dice, sin conceder nada (ADR-020).
+* Permisos de campo, _solo sus registros_, ámbitos de lectura (`RecordReadScope`) y máscaras de lectura
+  (`RecordReadMask`) que aporte la aplicación se aplican a listas, registros, historial y auditoría.
+* `ADMIN` omite las comprobaciones de permisos, no las reglas de escritura, y nunca se aplica a cuentas de servicio.
+* Las rutas de un módulo no instalado responden `404`.
+
+=== Límites de confianza
+
+* El navegador es no confiable: todo se valida en el servidor.
+* Los valores de los registros se enlazan siempre como parámetros SQL; los nombres de objetos y campos se validan y
+  se entrecomillan (`SqlIdentifier`).
+* Los webhooks de automatización rechazan direcciones privadas salvo `allow-private-webhooks=true`.
+* Lo que llega al modelo de IA del asistente lo decide la aplicación (ADR-056); sin clave de API, el asistente está
+  desactivado.
+
+=== Auditoría
+
+Ver <<sys-data-model>> y el capítulo de auditoría del _Manual del administrador_. Cada petición lleva un
+`X-Correlation-Id` (propio o generado) que se guarda en las entradas de auditoría y en las ejecuciones de reglas, y
+aparece en los registros del servidor como clave MDC `correlationId`.
+
+=== Secretos
+
+[cols="2,3",options="header"]
+|===
+|Secreto |Dónde vive
+|`WASICHAI_JWT_SECRET` |Entorno de ejecución. Cambiarlo invalida todas las sesiones.
+|Credenciales de base de datos |Entorno de ejecución.
+|Secretos de cuentas de servicio |Solo los conoce el sistema cliente; el servidor guarda su huella.
+|Credenciales de GeoServer, S3, SMTP, Anthropic |Entorno de ejecución.
+|===
+
+La base de datos contiene huellas BCrypt de contraseñas y secretos, nunca su valor. La base de demostración de este
+paquete contiene las huellas de contraseñas de demostración, públicas por diseño.

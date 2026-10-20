@@ -1,0 +1,34 @@
+[[user-faq]]
+== Frequently asked questions
+
+Can I recover a record I deleted?::
+Not from the application. Deletion is final; the audit log keeps that it existed and who deleted it. Only a
+technical restore of a backup could recover it, and it would affect the whole database.
+
+Why can I not change the state of a record from the form?::
+Because the state is not a field: it only changes through the transitions of the workflow (<<user-workflow>>),
+which check your role and are recorded.
+
+Why does a column show a long code such as `a8a1e643-…`?::
+It is the internal identifier of the related record. Open the record to see the link by its code, or ask the
+administrator for a view without that column.
+
+Can I export a list to Excel or CSV?::
+The interface has no export. A technical administrator can extract the data through the API.
+
+Why do I see screens in the menu that I cannot use?::
+The menu is the same for everyone. What you can do is decided by the server on every operation (<<user-roles>>).
+
+Why does a document not reflect a change I made to the record?::
+Documents are frozen when issued. Issue a new one of the same type: the previous one becomes *Archived*.
+
+Why does the map not show streets?::
+The base map comes from an external service. If your network does not allow access to it, only the geometries are
+seen.
+
+Are my changes saved on their own?::
+No. Click *Save*. If the session expires first, what you typed is lost.
+
+Who sees what I do?::
+Every change stays in the history of the record and in the audit log of the organization, with your user, the time
+and the reason.

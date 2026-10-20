@@ -1,0 +1,49 @@
+= System manual: Architecture, installation, operation and recovery of Wasichai
+:manual-title: System manual
+:description: Reference to install, configure, operate, maintain and recover a Wasichai application.
+include::../attributes.adoc[]
+include::locale.adoc[]
+:author: Wasichai documentation
+:toc:
+:title-page:
+
+include::system/00-about.adoc[]
+
+include::system/01-architecture.adoc[]
+
+include::system/02-requirements.adoc[]
+
+include::operations/installation.adoc[]
+
+include::reference/configuration.adoc[]
+
+include::reference/data-model.adoc[]
+
+include::system/05-security.adoc[]
+
+include::system/06-api.adoc[]
+
+include::system/07-background.adoc[]
+
+include::operations/operation.adoc[]
+
+include::operations/backup-and-restore.adoc[]
+
+include::operations/demo-database.adoc[]
+
+include::operations/disaster-recovery.adoc[]
+
+include::operations/troubleshooting.adoc[]
+
+include::system/12-quality.adoc[]
+
+include::system/13-maintaining-docs.adoc[]
+
+[appendix]
+include::system/a-evidence.adoc[]
+
+[appendix]
+include::system/b-limitations.adoc[]
+
+[appendix]
+include::reference/glossary.adoc[]

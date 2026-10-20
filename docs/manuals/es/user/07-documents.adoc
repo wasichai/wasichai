@@ -1,0 +1,58 @@
+[[user-documents]]
+== Emitir e imprimir documentos
+
+Un *documento* es un escrito numerado que se genera desde un registro a partir de una plantilla del administrador:
+un certificado, una resolución, un oficio. Al emitirse recibe un número correlativo (por ejemplo,
+`CLF-2026-001`: sigla, año y secuencia) y queda *congelado*: guarda la plantilla y los valores tal como estaban en
+ese momento. Cambiar después el registro o la plantilla no altera un documento ya emitido.
+
+[[user-issue-document]]
+=== Emitir un documento
+
+.Objetivo
+Generar un documento numerado desde un registro.
+
+.Requisitos previos
+* Permiso de lectura sobre el objeto.
+* Que el administrador haya creado al menos un tipo de documento para el objeto.
+
+.Procedimiento
+. Abra el registro y baje hasta el panel *Documentos emitidos*, al pie de la página.
+. En *Elige un tipo*, elija el tipo de documento.
+. Pulse *Emitir*.
+
+.Resultado esperado
+El documento aparece en la tabla del panel con su *Número*, la fecha y hora en que se *Emitió* y el *Estado*
+*Vigente* (<<user-fig-documents>>).
+
+[[user-fig-documents]]
+.Panel de documentos emitidos de una licencia aprobada
+image::screenshots/{lang}/user/12-record-documents.png[Pie de la página de una licencia con el formulario y el panel Documentos emitidos con el certificado CLF-2026-001 vigente,pdfwidth=100%]
+
+.Verificación
+El historial del registro muestra una entrada *Emisión*.
+
+.Casos especiales
+* Emitir de nuevo un documento del mismo tipo para el mismo registro archiva el anterior: siempre hay como máximo
+  uno *Vigente* por tipo y registro; los demás quedan como *Archivado*.
+* Algunos documentos se emiten solos al llegar a un estado del flujo. En el ejemplo, el certificado se emite al
+  aprobar la licencia; en el historial esa emisión figura a nombre de *Sistema*.
+* Un documento muestra todos sus datos a quien puede verlo: no se le aplican los permisos de campo, a diferencia del
+  resto de la aplicación.
+
+[[user-print-document]]
+=== Ver e imprimir un documento
+
+.Procedimiento
+. En el panel *Documentos emitidos*, pulse la fila del documento. Se abre un diálogo con el documento y el enlace
+  *Imprimir*.
+. Pulse *Imprimir*. La hoja imprimible se abre en una pestaña nueva (<<user-fig-print>>).
+. Pulse *Imprimir / Guardar PDF* y elija la impresora, o _Guardar como PDF_ en el diálogo de impresión del
+  navegador.
+
+[[user-fig-print]]
+.Hoja imprimible del certificado
+image::screenshots/{lang}/user/13-document-print.png[Hoja A4 con el título Certificado de licencia CLF-2026-001 y el texto del certificado; arriba, el número y el botón Imprimir / Guardar PDF,pdfwidth=100%]
+
+NOTE: La hoja imprimible se muestra siempre con el tema claro, sea cual sea el tema elegido. Un documento archivado
+se imprime con la marca *ARCHIVADO*.

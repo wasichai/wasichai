@@ -1,0 +1,21 @@
+:lang: es
+:doc-edition-label: Edición
+:toc-title: Índice
+:figure-caption: Figura
+:table-caption: Tabla
+:example-caption: Ejemplo
+:appendix-caption: Apéndice
+:chapter-signifier: Capítulo
+:part-signifier: Parte
+:section-refsig: Sección
+:chapter-refsig: Capítulo
+:appendix-refsig: Apéndice
+:note-caption: Nota
+:tip-caption: Consejo
+:important-caption: Importante
+:caution-caption: Precaución
+:warning-caption: Advertencia
+:version-label: Versión
+:last-update-label: Última actualización
+:untitled-label: Sin título
+:listing-caption: Listado

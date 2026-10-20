@@ -1,0 +1,12 @@
+stateDiagram-v2
+    direction TB
+    [*] --> Borrador
+    Borrador --> En_revision: Enviar a revisión (REGISTRADOR)
+    En_revision --> Observada: Observar (REVISOR)
+    Observada --> En_revision: Subsanar (REGISTRADOR)
+    En_revision --> Aprobada: Aprobar (REVISOR)
+    En_revision --> Rechazada: Rechazar (REVISOR)
+    Aprobada --> [*]
+    Rechazada --> [*]
+    En_revision: En revisión
+    note right of Aprobada: la regla certificar-aprobada emite CLF-aaaa-nnn
