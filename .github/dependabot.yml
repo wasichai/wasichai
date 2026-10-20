@@ -12,7 +12,7 @@ updates:
       actions:
         applies-to: version-updates
         patterns:
-          - "*"
+          - '*'
         update-types:
           - minor
           - patch
@@ -29,7 +29,7 @@ updates:
       dependencies:
         applies-to: version-updates
         patterns:
-          - "*"
+          - '*'
         update-types:
           - minor
           - patch
@@ -46,7 +46,7 @@ updates:
       tooling:
         applies-to: version-updates
         patterns:
-          - "*"
+          - '*'
         update-types:
           - minor
           - patch
