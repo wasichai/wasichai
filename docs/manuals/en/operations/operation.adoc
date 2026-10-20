@@ -1,0 +1,64 @@
+[[sys-operation]]
+== Daily operation
+
+=== Starting, stopping and restarting
+
+The server is a Java process. How it is managed (systemd, container, orchestrator) is decided by each installation;
+the platform does not impose it.
+
+[cols="1,3",options="header"]
+|===
+|Action |Reference command (`full-sample`, from `full-sample/`)
+|Start |`java -jar server/build/libs/server.jar` with the variables of <<sys-configuration>>
+|Stop |`SIGTERM` signal to the process (Spring Boot shuts down gracefully)
+|Restart |Stop and start. The database does not need to be stopped.
+|===
+
+Several instances can live side by side on the same database: rule runs are shared out with
+`FOR UPDATE SKIP LOCKED` and the periodic processes with a cluster lock (<<sys-background>>).
+
+=== Checking the status
+
+[source,bash]
+----
+curl -s http://localhost:8090/api/health            # {"status":"UP","application":"wasichai"}
+curl -s http://localhost:8090/actuator/health        # {"groups":["liveness","readiness"],"status":"UP"}
+----
+
+Both routes are public. For a load balancer or an orchestrator use `/actuator/health/liveness` and
+`/actuator/health/readiness`. Without `management.endpoint.health.show-details`, Actuator only returns the
+aggregate status.
+
+=== Logs
+
+The server writes to standard output in the Spring Boot format. Each line of a request carries the `correlationId`
+(MDC), the same one the response returns in `X-Correlation-Id` and the audit log stores.
+
+[cols="2,3",options="header"]
+|===
+|Symptom |What to look for
+|Does not start |The last lines: JWT `secret` missing or short, database unreachable, failed migration
+(`FlywayException`).
+|5xx errors |The lines with the `correlationId` the response gave.
+|Rules that do not act |menu:Automation[Runs] and the lines of `AutomationRunner`.
+|Layers that are not published |GeoServer responses in the lines of `wasichai.gis`.
+|Emails that do not arrive |`notification_deliveries` and the lines of the email channel.
+|===
+
+=== Smoke tests after a deployment or a restore
+
+. `GET /api/health` returns `UP`.
+. Sign-in with a known account works.
+. `GET /api/objects` lists the expected objects.
+. A record list returns the expected total.
+. A detail page opens in the interface.
+. If there are rules, a recent run appears as done.
+
+`full-sample` includes `e2e/smoke.sh` (bash, curl and jq), which creates an object of its own and goes through
+every module over the API. It writes data: use it in test environments.
+
+[source,bash]
+----
+# from full-sample/
+BASE_URL=http://localhost:8090 e2e/smoke.sh       # ends with: smoke passed against http://localhost:8090
+----

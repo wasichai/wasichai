@@ -27,7 +27,7 @@ An active account in the organization.
 
 [[user-fig-login]]
 .Sign-in screen
-image::screenshots/{lang}/user/01-login.png[Sign-in card with the name of the application, the Email and Password fields and the Sign in button,pdfwidth=50%]
+image::screenshots/{lang}/user/01-login.png["Sign-in card with the name of the application, the Email and Password fields and the Sign in button",pdfwidth=50%]
 
 .Expected result
 The *Home* page opens (<<user-fig-home>>). Your name and your email appear at the foot of the side menu.

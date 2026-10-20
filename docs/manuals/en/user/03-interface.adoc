@@ -1,9 +1,11 @@
 [[user-interface]]
 == A tour of the interface
 
+:user-home-alt: Home page with the dark side menu on the left and cards with the number of objects and a shortcut to \
+each object
 [[user-fig-home]]
 .Home page of an administrator
-image::screenshots/{lang}/user/02-home.png[Home page with the dark side menu on the left and cards with the number of objects and a shortcut to each object,pdfwidth=100%]
+image::screenshots/{lang}/user/02-home.png["{user-home-alt}",pdfwidth=100%]
 
 === Screen layout
 

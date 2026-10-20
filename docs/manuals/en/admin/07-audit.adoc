@@ -1,0 +1,38 @@
+[[admin-audit]]
+== Audit
+
+The audit log keeps every creation, change, deletion, transition and document issue, and the administration changes
+(users, roles, permissions, service accounts, units, objects, fields, relationships and the organization). It is
+append-only: the database prevents changing or deleting its rows, the application included.
+
+menu:Administration[Audit] (<<admin-fig-audit>>).
+
+:admin-audit-alt: Audit table with operation, object, record, user, reason and date; an expanded entry shows the \
+changed field Resultado
+[[admin-fig-audit]]
+.Audit log with one entry expanded
+image::screenshots/{lang}/admin/10-audit.png["{admin-audit-alt}",pdfwidth=100%]
+
+.Objective
+Find out who changed what and when.
+
+.Procedure
+. Filter by *Object* and by *Operation*, and pick the *Limit* of entries.
+. Expand an entry with the arrow to see the fields that changed, with the previous value and the new one.
+
+Each entry shows the operation, the object, the identifier of the record, the user (or *System* for the rules), the
+reason and the date.
+
+.Special cases
+* The audit log respects permissions: each person sees the entries of the objects they can read, without the fields
+  they cannot read.
+* Administration entries (`admin:user`, `admin:permission`…) are only seen by those who have
+  `MANAGE_ORGANIZATION`. They never contain passwords or secrets: a password change appears as
+  `passwordChanged: true`.
+* The screen filters by object and operation. The API also accepts a period (`from`, `to`), user (`userId`),
+  service account, origin (`source`) and correlation identifier, with cursor pagination (`GET /api/audit`, see the
+  REST reference).
+* Deleting a service account removes its name from its entries; disabling it keeps it.
+
+NOTE: Purging old entries is only possible with a dedicated database role (`wasichai.audit.purge-role`), outside
+the application. It is a technical task (<<admin-technical>>).

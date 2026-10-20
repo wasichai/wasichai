@@ -1,0 +1,45 @@
+[[admin-checklists]]
+== Checklists for critical operations
+
+[[admin-check-delete]]
+=== Before deleting an object, a field or a relationship
+
+[%interactive]
+* [ ] Is it enough to disable the object (*Active* checkbox) instead of deleting it?
+* [ ] Is there a recent backup, and is it known how to restore it?
+* [ ] Have the data that must be kept been exported through the API?
+* [ ] Which views, forms, pages, rules, document types and permissions depend on it? (They are deleted with the
+  object.)
+* [ ] Does any other object reference it? (The server will prevent it and name the reference.)
+* [ ] Have the people who work with it been told?
+* [ ] Was it tried first in a test environment?
+
+[[admin-check-permissions]]
+=== Before changing permissions
+
+[%interactive]
+* [ ] Which people have the role? (menu:Administration[Users]).
+* [ ] Does the change withdraw access from someone who needs it?
+* [ ] If it grants `MANAGE_METADATA` or `MANAGE_ORGANIZATION`, is it essential?
+* [ ] Afterwards: check with a test account and review the `admin:permission` entry in the audit log.
+
+[[admin-check-offboarding]]
+=== A person leaves
+
+[%interactive]
+* [ ] Disable them (do not delete them) in menu:Administration[Users].
+* [ ] If revocation is not on, remember that their credentials stay valid until they expire (8 h by default).
+* [ ] Remove them from their organizational units (API).
+* [ ] Check whether they knew secrets of service accounts and rotate them.
+
+[[admin-check-restore]]
+=== Before a restore
+
+[%interactive]
+* [ ] Which backup is restored, and from what date? Which later changes will be lost?
+* [ ] Is it first restored into a separate database to check it?
+* [ ] Has the application been stopped or have people been told?
+* [ ] Afterwards: check sign-in, the main objects and the audit log (_System manual_, _Backup and restore_).
+
+WARNING: Restoring a whole database replaces all the data of every organization it holds with the data of the
+backup. Whatever was done after the backup is lost.

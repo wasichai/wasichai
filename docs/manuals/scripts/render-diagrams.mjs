@@ -47,16 +47,23 @@ await page.evaluate((c) => window.mermaid.initialize(c), config)
 
 const files = readdirSync(src, { withFileTypes: true })
     .filter((d) => d.isDirectory())
-    .flatMap((d) => readdirSync(join(src, d.name)).filter((f) => f.endsWith('.mmd')).map((f) => join(d.name, f)))
+    .flatMap((d) =>
+        readdirSync(join(src, d.name))
+            .filter((f) => f.endsWith('.mmd'))
+            .map((f) => join(d.name, f))
+    )
     .sort()
 for (const file of files) {
     const name = file.replace(/\.mmd$/, '').replace('/', '-')
     const code = readFileSync(join(src, file), 'utf8')
-    await page.evaluate(async ({ id, code }) => {
-        await document.fonts.ready
-        const { svg } = await window.mermaid.render(id, code)
-        document.getElementById('d').innerHTML = svg
-    }, { id: `m-${name}`, code })
+    await page.evaluate(
+        async ({ id, code }) => {
+            await document.fonts.ready
+            const { svg } = await window.mermaid.render(id, code)
+            document.getElementById('d').innerHTML = svg
+        },
+        { id: `m-${name}`, code }
+    )
     await page.locator('#d').screenshot({ path: join(out, `${name}.png`), omitBackground: false })
     console.log(`diagram  ${name}.png`)
 }

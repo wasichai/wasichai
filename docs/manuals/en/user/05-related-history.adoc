@@ -12,9 +12,11 @@ their _Predios_ and their _Licencias_. The detail page shows these links in rela
 . Go to the tab that holds the related lists: in the example, *Predio y solicitante*; in a generated page,
   *Related*.
 
+:user-related-alt: Predio y solicitante tab with two tables: the plot P-0004 and the applicant C-0012, each with its \
+Edit link
 [[user-fig-related]]
 .Related lists of a licence
-image::screenshots/{lang}/user/10-record-related.png[Predio y solicitante tab with two tables: the plot P-0004 and the applicant C-0012, each with its Edit link,pdfwidth=100%]
+image::screenshots/{lang}/user/10-record-related.png["{user-related-alt}",pdfwidth=100%]
 
 Each list shows the name of the relationship, its type (for example, `MANY_TO_ONE`) and how many records it holds.
 *Edit* opens the related record. The lists work both ways: from a taxpayer you see their licences, from a licence,
@@ -32,9 +34,11 @@ cannot be changed or deleted from the application.
 .Procedure
 . Open the record and go to the *Historial* tab.
 
+:user-history-alt: Historial tab with two entries: Create and Update, each with user, relative date, reason and the \
+change of state from borrador to en_revision
 [[user-fig-history]]
 .History of a licence
-image::screenshots/{lang}/user/11-record-history.png[Historial tab with two entries: Create and Update, each with user, relative date, reason and the change of state from borrador to en_revision,pdfwidth=100%]
+image::screenshots/{lang}/user/11-record-history.png["{user-history-alt}",pdfwidth=100%]
 
 Each entry shows:
 

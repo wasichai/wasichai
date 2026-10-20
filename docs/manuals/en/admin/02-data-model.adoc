@@ -1,0 +1,191 @@
+[[admin-data-model]]
+== The data model: objects, fields and relationships
+
+The whole model is defined from menu:Data[Objects] and menu:Data[Relationships]. Every operation in this chapter
+changes the database at that moment: creating an object creates its table, adding a field adds a column, deleting a
+field drops the column with its data.
+
+Common requirement: the `MANAGE_METADATA` permission (or the `ADMIN` role).
+
+[[admin-objects]]
+=== The object list
+
+menu:Data[Objects] lists the objects of the organization with their label, their technical name and their geometry
+(<<admin-fig-objects>>). *View records* opens the record list; the pencil opens the editor.
+
+:admin-objects-alt: Table with the objects Contribuyente, Licencia de funcionamiento and Predio, with the View records \
+and edit buttons
+[[admin-fig-objects]]
+.Object list
+image::screenshots/{lang}/admin/01-objects.png["{admin-objects-alt}",pdfwidth=100%]
+
+[[admin-object-create]]
+=== Creating an object
+
+.Objective
+Define a new kind of information, with its fields.
+
+.Prerequisites
+* `MANAGE_METADATA`.
+* A technical name: lower case, no spaces (for example, `predio`). It cannot be changed later.
+
+.Procedure
+. In menu:Data[Objects], click *New object* (<<admin-fig-object-new>>).
+. Fill in *Technical name*, *Label* (singular), *Plural label* and, if you want, *Description*.
+. In *Fields*, click *Add field* for each field: technical *Name*, *Label*, *Type* and, where relevant, *Required*
+  and *Unique*. For an options field (`ENUM`) type the *Options (comma separated)*; for a reference (`RELATION`),
+  pick the *Target object*.
+. Click *Save*.
+
+[[admin-fig-object-new]]
+.Creating an object
+image::screenshots/{lang}/admin/04-object-new.png["New object form with technical name, labels, description and one field row",pdfwidth=100%]
+
+.Expected result
+The object appears in the list and in *Home*, with no records.
+
+.Verification
+Open *View records*: the list is empty and *New record* shows the defined fields.
+
+.Special cases
+* The names `id`, `organization_id`, `created_at`, `updated_at`, `created_by`, `updated_by`, `workflow_state`,
+  `version`, `count` and `after` are reserved by the platform; the editor rejects them.
+* A technical name repeated in the organization is rejected.
+* No role except `ADMIN` can use the new object until it is granted permissions (<<admin-permissions>>).
+
+[[admin-field-types]]
+=== Field types
+
+[cols="1,1,3",options="header"]
+|===
+|Type |Column |Use
+|`TEXT` |`text` |Short text. Included in the search.
+|`LONG_TEXT` |`text` |Long text (remarks). Included in the search; cannot be indexed.
+|`INTEGER` |`bigint` |Whole numbers.
+|`DECIMAL` |`numeric` |Amounts, areas.
+|`BOOLEAN` |`boolean` |Yes/no (checkbox).
+|`DATE` |`date` |Date without time.
+|`DATETIME` |`timestamptz` |Instant. It can set an IANA *Time zone* (`America/Lima`) or a fixed offset (`-05:00`)
+in which it is shown.
+|`ENUM` |`text` + `CHECK` |Closed list of options.
+|`EMAIL` |`text` |Email.
+|`URL` |`text` |Web address.
+|`UUID` |`uuid` |Identifier.
+|`RELATION` |`uuid` + foreign key |Reference to a record of another object. A relationship creates it.
+|`GEOMETRY` |PostGIS |Point, line, polygon or their multi variants, with their SRID. Requires the GIS module.
+|`FILE`, `IMAGE` |descriptor |Files. Requires the files module; the current web interface offers no control to
+upload them (they are managed through the API).
+|===
+
+[[admin-object-edit]]
+=== Editing an object
+
+The editor (pencil in the list) has several cards (<<admin-fig-object-editor>>).
+
+:admin-object-editor-alt: Object details card with the locked technical name, labels, description, the Active checkbox \
+and the write rules
+[[admin-fig-object-editor]]
+.Object editor: details and write rules
+image::screenshots/{lang}/admin/02-object-editor.png["{admin-object-editor-alt}",pdfwidth=100%]
+
+Object details::
+Labels and description. *Active*: an inactive object keeps its data and can be read, but accepts no new records or
+changes; it is the reversible alternative to deleting it. Click *Save*: *Changes saved* appears.
+Write rules::
+* *Append-only*: records are created and never edited or deleted, not even by `ADMIN`.
+* *Application only*: the generic API (and therefore the interface) does not write its records; only the
+  application's own code does.
+* *Requires a reason*: every creation, change, deletion or transition requires a reason, which stays in the
+  history.
+Fields::
+One row per field, with its editable label and the options *Required*, *Unique*, *Visible*, *Editable* and
+*Indexed* (and the *Time zone* on `DATETIME` fields). *System fields* expands the ones the platform maintains. The
+name and the type of a field cannot be changed (<<admin-fig-object-fields>>).
+Composite indexes and composite uniqueness::
+Comma-separated lists of fields. An index speeds up searches by that combination; a composite uniqueness prevents
+two records from repeating those values together (from 2 to 32 fields).
+Relationships::
+The relationships the object takes part in.
+Declared actions::
+Verbs of the object beyond read, create, update and delete (for example, `ANULAR`). They are declared here and
+granted per role in *Permissions*. They only have an effect if the application's code checks them.
+Delete the object::
+The danger zone (<<admin-object-delete>>).
+
+:admin-object-fields-alt: Fields card with the rows Expediente, Establecimiento, Giro, Área del local and Fecha de \
+solicitud and their options
+[[admin-fig-object-fields]]
+.Object editor: fields
+image::screenshots/{lang}/admin/03-object-fields.png["{admin-object-fields-alt}",pdfwidth=100%]
+
+.Special cases when changing fields
+* Marking *Required* fails if there are records with the field empty; marking *Unique* or adding a composite
+  uniqueness fails if there are already repeated values (`409`). Correct the data first.
+* Changing the *Options* of an `ENUM` replaces the constraint of the column; the new options must include the
+  default value if there is one.
+* A default value only fills the records created afterwards.
+
+[[admin-field-add]]
+=== Adding or deleting a field
+
+.Procedure to add
+. In the object editor, click *Add field*, fill in name, label, type and options, and save.
+
+A column is added to the table. The type cannot be changed afterwards: if you got it wrong, add a new field.
+
+.Procedure to delete
+. Click the trash can of the field row and confirm.
+
+WARNING: The column is dropped with all its values, in every record. It cannot be undone. The server rejects it
+(`409`) if the field belongs to a relationship (delete the relationship), if a composite index or uniqueness uses
+it (remove it from there), or if an automation rule uses it (the response names the rules).
+
+[[admin-object-delete]]
+=== Deleting an object
+
+.Procedure
+. In the editor, go to *Delete the object*.
+. Type the technical name of the object to confirm and click *Delete object*.
+
+WARNING: The table with all its records is dropped, along with the views, forms, pages, permissions, workflow and
+automations of the object. It cannot be undone. If you only want to retire it, disable it (*Active*): it keeps the
+data. The server rejects the deletion if another object has a reference field to this one (the response names
+`object.field`) or if the object is _append-only_.
+
+[[admin-relationships]]
+=== Relationships
+
+menu:Data[Relationships] creates and lists the relationships between objects (<<admin-fig-relationships>>).
+
+:admin-relationships-alt: New relationship form and the list with the relationships Predio, Solicitante and Titular, \
+all MANY_TO_ONE
+[[admin-fig-relationships]]
+.Relationships of the example
+image::screenshots/{lang}/admin/05-relationships.png["{admin-relationships-alt}",pdfwidth=100%]
+
+.Objective
+Link two objects, for example each plot with its owner.
+
+.Procedure
+. In *New relationship*, type the *Technical name* (`predio_titular`), the *Label* (what is read from the source:
+  _Titular_) and the *Inverse label* (what is read from the target: _Predios_).
+. Pick the *Type*, the *Source object* and the *Target object*.
+. In *Field*, the name of the column that will hold the reference (by default, the name of the target object).
+. Click *Create*.
+
+[cols="1,3",options="header"]
+|===
+|Type |What it creates
+|`MANY_TO_ONE` |Many records of the source point to one of the target (many plots, one owner). Column in the
+source, with a foreign key.
+|`ONE_TO_MANY` |The same seen the other way round: the column goes in the target.
+|`ONE_TO_ONE` |At most one reference in each direction.
+|`MANY_TO_MANY` |A join table; neither object gains a column. Links are added and removed from the related lists.
+|===
+
+.Special cases
+* Only the labels can be changed. To change the type, the source or the target, the relationship must be deleted
+  and created again.
+* The source and the target can be the same object (for example, a unit and its parent unit).
+
+WARNING: Deleting a relationship deletes the field or the join table it created, with all the links.

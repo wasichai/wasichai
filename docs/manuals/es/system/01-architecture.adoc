@@ -10,9 +10,11 @@ necesita y monta `<WasichaiApp>` con los módulos de interfaz correspondientes (
 definen los administradores generan en tiempo de ejecución el esquema, la API y las pantallas: no se genera código
 por objeto (ADR-003).
 
+:sys-fig-context-alt: Diagrama de contexto: navegador y sistemas externos llaman a la web y al servidor; el \
+servidor usa PostgreSQL, GeoServer y servicios opcionales
 [[sys-fig-context]]
 .Contexto del sistema
-image::diagrams/es-context.png[Diagrama de contexto: navegador y sistemas externos llaman a la web y al servidor; el servidor usa PostgreSQL, GeoServer y servicios opcionales,pdfwidth=85%,role=diagram]
+image::diagrams/es-context.png["{sys-fig-context-alt}",pdfwidth=85%,role=diagram]
 
 === Componentes
 
@@ -36,9 +38,11 @@ con `SqlIdentifier`, y todo DDL de objetos pasa por `ObjectSchemaManager`.
 [[sys-modules]]
 === Módulos
 
+:sys-fig-modules-alt: Diagrama de módulos: todos dependen de wasichai-core; pages depende de forms; integraciones \
+opcionales punteadas
 [[sys-fig-modules]]
 .Dependencias entre módulos del servidor
-image::diagrams/es-modules.png[Diagrama de módulos: todos dependen de wasichai-core; pages depende de forms; integraciones opcionales punteadas,pdfwidth=90%,role=diagram]
+image::diagrams/es-modules.png["{sys-fig-modules-alt}",pdfwidth=90%,role=diagram]
 
 Las flechas continuas son dependencias obligatorias; las punteadas, integraciones opcionales que se activan si el
 otro módulo está presente. `wasichai-core` no depende de ningún módulo (lo comprueba `CoreArchitectureTest`); los
@@ -69,9 +73,11 @@ instalado responde `404`.
 [[sys-request-flow]]
 === Flujo de una petición
 
+:sys-fig-request-alt: Diagrama de secuencia de una petición PUT: filtro JWT, permisos, actualización con If-Match, \
+auditoría y cola de automatizaciones
 [[sys-fig-request]]
 .Modificación de un registro
-image::diagrams/es-request-flow.png[Diagrama de secuencia de una petición PUT: filtro JWT, permisos, actualización con If-Match, auditoría y cola de automatizaciones,pdfwidth=100%,role=diagram]
+image::diagrams/es-request-flow.png["{sys-fig-request-alt}",pdfwidth=100%,role=diagram]
 
 . El filtro de seguridad valida el JWT (HS256) y resuelve el usuario y su organización (_claim_ `org`).
 . El servicio de registros comprueba la acción sobre el objeto, los permisos de campo y las reglas de escritura.

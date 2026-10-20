@@ -1,0 +1,109 @@
+[[sys-architecture]]
+== Architecture
+
+=== Context
+
+{product-name} is not an application but a set of *libraries*: Spring Boot _starters_ for the server and
+`@wasichai/*` npm packages for the interface. A particular application (such as `full-sample`, or the applications
+of an organization) declares its own main class with `@WasichaiApplication`, adds the starters of the modules it
+needs and mounts `<WasichaiApp>` with the matching interface modules (ADR-024, ADR-028). The metadata the
+administrators define generates the schema, the API and the screens at runtime: no code is generated per object
+(ADR-003).
+
+:sys-context-alt: Context diagram: browser and external systems call the web app and the server; the server uses \
+PostgreSQL, GeoServer and optional services
+[[sys-fig-context]]
+.System context
+image::diagrams/en-context.png["{sys-context-alt}",pdfwidth=85%,role=diagram]
+
+=== Components
+
+[cols="1,2,3",options="header"]
+|===
+|Component |Technology |Responsibility
+|Server |Kotlin 2.4, Spring Boot 4.1 WebFlux (reactive), JDK 25 |REST API under `/api`, JWT security, metadata,
+dynamic DDL, background processes.
+|Web interface |React 19, Vite 8, Tailwind CSS 4, MapLibre GL JS |Generic screens on top of the API; it is built
+inside each application.
+|Database |PostgreSQL 18; PostGIS 3.6 with the GIS module; optional pgvector |Metadata (`wasichai` schema) and the
+data of the objects (`app_data` schema).
+|GeoServer |Optional |Publishes WMS/WFS/WMTS layers from PostGIS.
+|External services |Optional |Anthropic API (assistant), SMTP (notification email), S3 (files).
+|===
+
+The server uses neither JPA nor Spring Data repositories: every query is SQL through `DatabaseClient` (R2DBC) with
+bound values; the migrations use Flyway over JDBC. Dynamic identifiers are validated and quoted with
+`SqlIdentifier`, and all object DDL goes through `ObjectSchemaManager`.
+
+[[sys-modules]]
+=== Modules
+
+[[sys-fig-modules]]
+.Dependencies between server modules
+image::diagrams/en-modules.png[Module diagram: all depend on wasichai-core; pages depends on forms; optional integrations dashed,pdfwidth=90%,role=diagram]
+
+Solid arrows are mandatory dependencies; dashed ones, optional integrations that switch on if the other module is
+present. `wasichai-core` depends on no module (`CoreArchitectureTest` checks it); the modules extend it through its
+SPIs: field types, query contributors, _listeners_, page components and ports.
+
+[cols="1,1,3",options="header"]
+|===
+|Module |Starter |What it adds
+|core |`wasichai-spring-boot-starter` |Objects, fields, relationships, records, identity (users, roles, permissions,
+service accounts, units), organizations, audit, preferences.
+|views |`…-starter-views` |Saved list views.
+|forms |`…-starter-forms` |Forms by sections.
+|pages |`…-starter-pages` |Tree-shaped detail pages with templates (requires forms).
+|workflow |`…-starter-workflow` |States and transitions per object.
+|automation |`…-starter-automation` |Trigger → conditions → actions rules, queued.
+|documents |`…-starter-documents` |Document types, numbered and frozen issue.
+|files |`…-starter-files` |`FILE` and `IMAGE` fields, local or S3 store.
+|gis |`…-starter-gis` |`GEOMETRY` fields, `bbox` queries, publishing to GeoServer.
+|notifications |`…-starter-notifications` |Notices, inbox, notice rules, email delivery, SSE.
+|agent |`…-starter-agent` |AI assistant on top of the API (Embabel + Anthropic).
+|===
+
+Each module ships its auto-configuration, its `wasichai.<module>.enabled` switch (default `true`), its properties
+and its Flyway migrations with their own history table (ADR-024 to ADR-026). A route of a module that is not
+installed answers `404`.
+
+[[sys-request-flow]]
+=== Flow of a request
+
+:sys-request-alt: Sequence diagram of a PUT request: JWT filter, permissions, update with If-Match, audit and \
+automation queue
+[[sys-fig-request]]
+.Updating a record
+image::diagrams/en-request-flow.png["{sys-request-alt}",pdfwidth=100%,role=diagram]
+
+. The security filter validates the JWT (HS256) and resolves the user and their organization (`org` _claim_).
+. The record service checks the action on the object, the field permissions and the write rules.
+. The write always filters by `organization_id`; with `If-Match`, it also compares `updated_at` in the same
+  statement (`412` if it does not match).
+. In the same transaction the audit entry is written and the automation rules are evaluated; they stay in
+  `automation_runs` as `PENDING` and a process runs them afterwards (ADR-016).
+. The response carries the record, its new `ETag` and the `X-Correlation-Id`.
+
+=== Multi-tenancy
+
+Each metadata row carries `organization_id`, and each object has one physical table per organization:
+`app_data.<object>__<first 8 hex characters of the organization id>`. Every query filters by the organization of
+the JWT. There is no route that lists all organizations.
+
+=== Relevant decisions
+
+[cols="1,4",options="header"]
+|===
+|ADR |Decision
+|003, 004 |Metadata at runtime; one physical table per object.
+|010, 059 |Own JWT; revocation, sign-in limits and password policy.
+|016, 039 |Queued automations; background work as the platform, with a cluster lock.
+|024 to 027 |Libraries and starters, extension SPIs, per-module migrations, optional GIS.
+|031 |Deliberate differences from the original application.
+|033 |Samples and infrastructure in their own repositories.
+|049, 050, 054 |Administration audit, correlation id and origin; append-only audit in the database.
+|051, 058 |Optimistic locking with ETag/If-Match; Idempotency-Key on creation.
+|070 |Manuals in AsciiDoc next to the Markdown reference.
+|===
+
+The full index is in {adr-index}[docs/adr/README.md].

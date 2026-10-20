@@ -4,7 +4,7 @@
 //  - every book converts with no warning, unresolved reference or missing include/image
 //  - es and en have the same files and the same anchors, file by file
 //  - every image a source names exists; every screenshot and diagram is used
-//  - line length (160), final newline, no trailing spaces, no TODO, no absolute local paths, no secret-looking strings
+//  - line length (160), final newline, no trailing spaces, no unfinished markers, no absolute local paths, no secrets
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -51,7 +51,14 @@ for (const lang of LANGS) {
 
 // 2. language parity: same chapters, same anchors in each
 const anchors = (file) => [...readFileSync(file, 'utf8').matchAll(/^\[\[([a-z0-9-]+)\]\]/gm)].map((m) => m[1]).sort()
-const files = Object.fromEntries(LANGS.map((lang) => [lang, sources(lang).map((f) => relative(join(root, lang), f)).sort()]))
+const files = Object.fromEntries(
+    LANGS.map((lang) => [
+        lang,
+        sources(lang)
+            .map((f) => relative(join(root, lang), f))
+            .sort()
+    ])
+)
 for (const f of new Set([...files.es, ...files.en])) {
     const [es, en] = LANGS.map((lang) => join(root, lang, f))
     if (!existsSync(es) || !existsSync(en)) {
@@ -74,7 +81,12 @@ for (const lang of LANGS) {
         }
     }
 }
-const generated = [...walk(join(root, 'assets', 'screenshots')), ...readdirSync(join(root, 'assets', 'diagrams')).filter((f) => f.endsWith('.png')).map((f) => join(root, 'assets', 'diagrams', f))]
+const generated = [
+    ...walk(join(root, 'assets', 'screenshots')),
+    ...readdirSync(join(root, 'assets', 'diagrams'))
+        .filter((f) => f.endsWith('.png'))
+        .map((f) => join(root, 'assets', 'diagrams', f))
+]
 for (const png of generated) {
     const target = relative(join(root, 'assets'), png)
     if (png.endsWith('.png') && !used.has(target)) problem(`${rel(png)}: not used by any manual`)
@@ -83,7 +95,7 @@ for (const png of generated) {
 // 4. text hygiene over every hand-written file of the manuals
 const text = walk(root).filter(
     (f) =>
-        !/(node_modules|\.bundle|output|backups|assets\/screenshots)/.test(f) &&
+        !/(node_modules|\.bundle|vendor|output|backups|assets\/screenshots)/.test(f) &&
         /\.(adoc|mjs|sh|sql|yml|css|mmd|json)$/.test(f) &&
         !f.endsWith('demo-dataset.json') &&
         !f.endsWith('demo-manifest.json')
@@ -96,7 +108,7 @@ for (const file of text) {
         const at = `${rel(file)}:${i + 1}`
         if ([...line].length > 160) problem(`${at}: longer than 160 columns`)
         if (/[ \t]+$/.test(line)) problem(`${at}: trailing whitespace`)
-        if (/\b(TODO|FIXME|TBD)\b/.test(line)) problem(`${at}: unfinished marker`)
+        if (/\b(TO[D]O|FIX[M]E|TB[D])\b/.test(line)) problem(`${at}: unfinished marker`)
         if (/(\/home\/|\/tmp\/claude|[A-Z]:\\\\Users)/.test(line)) problem(`${at}: absolute local path`)
         if (secret.test(line)) problem(`${at}: looks like a secret`)
     })

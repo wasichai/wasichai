@@ -35,7 +35,11 @@ order by 1
 SQL
 )
 flyway=$(psql -XtA -F $'\t' -c "select tablename from pg_tables where schemaname = 'wasichai' and tablename like 'flyway_history_%' order by 1" |
-    while read -r t; do printf '%s\t%s\n' "$t" "$(psql -XtAc "select coalesce((select version from \"wasichai\".\"$t\" where success and version is not null order by installed_rank desc limit 1), '')")"; done)
+    while read -r t; do
+        v=$(psql -XtAc "select coalesce((select version from \"wasichai\".\"$t\" where success and version is not null
+                        order by installed_rank desc limit 1), '')")
+        printf '%s\t%s\n' "$t" "$v"
+    done)
 
 python3 - "$MANIFEST" "$OUT" <<PY
 import hashlib, json, sys, datetime

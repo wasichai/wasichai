@@ -25,9 +25,11 @@ Generar un documento numerado desde un registro.
 El documento aparece en la tabla del panel con su *Número*, la fecha y hora en que se *Emitió* y el *Estado*
 *Vigente* (<<user-fig-documents>>).
 
+:user-fig-documents-alt: Pie de la página de una licencia con el formulario y el panel Documentos emitidos con el \
+certificado CLF-2026-001 vigente
 [[user-fig-documents]]
 .Panel de documentos emitidos de una licencia aprobada
-image::screenshots/{lang}/user/12-record-documents.png[Pie de la página de una licencia con el formulario y el panel Documentos emitidos con el certificado CLF-2026-001 vigente,pdfwidth=100%]
+image::screenshots/{lang}/user/12-record-documents.png["{user-fig-documents-alt}",pdfwidth=100%]
 
 .Verificación
 El historial del registro muestra una entrada *Emisión*.
@@ -50,9 +52,11 @@ El historial del registro muestra una entrada *Emisión*.
 . Pulse *Imprimir / Guardar PDF* y elija la impresora, o _Guardar como PDF_ en el diálogo de impresión del
   navegador.
 
+:user-fig-print-alt: Hoja A4 con el título Certificado de licencia CLF-2026-001 y el texto del certificado; arriba, \
+el número y el botón Imprimir / Guardar PDF
 [[user-fig-print]]
 .Hoja imprimible del certificado
-image::screenshots/{lang}/user/13-document-print.png[Hoja A4 con el título Certificado de licencia CLF-2026-001 y el texto del certificado; arriba, el número y el botón Imprimir / Guardar PDF,pdfwidth=100%]
+image::screenshots/{lang}/user/13-document-print.png["{user-fig-print-alt}",pdfwidth=100%]
 
 NOTE: La hoja imprimible se muestra siempre con el tema claro, sea cual sea el tema elegido. Un documento archivado
 se imprime con la marca *ARCHIVADO*.

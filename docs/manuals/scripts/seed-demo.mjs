@@ -178,7 +178,12 @@ async function seedModel(data) {
     for (const rule of data.automations) {
         const found = await call('GET', `/api/objects/${rule.objectName}/automations/${rule.name}`, undefined, { allow: [404] })
         if (found.status === 404) {
-            await call('POST', `/api/objects/${rule.objectName}/automations`, { name: rule.name, label: rule.label, enabled: rule.enabled, definition: rule.definition })
+            await call('POST', `/api/objects/${rule.objectName}/automations`, {
+                name: rule.name,
+                label: rule.label,
+                enabled: rule.enabled,
+                definition: rule.definition
+            })
             created(`automation ${rule.name}`)
         } else skipped(`automation ${rule.name}`)
     }
@@ -186,7 +191,12 @@ async function seedModel(data) {
         const stored = (await call('GET', `/api/metadata/objects/${view.objectName}/views`)).json
         if (stored.some((v) => v.name === view.name)) skipped(`view ${view.name}`)
         else {
-            await call('POST', `/api/objects/${view.objectName}/views`, { name: view.name, label: view.label, isDefault: view.isDefault, definition: view.definition })
+            await call('POST', `/api/objects/${view.objectName}/views`, {
+                name: view.name,
+                label: view.label,
+                isDefault: view.isDefault,
+                definition: view.definition
+            })
             created(`view ${view.name}`)
         }
     }

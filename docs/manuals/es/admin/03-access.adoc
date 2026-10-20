@@ -9,9 +9,11 @@ Requisito común: `MANAGE_ORGANIZATION` (o `ADMIN`). Una cuenta de servicio nunc
 menu:Administración[Usuarios] tiene arriba el formulario *Nuevo usuario* y debajo la lista de personas con su
 nombre, correo, roles, estado y fecha de alta (<<admin-fig-users>>). Su propia fila lleva la marca _Eres tú_.
 
+:admin-fig-users-alt: Formulario Nuevo usuario y la lista con cuatro personas y sus roles ADMIN, CONSULTA, \
+REGISTRADOR y REVISOR
 [[admin-fig-users]]
 .Usuarios del ejemplo
-image::screenshots/{lang}/admin/06-users.png[Formulario Nuevo usuario y la lista con cuatro personas y sus roles ADMIN, CONSULTA, REGISTRADOR y REVISOR,pdfwidth=100%]
+image::screenshots/{lang}/admin/06-users.png["{admin-fig-users-alt}",pdfwidth=100%]
 
 .Objetivo
 Dar de alta a una persona.
@@ -55,9 +57,11 @@ WARNING: Eliminar a una persona no se puede deshacer. Prefiera desactivarla: su 
 menu:Administración[Roles] crea roles y muestra cuántos permisos y campos restringidos tiene cada uno
 (<<admin-fig-roles>>).
 
+:admin-fig-roles-alt: Formulario Nuevo rol y la lista con Administrator, Consulta, Registrador de licencias y \
+Revisor técnico
 [[admin-fig-roles]]
 .Roles del ejemplo
-image::screenshots/{lang}/admin/07-roles.png[Formulario Nuevo rol y la lista con Administrator, Consulta, Registrador de licencias y Revisor técnico,pdfwidth=100%]
+image::screenshots/{lang}/admin/07-roles.png["{admin-fig-roles-alt}",pdfwidth=100%]
 
 .Procedimiento
 . Escriba el *Nombre técnico* en mayúsculas (`INSPECTOR`) y la *Etiqueta*.
@@ -75,9 +79,11 @@ image::screenshots/{lang}/admin/07-roles.png[Formulario Nuevo rol y la lista con
 
 menu:Administración[Permisos] edita lo que puede hacer un rol (<<admin-fig-permissions>>).
 
+:admin-fig-permissions-alt: Matriz de permisos con READ marcado en los tres objetos y permisos de campo de \
+Contribuyente con DNI/RUC y Teléfono sin lectura
 [[admin-fig-permissions]]
 .Matriz de permisos y permisos de campo del rol Consulta
-image::screenshots/{lang}/admin/08-permissions.png[Matriz de permisos con READ marcado en los tres objetos y permisos de campo de Contribuyente con DNI/RUC y Teléfono sin lectura,pdfwidth=100%]
+image::screenshots/{lang}/admin/08-permissions.png["{admin-fig-permissions-alt}",pdfwidth=100%]
 
 .Objetivo
 Conceder o retirar acciones a un rol, objeto por objeto, y restringir campos.
@@ -116,9 +122,11 @@ verán botones que no pueden usar.
 Una cuenta de servicio identifica a otro sistema (por ejemplo, el sistema de rentas) que llama a la API con un id de
 cliente y un secreto. Tiene roles como una persona, pero nunca administra la organización.
 
+:admin-fig-service-accounts-alt: Formulario Nueva cuenta de servicio y la cuenta integracion-rentas con su id de \
+cliente, rol CONSULTA y estado Activa
 [[admin-fig-service-accounts]]
 .Cuentas de servicio
-image::screenshots/{lang}/admin/09-service-accounts.png[Formulario Nueva cuenta de servicio y la cuenta integracion-rentas con su id de cliente, rol CONSULTA y estado Activa,pdfwidth=100%]
+image::screenshots/{lang}/admin/09-service-accounts.png["{admin-fig-service-accounts-alt}",pdfwidth=100%]
 
 .Procedimiento
 . En menu:Administración[Cuentas de servicio], escriba el *Nombre* (minúsculas, números, `_` o `-`; no se podrá

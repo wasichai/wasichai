@@ -1,9 +1,11 @@
 [[user-interface]]
 == Recorrido por la interfaz
 
+:user-fig-home-alt: Página Inicio con el menú lateral oscuro a la izquierda y tarjetas con el número de objetos y \
+un acceso a cada objeto
 [[user-fig-home]]
 .Página Inicio de un administrador
-image::screenshots/{lang}/user/02-home.png[Página Inicio con el menú lateral oscuro a la izquierda y tarjetas con el número de objetos y un acceso a cada objeto,pdfwidth=100%]
+image::screenshots/{lang}/user/02-home.png["{user-fig-home-alt}",pdfwidth=100%]
 
 === Estructura de la pantalla
 

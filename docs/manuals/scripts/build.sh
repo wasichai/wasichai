@@ -23,11 +23,11 @@ html() {
     rm -rf "$OUT/html" && mkdir -p "$OUT/html/theme/fonts"
     for lang in "${LANGS[@]}"; do
         bundle exec asciidoctor --failure-level=WARN \
-            -a linkcss -a stylesdir=../theme -a stylesheet=wasichai-docs.css -a toc=left -a docinfo=shared \
-            -D "$OUT/html/$lang" "$lang/index.adoc" "${BOOKS[@]/#/$lang/}"
+            -a linkcss -a copycss! -a icons! -a rouge-css=style -a stylesdir=../theme -a stylesheet=wasichai-docs.css -a toc=left -a docinfo=shared \
+            -D "$OUT/html/$lang" "$lang/index.adoc" "$lang/user-manual.adoc" "$lang/admin-manual.adoc" "$lang/system-manual.adoc"
     done
     # the landing page picks the language
-    bundle exec asciidoctor --failure-level=WARN -a linkcss -a stylesdir=theme -a stylesheet=wasichai-docs.css \
+    bundle exec asciidoctor --failure-level=WARN -a linkcss -a copycss! -a icons! -a rouge-css=style -a stylesdir=theme -a stylesheet=wasichai-docs.css \
         -a imagesdir=assets -D "$OUT/html" index.adoc
     cp "$(gem_dir asciidoctor)/data/stylesheets/asciidoctor-default.css" "$OUT/html/theme/"
     cp theme/html/wasichai-docs.css "$OUT/html/theme/"

@@ -33,7 +33,7 @@ const SCALE = 1.5
 const SIDEBAR = 240
 
 if (!DEMO_PASSWORD) {
-    console.error('screenshots: set WASICHAI_DEMO_PASSWORD (the demo users\' password)')
+    console.error("screenshots: set WASICHAI_DEMO_PASSWORD (the demo users' password)")
     process.exit(1)
 }
 
@@ -84,7 +84,9 @@ const launch = (lang) =>
 async function settle(page) {
     await page.waitForLoadState('networkidle')
     // a query still loading draws a skeleton; never photograph one
-    await page.waitForFunction(() => !document.querySelector('[data-slot="query-state"][data-state="loading"], [aria-busy="true"]'), null, { timeout: 15000 }).catch(() => {})
+    await page
+        .waitForFunction(() => !document.querySelector('[data-slot="query-state"][data-state="loading"], [aria-busy="true"]'), null, { timeout: 15000 })
+        .catch(() => {})
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(500)
 }
@@ -94,7 +96,13 @@ async function session(lang, who) {
     const token = await tokenOf(user)
     // what the app restores at sign-in wins over localStorage, so the language goes to the server first
     await api(token, 'PUT', '/auth/me/preferences', { locale: lang, theme: 'light' })
-    const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE, locale: lang === 'es' ? 'es-PE' : 'en-US', timezoneId: 'America/Lima', colorScheme: 'light' })
+    const context = await browser.newContext({
+        viewport: VIEWPORT,
+        deviceScaleFactor: SCALE,
+        locale: lang === 'es' ? 'es-PE' : 'en-US',
+        timezoneId: 'America/Lima',
+        colorScheme: 'light'
+    })
     await context.addInitScript((l) => {
         localStorage.setItem('wasichai.lang', l)
         localStorage.setItem('wasichai.theme', 'light')
@@ -207,7 +215,10 @@ async function run(lang) {
     await go(page, '/data/objects/licencia/records/new')
     await shot(page, 'user/08-record-new', { fullPage: true, crop: 'content' })
     // saving an empty form: the client stops it before any request, so nothing is written
-    await page.getByRole('button', { name: t('Guardar', 'Save') }).last().click()
+    await page
+        .getByRole('button', { name: t('Guardar', 'Save') })
+        .last()
+        .click()
     await page.waitForTimeout(500)
     await shot(page, 'user/21-validation-errors', { fullPage: true, crop: 'content' })
     await go(page, `/data/objects/licencia/records/${data.review.id}`)
@@ -218,7 +229,10 @@ async function run(lang) {
     await shot(page, 'user/11-record-history', { fullPage: true, crop: 'content' })
     await go(page, `/data/objects/licencia/records/${data.approved.id}`)
     // the issued documents panel closes the page; the shell scrolls an inner container, not the window
-    await page.getByText(t('Documentos emitidos', 'Issued documents')).first().evaluate((e) => e.scrollIntoView({ block: 'start' }))
+    await page
+        .getByText(t('Documentos emitidos', 'Issued documents'))
+        .first()
+        .evaluate((e) => e.scrollIntoView({ block: 'start' }))
     await shot(page, 'user/12-record-documents', { crop: 'content' })
     await go(page, `/documents/${data.document.id}/print`)
     await shot(page, 'user/13-document-print')
@@ -292,7 +306,9 @@ async function run(lang) {
     {
         const s = await session(lang, 'registrador')
         await go(s.page, `/data/objects/licencia/records/${data.review.id}`)
-        await shot(s.page, 'user/17-transitions-registrador', { locator: s.page.locator('[data-slot="card"]').filter({ hasText: 'Trámite de licencia' }).first() })
+        await shot(s.page, 'user/17-transitions-registrador', {
+            locator: s.page.locator('[data-slot="card"]').filter({ hasText: 'Trámite de licencia' }).first()
+        })
         await s.context.close()
     }
     {
@@ -301,7 +317,10 @@ async function run(lang) {
         await go(s.page, `/data/objects/contribuyente/records/${data.contribuyente.id}`)
         await shot(s.page, 'user/19-field-permissions-consulta', { crop: 'content' })
         // the screen offers save, the server refuses: a read-only role gets 403 and nothing changes
-        await s.page.getByRole('button', { name: t('Guardar', 'Save') }).first().click()
+        await s.page
+            .getByRole('button', { name: t('Guardar', 'Save') })
+            .first()
+            .click()
         await s.page.waitForTimeout(800)
         await shot(s.page, 'user/22-forbidden-consulta', { crop: 'content' })
         await s.context.close()

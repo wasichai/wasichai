@@ -1,0 +1,38 @@
+[[sys-evidence]]
+== Evidence matrix
+
+Relation between each documented feature and its evidence. _Screenshot_: figure taken from the real application.
+_Run_: checked by running the application, the API or the scripts while preparing these manuals. _Code_: read in
+the source code, not run.
+
+[cols="3,4,2",options="header"]
+|===
+|Feature |Code |Evidence
+|Sign-in and sign-out |`wasichai-core/…/identity/AuthController.kt`, `wasichai-ui/packages/core/src/auth` |Screenshot, run
+|List, search, sort, pagination, views |`…/data/RecordController.kt`, `PhysicalTableRecordStore.kt`,
+`RecordListPage.tsx` |Screenshot, run
+|Creation, editing with reason, validations |`RecordService`, `DynamicForm.tsx`, `ReasonDialog.tsx` |Screenshot,
+run
+|Uniqueness (409), version (412), reason (400) |`RecordController.kt`, rest.md |Run (API)
+|Relationships and related lists |`RelatedRecordController.kt`, `RelatedList` |Screenshot
+|History and audit |`audit/AuditController.kt`, `AuditPage.tsx` |Screenshot
+|Workflows and transitions by role |`wasichai-workflow/…/WorkflowService.kt` |Screenshot (3 roles), run
+|Documents: issue, freezing, printing |`wasichai-documents`, `RecordDocuments.tsx`, `PrintableDocumentPage.tsx`
+|Screenshot, run
+|Maps and geometries |`wasichai-gis`, `MapPage.tsx` |Screenshot (no base map)
+|GeoServer layers |`LayerService.kt` |Screenshot (GeoServer disabled); publishing not run
+|Model: objects, fields, relationships |`metadata/MetadataController.kt`, `ObjectEditorPage.tsx` |Screenshot, run
+(data loading)
+|Users, roles, field permissions |`admin/AdminController.kt`, administration pages |Screenshot, run
+|Service accounts |`ServiceAccountAdmin.kt` |Screenshot, run (creation)
+|Organizational units and notifications |`OrgUnitAdmin.kt`, `NotificationAdmin.kt` |Run (API); no screen
+|Rules and runs |`wasichai-automation` |Screenshot, run (54 runs)
+|Builders of views, forms, pages, documents |packages `views`, `forms`, `pages`, `documents` |Screenshot
+|Security: revocation, attempt limit, policy |`WasichaiSecurityAutoConfiguration.kt`, `LoginThrottle.kt`
+|Code (off by default in `full-sample`)
+|Organizations (creation and deletion) |`OrganizationController.kt` |Code
+|Backup, restore and verification |`scripts/*.sh`, `database/verify.sql` |Run
+|Background processes |auto-configurations of each module |Code; the rule queue, by run
+|AI assistant |`wasichai-agent` |Code; not included in `full-sample`
+|Files (`FILE`, `IMAGE`) |`wasichai-files` |Run in `e2e/smoke.sh` (API); no upload screen
+|===

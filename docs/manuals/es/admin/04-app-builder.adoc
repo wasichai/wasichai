@@ -10,9 +10,11 @@ objeto. Leer la configuración solo necesita `READ`.
 
 Una vista es una forma guardada de listar un objeto. menu:App Builder[Vistas] (<<admin-fig-views>>).
 
+:admin-fig-views-alt: Constructor de vistas: nombre técnico, etiqueta, registros por página, casilla Vista por \
+defecto, lista de columnas con flechas para ordenar, filtros y orden
 [[admin-fig-views]]
 .Constructor de vistas con la vista «Bandeja de licencias»
-image::screenshots/{lang}/admin/11-views-builder.png[Constructor de vistas: nombre técnico, etiqueta, registros por página, casilla Vista por defecto, lista de columnas con flechas para ordenar, filtros y orden,pdfwidth=100%]
+image::screenshots/{lang}/admin/11-views-builder.png["{admin-fig-views-alt}",pdfwidth=100%]
 
 .Procedimiento
 . Elija el *Objeto* y, en *Vista*, una existente o la opción para crear una nueva.
@@ -36,9 +38,11 @@ visibles.
 Un formulario organiza los campos editables de un objeto en secciones con título. menu:App Builder[Formularios]
 (<<admin-fig-forms>>).
 
+:admin-fig-forms-alt: Constructor de formularios con las secciones Identificación, Local y Evaluación y los campos \
+de cada una
 [[admin-fig-forms]]
 .Constructor de formularios con el formulario «Solicitud de licencia»
-image::screenshots/{lang}/admin/12-forms-builder.png[Constructor de formularios con las secciones Identificación, Local y Evaluación y los campos de cada una,pdfwidth=100%]
+image::screenshots/{lang}/admin/12-forms-builder.png["{admin-fig-forms-alt}",pdfwidth=100%]
 
 .Procedimiento
 . Elija el *Objeto* y el *Formulario* (o cree uno).
@@ -56,9 +60,11 @@ image::screenshots/{lang}/admin/12-forms-builder.png[Constructor de formularios 
 
 menu:App Builder[Páginas] compone la página de detalle de un objeto arrastrando componentes (<<admin-fig-pages>>).
 
+:admin-fig-pages-alt: Constructor de páginas: plantilla Principal y barra lateral derecha, paleta de componentes, \
+lienzo con pestañas y propiedades
 [[admin-fig-pages]]
 .Constructor de páginas con la página de la licencia
-image::screenshots/{lang}/admin/13-pages-builder.png[Constructor de páginas: plantilla Principal y barra lateral derecha, paleta de componentes, lienzo con pestañas y propiedades,pdfwidth=100%]
+image::screenshots/{lang}/admin/13-pages-builder.png["{admin-fig-pages-alt}",pdfwidth=100%]
 
 La pantalla tiene tres columnas:
 
@@ -88,9 +94,11 @@ nota, transición de una acción, clave de una pestaña…
 
 menu:App Builder[Documentos] redacta las plantillas que un registro puede emitir (<<admin-fig-documents>>).
 
+:admin-fig-documents-alt: Editor del tipo Certificado de licencia: nombre, etiqueta, sigla CLF y el texto de la \
+plantilla con marcadores de campo
 [[admin-fig-documents]]
 .Plantilla del certificado de licencia
-image::screenshots/{lang}/admin/14-document-types.png[Editor del tipo Certificado de licencia: nombre, etiqueta, sigla CLF y el texto de la plantilla con marcadores de campo,pdfwidth=100%]
+image::screenshots/{lang}/admin/14-document-types.png["{admin-fig-documents-alt}",pdfwidth=100%]
 
 .Procedimiento
 . Elija el *Objeto*. En *Tipos*, pulse *+* para crear uno o elija uno existente.

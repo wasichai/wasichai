@@ -1,9 +1,12 @@
 [[sys-data-model]]
 == Modelo de datos
 
+:sys-fig-data-model-alt: Diagrama entidad-relación: organizations con users, roles, custom_objects, org_units, \
+service_accounts y audit_log; custom_objects con sus campos, relaciones, tabla de datos y la configuración de cada \
+módulo
 [[sys-fig-data-model]]
 .Entidades principales de los metadatos
-image::diagrams/es-data-model.png[Diagrama entidad-relación: organizations con users, roles, custom_objects, org_units, service_accounts y audit_log; custom_objects con sus campos, relaciones, tabla de datos y la configuración de cada módulo,pdfwidth=100%,role=diagram]
+image::diagrams/es-data-model.png["{sys-fig-data-model-alt}",pdfwidth=100%,role=diagram]
 
 === Esquemas
 

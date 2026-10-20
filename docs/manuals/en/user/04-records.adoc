@@ -22,9 +22,11 @@ The list opens (<<user-fig-list>>). The header shows the plural name of the obje
 right, the view selector (if the object has saved views) and *New record*. The table shows 25 records per page,
 unless the view sets another amount, and at the top right the total number of results.
 
+:user-list-alt: Table of licences with the columns Expediente, Establecimiento, Giro, Área del local, Fecha de \
+solicitud and Resultado
 [[user-fig-list]]
 .List of licences with the view "Bandeja de licencias"
-image::screenshots/{lang}/user/03-record-list.png[Table of licences with the columns Expediente, Establecimiento, Giro, Área del local, Fecha de solicitud and Resultado,pdfwidth=100%]
+image::screenshots/{lang}/user/03-record-list.png["{user-list-alt}",pdfwidth=100%]
 
 .Special cases
 * Click any row to open the record (<<user-detail>>).
@@ -88,9 +90,11 @@ size. If the object has views, a selector appears in the header of the list.
 The table changes its columns, filter and order. In the example, the view *Restaurantes* shows only the licences
 with line of business _RESTAURANTE_, sorted from the most recent application to the oldest (<<user-fig-view>>).
 
+:user-view-alt: The list with the view Restaurantes: seven licences, columns Expediente, Establecimiento, Área del \
+local and Fecha de solicitud
 [[user-fig-view]]
 .The view "Restaurantes"
-image::screenshots/{lang}/user/06-record-view.png[The list with the view Restaurantes: seven licences, columns Expediente, Establecimiento, Área del local and Fecha de solicitud,pdfwidth=100%]
+image::screenshots/{lang}/user/06-record-view.png["{user-view-alt}",pdfwidth=100%]
 
 NOTE: The filters of a view are exact equality (for example, _Giro = RESTAURANTE_). The interface offers no free
 per-column filters: for other combinations, ask the administrator for a new view or use the search.
@@ -101,9 +105,10 @@ per-column filters: for other combinations, ask the administrator for a new view
 At the foot of the table there is *Page _n_ of _m_* with the buttons *Previous page* and *Next page*
 (<<user-fig-pager>>). The page size is 25 records, or the one the view sets (up to 200).
 
+:user-pager-alt: The last rows of the table and the foot with the text Page 1 of 2 and the previous and next buttons
 [[user-fig-pager]]
 .Foot of the table with the pagination
-image::screenshots/{lang}/user/07-record-pager.png[The last rows of the table and the foot with the text Page 1 of 2 and the previous and next buttons,pdfwidth=100%]
+image::screenshots/{lang}/user/07-record-pager.png["{user-pager-alt}",pdfwidth=100%]
 
 TIP: The interface does not export lists to a file. If you need the data outside the application, ask a technical
 administrator for an extraction through the API (chapter _REST API_ of the _System manual_).
@@ -126,9 +131,10 @@ Add a new record, for example a licence application.
 . If the *Reason* field appears, write why you are creating the record (up to 500 characters).
 . Click *Save*. *Cancel* goes back to the list without saving.
 
+:user-new-alt: New record form with the fields of the licence, the Reason field and the Save and Cancel buttons
 [[user-fig-new]]
 .Creation form of a licence
-image::screenshots/{lang}/user/08-record-new.png[New record form with the fields of the licence, the Reason field and the Save and Cancel buttons,pdfwidth=100%]
+image::screenshots/{lang}/user/08-record-new.png["{user-new-alt}",pdfwidth=100%]
 
 .Expected result
 The detail page of the created record opens. If the object has a workflow, the record starts in its initial state
@@ -146,9 +152,10 @@ The record appears in the list and its history tab shows a *Create* entry with y
 * Some automation rules act after saving (for example, they fill in a field). Their effects may take a few seconds
   to show; reload the page.
 
+:user-validation-alt: The creation form with the fields Expediente, Establecimiento, Giro and Reason marked in red
 [[user-fig-validation]]
 .Required fields not filled in
-image::screenshots/{lang}/user/21-validation-errors.png[The creation form with the fields Expediente, Establecimiento, Giro and Reason marked in red,pdfwidth=100%]
+image::screenshots/{lang}/user/21-validation-errors.png["{user-validation-alt}",pdfwidth=100%]
 
 [[user-detail]]
 === Looking at a record
@@ -157,9 +164,11 @@ When you open a record you see its *detail page*. The administrator decides its 
 (<<user-fig-detail>>) it has three tabs (*Solicitud*, *Predio y solicitante*, *Historial*) and, on the right, the
 state of the case with the available transitions and a note.
 
+:user-detail-alt: Detail of the licence with the tabs, the form in the sections Identificación, Local and Evaluación, \
+and the Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar
 [[user-fig-detail]]
 .Detail page of a licence in review
-image::screenshots/{lang}/user/09-record-detail.png[Detail of the licence with the tabs, the form in the sections Identificación, Local and Evaluación, and the Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar,pdfwidth=100%]
+image::screenshots/{lang}/user/09-record-detail.png["{user-detail-alt}",pdfwidth=100%]
 
 * The header shows the object and the internal identifier of the record; *Back* returns to the list of the object.
 * An object with no configured page shows a generated page with the tabs *Details*, *Related*, *History* and, if it

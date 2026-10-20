@@ -31,11 +31,18 @@ remarks, but cannot approve or reject.
 Revisor técnico (_Raúl Revisor_)::
 Reads the three objects and updates licences. Can make remarks on, approve and reject licences in review.
 Consulta (_Carmen Consulta_)::
-Read only. Besides, does not see the identity document or the phone of taxpayers (<<user-fig-field-permissions>>).
+Read only, although the menu is the same as an administrator's (<<user-fig-home-consulta>>). Besides, does not see
+the identity document or the phone of taxpayers (<<user-fig-field-permissions>>).
+
+:user-field-permissions-alt: Detail of a taxpayer with the fields Código, Nombre, Tipo, Correo, Dirección fiscal and \
+Activo; DNI/RUC and Teléfono are missing
+[[user-fig-home-consulta]]
+.Home of the Consulta role: the same menu as an administrator's
+image::screenshots/{lang}/user/18-home-consulta.png["Home page of Carmen Consulta, with the full menu and the three object cards",pdfwidth=100%]
 
 [[user-fig-field-permissions]]
 .A taxpayer as the Consulta role sees it: no DNI/RUC and no phone
-image::screenshots/{lang}/user/19-field-permissions-consulta.png[Detail of a taxpayer with the fields Código, Nombre, Tipo, Correo, Dirección fiscal and Activo; DNI/RUC and Teléfono are missing,pdfwidth=100%]
+image::screenshots/{lang}/user/19-field-permissions-consulta.png["{user-field-permissions-alt}",pdfwidth=100%]
 
 [[user-fig-forbidden]]
 .The Consulta role tries to save: the server rejects it

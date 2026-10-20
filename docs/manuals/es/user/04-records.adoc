@@ -22,9 +22,11 @@ Se abre la lista (<<user-fig-list>>). El encabezado muestra el nombre del objeto
 la derecha, el selector de vista (si el objeto tiene vistas guardadas) y *Nuevo registro*. La tabla muestra 25
 registros por página, salvo que la vista indique otra cantidad, y arriba a la derecha el total de resultados.
 
+:user-fig-list-alt: Tabla de licencias con columnas Expediente, Establecimiento, Giro, Área del local, Fecha de \
+solicitud y Resultado
 [[user-fig-list]]
 .Lista de licencias con la vista «Bandeja de licencias»
-image::screenshots/{lang}/user/03-record-list.png[Tabla de licencias con columnas Expediente, Establecimiento, Giro, Área del local, Fecha de solicitud y Resultado,pdfwidth=100%]
+image::screenshots/{lang}/user/03-record-list.png["{user-fig-list-alt}",pdfwidth=100%]
 
 .Casos especiales
 * Pulse cualquier fila para abrir el registro (<<user-detail>>).
@@ -50,7 +52,7 @@ texto. El total de resultados cambia en consecuencia (<<user-fig-search>>).
 
 [[user-fig-search]]
 .Búsqueda del texto «Restaurante»
-image::screenshots/{lang}/user/04-record-search.png[La lista filtrada por el texto Restaurante,pdfwidth=100%]
+image::screenshots/{lang}/user/04-record-search.png["La lista filtrada por el texto Restaurante",pdfwidth=100%]
 
 .Casos especiales
 * La búsqueda no distingue mayúsculas de minúsculas y encuentra el texto en cualquier posición: `rest` encuentra
@@ -69,7 +71,7 @@ image::screenshots/{lang}/user/04-record-search.png[La lista filtrada por el tex
 
 [[user-fig-sort]]
 .Lista ordenada por fecha de solicitud
-image::screenshots/{lang}/user/05-record-sort.png[La lista ordenada de forma ascendente por Fecha de solicitud,pdfwidth=100%]
+image::screenshots/{lang}/user/05-record-sort.png["La lista ordenada de forma ascendente por Fecha de solicitud",pdfwidth=100%]
 
 .Casos especiales
 * El orden que elija dura mientras esté en la pantalla. La vista guardada conserva el suyo.
@@ -89,9 +91,11 @@ de página. Si el objeto tiene vistas, aparece un selector en el encabezado de l
 La tabla cambia de columnas, de filtro y de orden. En el ejemplo, la vista *Restaurantes* muestra solo las licencias
 con giro _RESTAURANTE_, ordenadas de la solicitud más reciente a la más antigua (<<user-fig-view>>).
 
+:user-fig-view-alt: La lista con la vista Restaurantes: siete licencias, columnas Expediente, Establecimiento, Área \
+del local y Fecha de solicitud
 [[user-fig-view]]
 .La vista «Restaurantes»
-image::screenshots/{lang}/user/06-record-view.png[La lista con la vista Restaurantes: siete licencias, columnas Expediente, Establecimiento, Área del local y Fecha de solicitud,pdfwidth=100%]
+image::screenshots/{lang}/user/06-record-view.png["{user-fig-view-alt}",pdfwidth=100%]
 
 NOTE: Los filtros de una vista son de igualdad exacta (por ejemplo, _Giro = RESTAURANTE_). La interfaz no ofrece
 filtros libres por columna: para otras combinaciones, pida al administrador una vista nueva o use la búsqueda.
@@ -102,9 +106,11 @@ filtros libres por columna: para otras combinaciones, pida al administrador una 
 Al pie de la tabla aparece *Página _n_ de _m_* con los botones *Página anterior* y *Página siguiente*
 (<<user-fig-pager>>). El tamaño de página es de 25 registros, o el que indique la vista (hasta 200).
 
+:user-fig-pager-alt: Las últimas filas de la tabla y el pie con el texto Página 1 de 2 y los botones anterior y \
+siguiente
 [[user-fig-pager]]
 .Pie de la tabla con la paginación
-image::screenshots/{lang}/user/07-record-pager.png[Las últimas filas de la tabla y el pie con el texto Página 1 de 2 y los botones anterior y siguiente,pdfwidth=100%]
+image::screenshots/{lang}/user/07-record-pager.png["{user-fig-pager-alt}",pdfwidth=100%]
 
 TIP: La interfaz no exporta listas a archivo. Si necesita los datos fuera de la aplicación, pida a un administrador
 técnico una extracción por la API (capítulo _API REST_ del _Manual técnico del sistema_).
@@ -127,9 +133,11 @@ Dar de alta un registro nuevo, por ejemplo una solicitud de licencia.
 . Si aparece el campo *Motivo*, escriba por qué da de alta el registro (hasta 500 caracteres).
 . Pulse *Guardar*. *Cancelar* vuelve a la lista sin guardar.
 
+:user-fig-new-alt: Formulario Nuevo registro con los campos de la licencia, el campo Motivo y los botones Guardar y \
+Cancelar
 [[user-fig-new]]
 .Formulario de alta de una licencia
-image::screenshots/{lang}/user/08-record-new.png[Formulario Nuevo registro con los campos de la licencia, el campo Motivo y los botones Guardar y Cancelar,pdfwidth=100%]
+image::screenshots/{lang}/user/08-record-new.png["{user-fig-new-alt}",pdfwidth=100%]
 
 .Resultado esperado
 Se abre la página de detalle del registro creado. Si el objeto tiene un flujo de trabajo, el registro empieza en su
@@ -147,9 +155,11 @@ El registro aparece en la lista y su pestaña de historial muestra una entrada *
 * Algunas reglas de automatización actúan después de guardar (por ejemplo, rellenan un campo). Sus efectos pueden
   tardar unos segundos en verse; recargue la página.
 
+:user-fig-validation-alt: El formulario de alta con los campos Expediente, Establecimiento, Giro y Motivo marcados \
+en rojo
 [[user-fig-validation]]
 .Campos obligatorios sin completar
-image::screenshots/{lang}/user/21-validation-errors.png[El formulario de alta con los campos Expediente, Establecimiento, Giro y Motivo marcados en rojo,pdfwidth=100%]
+image::screenshots/{lang}/user/21-validation-errors.png["{user-fig-validation-alt}",pdfwidth=100%]
 
 [[user-detail]]
 === Consultar un registro
@@ -158,9 +168,11 @@ Al abrir un registro se ve su *página de detalle*. Su composición la decide el
 (<<user-fig-detail>>) tiene tres pestañas (*Solicitud*, *Predio y solicitante*, *Historial*) y, a la derecha, el
 estado del trámite con las transiciones disponibles y una nota.
 
+:user-fig-detail-alt: Detalle de la licencia con las pestañas, el formulario por secciones Identificación, Local y \
+Evaluación, y el panel Trámite de licencia con los botones Observar, Aprobar y Rechazar
 [[user-fig-detail]]
 .Página de detalle de una licencia en revisión
-image::screenshots/{lang}/user/09-record-detail.png[Detalle de la licencia con las pestañas, el formulario por secciones Identificación, Local y Evaluación, y el panel Trámite de licencia con los botones Observar, Aprobar y Rechazar,pdfwidth=100%]
+image::screenshots/{lang}/user/09-record-detail.png["{user-fig-detail-alt}",pdfwidth=100%]
 
 * El encabezado muestra el objeto y el identificador interno del registro; *Volver* regresa a la lista del objeto.
 * Un objeto sin página configurada muestra una página generada con las pestañas *Detalles*, *Relacionados*,

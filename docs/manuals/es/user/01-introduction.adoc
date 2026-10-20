@@ -53,6 +53,8 @@ observaciones y resultado. Cada una tiene un solicitante y un predio, y avanza p
 
 El flujo de trámite de una licencia se muestra en la <<user-fig-demo-workflow>>.
 
+:user-fig-demo-workflow-alt: Diagrama de estados: Borrador pasa a En revisión; de En revisión a Observada, Aprobada \
+o Rechazada; de Observada vuelve a En revisión
 [[user-fig-demo-workflow]]
 .Estados y transiciones del trámite de licencia del ejemplo
-image::diagrams/es-demo-workflow.png[Diagrama de estados: Borrador pasa a En revisión; de En revisión a Observada, Aprobada o Rechazada; de Observada vuelve a En revisión,pdfwidth=70%,role=diagram]
+image::diagrams/es-demo-workflow.png["{user-fig-demo-workflow-alt}",pdfwidth=70%,role=diagram]

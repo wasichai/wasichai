@@ -7,10 +7,6 @@ include::attributes.adoc[]
 :nofooter:
 :imagesdir: assets
 
-image::branding/emblem.svg[Wasichai,64,role=emblem]
-
-Version {product-version} · {edition-date}
-
 [.manuals-grid]
 * *link:es/index.html[Documentación en español]* +
   Manual de usuario, manual del administrador y manual técnico del sistema.

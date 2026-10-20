@@ -7,9 +7,11 @@
 Un objeto puede tener un flujo: estados y transiciones. menu:Automatización[Workflows] los dibuja en un lienzo
 (<<admin-fig-workflow>>).
 
+:admin-fig-workflow-alt: Lienzo con los estados Borrador, En revisión, Observada, Aprobada y Rechazada unidos por \
+transiciones, y el panel Detalles
 [[admin-fig-workflow]]
 .Lienzo del flujo «Trámite de licencia»
-image::screenshots/{lang}/admin/15-workflow-canvas.png[Lienzo con los estados Borrador, En revisión, Observada, Aprobada y Rechazada unidos por transiciones, y el panel Detalles,pdfwidth=100%]
+image::screenshots/{lang}/admin/15-workflow-canvas.png["{admin-fig-workflow-alt}",pdfwidth=100%]
 
 .Objetivo
 Definir el ciclo de vida de los registros de un objeto.
@@ -43,9 +45,11 @@ no se pueden aplicar transiciones hasta que el objeto tenga un flujo nuevo.
 Una regla dice: _cuando_ pase algo a un registro, _si_ se cumplen unas condiciones, _haz_ unas acciones.
 menu:Automatización[Reglas] (<<admin-fig-rules>>).
 
+:admin-fig-rules-alt: Editor de una regla: nombre técnico, etiqueta, casilla habilitada, disparador Al entrar en un \
+estado Aprobada, sin condiciones, y la acción Emitir un documento
 [[admin-fig-rules]]
 .La regla «Emitir certificado al aprobar»
-image::screenshots/{lang}/admin/16-automation-rules.png[Editor de una regla: nombre técnico, etiqueta, casilla habilitada, disparador Al entrar en un estado Aprobada, sin condiciones, y la acción Emitir un documento,pdfwidth=100%]
+image::screenshots/{lang}/admin/16-automation-rules.png["{admin-fig-rules-alt}",pdfwidth=100%]
 
 Disparadores (*Cuándo*)::
 Al crear, al modificar o al eliminar un registro; al aplicar una transición (opcionalmente una concreta); al entrar
@@ -82,9 +86,10 @@ En los textos se puede leer el registro con dobles llaves: `{{codigo}}`, y adem�
 menu:Automatización[Ejecuciones] muestra qué se disparó, qué no y por qué (<<admin-fig-runs>>). Se puede filtrar por
 *Estado* y por cantidad.
 
+:admin-fig-runs-alt: Tabla de ejecuciones con estado Hecho, regla, disparador, fecha y el detalle de cada acción
 [[admin-fig-runs]]
 .Ejecuciones de las reglas del ejemplo
-image::screenshots/{lang}/admin/17-automation-runs.png[Tabla de ejecuciones con estado Hecho, regla, disparador, fecha y el detalle de cada acción,pdfwidth=100%]
+image::screenshots/{lang}/admin/17-automation-runs.png["{admin-fig-runs-alt}",pdfwidth=100%]
 
 Cada fila indica el estado (hecha, omitida con su razón, fallida), la regla, el disparador, cuándo ocurrió y el
 detalle de cada acción. Leer las ejecuciones solo requiere `READ` sobre el objeto, para que quien vio cambiar un

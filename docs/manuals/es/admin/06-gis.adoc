@@ -5,9 +5,11 @@ Con el módulo GIS, cada campo de geometría puede publicarse en GeoServer como 
 herramientas cartográficas. menu:GIS[Capas] lista una fila por geometría de cada objeto, con su tipo, su sistema de
 coordenadas (CRS), su estado y los enlaces de la capa (<<admin-fig-layers>>).
 
+:admin-fig-layers-alt: Pantalla Capas GIS con el aviso GeoServer no está configurado y la fila predio.lote Sin \
+publicar
 [[admin-fig-layers]]
 .Capas GIS con GeoServer deshabilitado
-image::screenshots/{lang}/admin/18-gis-layers.png[Pantalla Capas GIS con el aviso GeoServer no está configurado y la fila predio.lote Sin publicar,pdfwidth=100%]
+image::screenshots/{lang}/admin/18-gis-layers.png["{admin-fig-layers-alt}",pdfwidth=100%]
 
 .Objetivo
 Publicar la geometría de un objeto en GeoServer.

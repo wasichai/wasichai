@@ -7,9 +7,11 @@ organización). Es de solo anexado: la base de datos impide modificar o borrar s
 
 menu:Administración[Auditoría] (<<admin-fig-audit>>).
 
+:admin-fig-audit-alt: Tabla de auditoría con operación, objeto, registro, usuario, motivo y fecha; una entrada \
+desplegada muestra el campo Resultado cambiado
 [[admin-fig-audit]]
 .Auditoría con una entrada desplegada
-image::screenshots/{lang}/admin/10-audit.png[Tabla de auditoría con operación, objeto, registro, usuario, motivo y fecha; una entrada desplegada muestra el campo Resultado cambiado,pdfwidth=100%]
+image::screenshots/{lang}/admin/10-audit.png["{admin-fig-audit-alt}",pdfwidth=100%]
 
 .Objetivo
 Saber quién cambió qué y cuándo.

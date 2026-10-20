@@ -13,7 +13,7 @@ la geometría sobre el mapa.
 
 [[user-fig-map-tab]]
 .Pestaña Mapa de un predio
-image::screenshots/{lang}/user/14-predio-map-tab.png[Detalle de un predio con la pestaña Mapa abierta y el polígono del lote,pdfwidth=100%]
+image::screenshots/{lang}/user/14-predio-map-tab.png["Detalle de un predio con la pestaña Mapa abierta y el polígono del lote",pdfwidth=100%]
 
 [[user-map-page]]
 === El mapa de un objeto
@@ -25,7 +25,7 @@ image::screenshots/{lang}/user/14-predio-map-tab.png[Detalle de un predio con la
 
 [[user-fig-map]]
 .Mapa de los predios del ejemplo
-image::screenshots/{lang}/user/15-map.png[Página Mapa con 25 polígonos de predios dibujados sobre un fondo liso y el panel Atributos vacío,pdfwidth=100%]
+image::screenshots/{lang}/user/15-map.png["Página Mapa con 25 polígonos de predios dibujados sobre un fondo liso y el panel Atributos vacío",pdfwidth=100%]
 
 El encabezado indica cuántas entidades se dibujaron. Use los botones *+* y *−* o la rueda del ratón para acercar y
 alejar; la escala aparece abajo a la izquierda.

@@ -46,3 +46,4 @@ wasichai-integration-tests/it-env.sh
 # Manuals: generated output and local tool installs
 docs/manuals/output/
 docs/manuals/.bundle/
+docs/manuals/vendor/

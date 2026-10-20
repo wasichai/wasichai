@@ -54,6 +54,8 @@ dates, remarks and outcome. Each one has an applicant and a plot, and moves thro
 
 The processing workflow of a licence is shown in <<user-fig-demo-workflow>>.
 
+:user-demo-workflow-alt: State diagram: Borrador goes to En revisión; from En revisión to Observada, Aprobada or \
+Rechazada; from Observada back to En revisión
 [[user-fig-demo-workflow]]
 .States and transitions of the sample licence process
-image::diagrams/en-demo-workflow.png[State diagram: Borrador goes to En revisión; from En revisión to Observada, Aprobada or Rechazada; from Observada back to En revisión,pdfwidth=70%,role=diagram]
+image::diagrams/en-demo-workflow.png["{user-demo-workflow-alt}",pdfwidth=70%,role=diagram]

@@ -4,9 +4,11 @@
 Las figuras de los manuales salen de una base de demostración que cualquiera puede reconstruir desde cero. Este
 capítulo explica qué contiene, cómo se genera, cómo se exporta y cómo se restaura, y qué se comprobó.
 
+:sys-fig-demo-db-alt: Diagrama: base vacía, arranque con migraciones, carga por la API, exportación a SQL, \
+restauración y verificación
 [[sys-fig-demo-db]]
 .Ciclo de vida de la base de demostración
-image::diagrams/es-demo-db-lifecycle.png[Diagrama: base vacía, arranque con migraciones, carga por la API, exportación a SQL, restauración y verificación,pdfwidth=100%,role=diagram]
+image::diagrams/es-demo-db-lifecycle.png["{sys-fig-demo-db-alt}",pdfwidth=100%,role=diagram]
 
 === Contenido
 

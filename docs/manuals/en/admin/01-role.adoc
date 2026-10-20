@@ -1,0 +1,43 @@
+[[admin-role]]
+== Functions and responsibilities
+
+=== Who is an administrator
+
+There is no single "administrator": there are permissions that enable each task, and the special role `ADMIN`, which
+gathers them.
+
+[cols="2,4",options="header"]
+|===
+|Permission or role |Enables
+|`ADMIN` |Everything inside the organization. It skips the permission checks (not the _append-only_ or _application
+only_ rules). It cannot be deleted. It never applies to a service account.
+|`MANAGE_METADATA` |Objects, fields, relationships, declared actions, views, forms, pages, document types, workflows
+and automation rules.
+|`MANAGE_ORGANIZATION` |Users, roles, permissions, service accounts, organizational units, notifications, the name
+of the organization and reading the administration entries of the audit log.
+|`MANAGE_TENANTS` |Create and delete organizations (tenants). By default whoever has `MANAGE_ORGANIZATION` has it;
+with `wasichai.organizations.separate-provisioning=true`, only an explicit grant.
+|===
+
+`MANAGE_METADATA` and `MANAGE_ORGANIZATION` are granted "for every object" (the *Every object* row of the
+permission matrix, <<admin-permissions>>).
+
+=== First access to an environment
+
+The platform creates no administrator in production. There are two ways:
+
+* *Development or demo environment*: with `wasichai.seed.dev=true`, the first migration creates the organization
+  _Demo_ (`demo`), the role `ADMIN` and the user `admin@wasichai.local` with password `admin`. Development only.
+* *Production*: an operator who already has `MANAGE_TENANTS` creates the organization and its first administrator
+  with `POST /api/organizations` (<<admin-tenants>>). The first holder of that permission is granted outside the
+  application, as the guide _Build your app_ in the repository describes.
+
+WARNING: Do not turn on `wasichai.seed.dev` in production: it creates an account with a publicly known password.
+
+=== Usual responsibilities
+
+* Keep the data model up to date with the work of the organization.
+* Add and remove people, and review their roles periodically.
+* Grant each role only what it needs (least privilege).
+* Review the audit log when incidents happen.
+* Coordinate backups, upgrades and restores with the technical team.

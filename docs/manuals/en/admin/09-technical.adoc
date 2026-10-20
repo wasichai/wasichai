@@ -1,0 +1,34 @@
+[[admin-technical]]
+== Technical administration
+
+These tasks are not done from the application but on the server, its configuration or the database. The technical
+team does them; the _System manual_ gives the full procedures. This chapter summarizes what exists so that the
+functional administrator knows what to ask for.
+
+[cols="2,3,2",options="header"]
+|===
+|Need |How it is solved |Where
+|Block sign-in after several failed attempts |`wasichai.security.login.enabled=true` (5 attempts per email and
+address, 20 per email, 15-minute window) |Configuration
+|Require stronger passwords |`wasichai.security.password.*`: minimum length, upper case, lower case, digits,
+symbols, different from the email |Configuration
+|Make disabling or signing out cut off access at once |`wasichai.security.jwt.revocation=true` |Configuration
+|Change the session length |`wasichai.security.jwt.ttl` (8 h by default) |Configuration
+|Separate who creates organizations |`wasichai.organizations.separate-provisioning=true` |Configuration
+|Backups and restore |`pg_dump` / `pg_restore` of the whole database |Database
+|Purge old audit entries |A dedicated database role (`wasichai.audit.purge-role`) |Database
+|Publish layers to GeoServer |`wasichai.gis.geoserver.*` |Configuration
+|Send notifications by email |`wasichai.notifications.email.*` and an SMTP server |Configuration
+|Review errors |The server logs; each request carries an `X-Correlation-Id` |Server
+|Recover data deleted by mistake |Restore a backup into a separate database and copy what is needed |Database
+|===
+
+CAUTION: The application has no trash. The only way to recover a deleted record, field or object is an earlier
+backup. Confirm with the technical team how often backups are taken and that restores have been tested.
+
+=== Recommended periodic maintenance
+
+* Every month: review the active accounts and disable those of people who no longer work in the organization;
+  review the service accounts and rotate their secrets according to the policy of the organization.
+* Every quarter: review the roles and their permissions; check in *Runs* whether any rules are failing.
+* Before every model change in production: try it in a test environment and confirm there is a recent backup.

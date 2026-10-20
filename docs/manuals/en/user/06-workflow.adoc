@@ -30,9 +30,11 @@ Move a record to the next state, for example approve a licence in review.
 . In the workflow panel, click the button of the transition.
 . If the *Reason for the change* dialog opens, write the reason and click *Continue*.
 
+:user-transitions-ok-alt: Trámite de licencia panel in the state En revisión with the buttons Observar, Aprobar and \
+Rechazar enabled
 [[user-fig-transitions-ok]]
 .Transitions available to the reviewer
-image::screenshots/{lang}/user/16-transitions-revisor.png[Trámite de licencia panel in the state En revisión with the buttons Observar, Aprobar and Rechazar enabled,pdfwidth=45%]
+image::screenshots/{lang}/user/16-transitions-revisor.png["{user-transitions-ok-alt}",pdfwidth=45%]
 
 .Expected result
 The label shows the new state and the buttons of the transitions that leave it appear.
@@ -50,8 +52,10 @@ The history shows an *Update* entry with the change of `state` and the reason.
   _Resultado_ field is filled in; on entering _En revisión_ the reviewers are notified. These effects run in the
   background and may take a few seconds to show.
 
+:user-transitions-denied-alt: Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar disabled and \
+the text requires role REVISOR under each one
 [[user-fig-transitions-denied]]
 .The same transitions as the registrar sees them
-image::screenshots/{lang}/user/17-transitions-registrador.png[Trámite de licencia panel with the buttons Observar, Aprobar and Rechazar disabled and the text requires role REVISOR under each one,pdfwidth=45%]
+image::screenshots/{lang}/user/17-transitions-registrador.png["{user-transitions-denied-alt}",pdfwidth=45%]
 
 TIP: If the administrator disabled a workflow, the panel shows no transition buttons.

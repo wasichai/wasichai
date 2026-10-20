@@ -13,9 +13,11 @@ relacionadas (<<user-fig-related>>).
 . Vaya a la pestaña que contiene las listas relacionadas: en el ejemplo, *Predio y solicitante*; en una página
   generada, *Relacionados*.
 
+:user-fig-related-alt: Pestaña Predio y solicitante con dos tablas: el predio P-0004 y el solicitante C-0012, cada \
+una con su enlace Editar
 [[user-fig-related]]
 .Listas relacionadas de una licencia
-image::screenshots/{lang}/user/10-record-related.png[Pestaña Predio y solicitante con dos tablas: el predio P-0004 y el solicitante C-0012, cada una con su enlace Editar,pdfwidth=100%]
+image::screenshots/{lang}/user/10-record-related.png["{user-fig-related-alt}",pdfwidth=100%]
 
 Cada lista indica el nombre de la relación, su tipo (por ejemplo, `MANY_TO_ONE`, «muchos a uno») y cuántos registros
 contiene. *Editar* abre el registro relacionado. Las listas funcionan en los dos sentidos: desde un contribuyente se
@@ -33,9 +35,11 @@ registro, que no se puede modificar ni borrar desde la aplicación.
 .Procedimiento
 . Abra el registro y vaya a la pestaña *Historial*.
 
+:user-fig-history-alt: Pestaña Historial con dos entradas: Creación y Modificación, cada una con usuario, fecha \
+relativa, motivo y el cambio de estado de borrador a en_revision
 [[user-fig-history]]
 .Historial de una licencia
-image::screenshots/{lang}/user/11-record-history.png[Pestaña Historial con dos entradas: Creación y Modificación, cada una con usuario, fecha relativa, motivo y el cambio de estado de borrador a en_revision,pdfwidth=100%]
+image::screenshots/{lang}/user/11-record-history.png["{user-fig-history-alt}",pdfwidth=100%]
 
 Cada entrada muestra:
 

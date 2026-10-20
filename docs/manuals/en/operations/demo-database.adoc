@@ -1,0 +1,157 @@
+[[sys-demo-db]]
+== Reproducible demo database
+
+The figures of the manuals come from a demo database that anyone can rebuild from scratch. This chapter explains
+what it contains, how it is generated, exported and restored, and what was checked.
+
+:sys-demo-db-alt: Diagram: empty database, startup with migrations, loading through the API, export to SQL, restore \
+and verification
+[[sys-fig-demo-db]]
+.Life cycle of the demo database
+image::diagrams/en-demo-db-lifecycle.png["{sys-demo-db-alt}",pdfwidth=100%,role=diagram]
+
+=== Contents
+
+Synthetic data of a fictitious municipality, the _Distrito Demo_. No name, document, email or address belongs to a
+real person or company; the emails use the reserved `.example` domain.
+
+[cols="2,3",options="header"]
+|===
+|Item |Contents
+|Organization |_Demo_ (`demo`), created by the development seed.
+|Objects |`contribuyente` (30), `predio` (25, with an EPSG:4326 polygon), `licencia` (40, requires a reason).
+|Relationships |`predio_titular`, `licencia_solicitante`, `licencia_predio` (many-to-one).
+|Workflow |`licencia-tramite`: borrador, en revisión, observada, aprobada, rechazada. Licences in every state (8,
+10, 6, 11 and 5), moved by real transitions.
+|Configuration |2 licence views and 1 plot view, 1 form, 1 page, 1 document type (`CLF`), 2 rules.
+|Documents |11 certificates, issued by the rule on approval.
+|People |`admin@wasichai.local` (`ADMIN`), `registrador@demo.example`, `revisor@demo.example`,
+`consulta@demo.example`.
+|Others |Field permissions (role `CONSULTA`), 1 service account, 2 organizational units, 1 manual notice and the
+notices of the review rule.
+|===
+
+The demo credentials are public and *only for local or test environments*: the administrator uses the password of
+the development seed (`admin`); the other people, the one set in `WASICHAI_DEMO_PASSWORD` when loading (the figures
+used `Demo-2026!`). The exported database holds their BCrypt fingerprints.
+
+=== Artifacts
+
+[cols="2,3",options="header"]
+|===
+|Path (in `docs/manuals/`) |What it is
+|`database/fixtures/demo-dataset.json` |The dataset: metadata, roles, people, configuration and records. Canonical
+source.
+|`scripts/seed-demo.mjs` |Loads it *through the REST API* into a running application. Idempotent.
+|`scripts/export-demo-db.sh` |Exports the database to plain SQL and writes the manifest.
+|`database/backups/wasichai-demo.sql` |Full logical backup: schemas `wasichai` and `app_data` (structure, data,
+sequences, _triggers_, Flyway history) and the extensions `pgcrypto` and `postgis`. One `INSERT` per row.
+|`database/manifests/demo-manifest.json` |Versions (PostgreSQL, PostGIS, migrations per module), date, SHA-256
+fingerprint of the SQL, restore order and number of rows per table.
+|`scripts/restore-demo-db.sh` |Restores the SQL into a demo database and verifies it.
+|`database/verify.sql` |Integrity checks.
+|===
+
+The data is loaded through the API, not with direct `INSERT` statements, because the platform creates the object
+tables (`ObjectSchemaManager`) and because that way the load goes through the same validations, permissions, audit
+and rules as real use. The exported SQL, however, is a full backup: it does not depend on running the load again.
+
+[[sys-demo-seed]]
+=== Generating the database from scratch
+
+.Prerequisites
+* PostgreSQL 18 with PostGIS 3.6 and an *empty* database whose name ends in `_demo`.
+* `full-sample` running against it (<<sys-installation>>). Its first startup applies the migrations and the
+  development seed.
+* Node 26.
+
+.Procedure
+[source,bash]
+----
+# from wasichai/
+export WASICHAI_DEMO_PASSWORD='Demo-2026!'          # local only
+yarn docs:db:seed                                   # = node docs/manuals/scripts/seed-demo.mjs
+----
+
+.Expected result
+One line per item (`created …`) and at the end `done: 127 created, 0 already there`.
+
+.Special cases
+* The script refuses to load if the account signs in to an organization that is not `demo`.
+* It is idempotent: each item is looked up by its name or its code before creating it. A second run ends with
+  `done: 0 created, 120 already there` and changes nothing.
+* It does not delete or overwrite anything that already exists. To start over, use a new database.
+* `BASE_URL` (by default `http://localhost:8090`) points at another instance.
+
+[[sys-demo-export]]
+=== Exporting
+
+[source,bash]
+----
+# from wasichai/, with the application stopped or idle
+WASICHAI_DB_HOST=localhost WASICHAI_DB_PORT=5432 WASICHAI_DB_NAME=wasichai_demo yarn docs:db:export
+----
+
+It only reads the database. It refuses if the name does not end in `_demo`. The export is deterministic: two
+exports of the same data produce the same file (no date in the header and a fixed `\restrict` key), so a change in
+the versioned SQL reflects a real change of data.
+
+[[sys-demo-restore]]
+=== Restoring
+
+[source,bash]
+----
+# from wasichai/
+WASICHAI_DB_NAME=wasichai_demo_restore yarn docs:db:restore            # new or empty database
+WASICHAI_DB_NAME=wasichai_demo_restore yarn docs:db:restore --replace  # drops it and creates it again
+----
+
+The script:
+
+. checks that the SQL matches the fingerprint of the manifest;
+. creates the database if it does not exist; refuses if it already holds {product-name} tables, unless
+  `--replace` is given;
+. loads the SQL with `psql -v ON_ERROR_STOP=1`;
+. runs `verify.sql`;
+. compares the number of rows of each table with the manifest.
+
+WARNING: `--replace` drops the given database with all its contents. The script only accepts it for names that end
+in `_demo` or `_demo_restore`, but check which server the `WASICHAI_DB_*` variables point at before using it.
+
+The role needs `CREATEDB` and to be able to create the extensions `pgcrypto` and `postgis` (or they must already
+exist in the template). Then start the application with `WASICHAI_DB_NAME=wasichai_demo_restore`.
+
+=== What it does not restore
+
+* `WASICHAI_JWT_SECRET`: it is configuration. With another secret, the earlier sessions are not valid (you have to
+  sign in again), with no other effect.
+* The secret of the demo service account: it was not kept when it was created. Rotate it to get one.
+* Files of the `files` module: the demo uses no file fields.
+* GeoServer layers.
+
+[[sys-demo-proof]]
+=== Rebuild test performed
+
+The rebuild was tested end to end on {edition-date}, with PostgreSQL 18.6, PostGIS 3.6.4, OpenJDK 25.0.2 and
+Node 26:
+
+[cols="1,3,3",options="header"]
+|===
+|Step |Action |Observed result
+|1 |Empty database `wasichai_demo` |0 tables.
+|2 |Startup of `full-sample` |Migrations applied; `/api/health` → `UP`.
+|3 |`seed-demo.mjs` |`127 created, 0 already there`; 54 rule runs, all done.
+|4 |`seed-demo.mjs` again |`0 created, 120 already there`.
+|5 |`export-demo-db.sh` |524 KB SQL; two exports in a row, identical.
+|6 |`restore-demo-db.sh` into `wasichai_demo_restore` |`verify.sql` OK; 47 tables and 566 rows equal to the
+manifest.
+|7 |Startup against the restored database |Flyway: all migrations validated, none pending.
+|8 |Screenshots of the manuals |80 screenshots (40 per language) taken against the restored database.
+|9 |`e2e/smoke.sh` of `full-sample` |`smoke passed`.
+|10 |Negative tests |`verify.sql` detects an orphan foreign key and a dropped _trigger_; the scripts reject
+database names that are not for demos and a non-empty database without `--replace`.
+|11 |Production-style backup |`pg_dump -Fc` + `pg_restore` into another database: `verify.sql` OK.
+|===
+
+Unavoidable differences between the original and the restored database: none in the data; the date of the audit
+entries and of the documents is that of the moment of the load.

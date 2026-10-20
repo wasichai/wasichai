@@ -13,9 +13,11 @@ Requisito común: permiso `MANAGE_METADATA` (o rol `ADMIN`).
 menu:Datos[Objetos] lista los objetos de la organización con su etiqueta, su nombre técnico y su geometría
 (<<admin-fig-objects>>). *Ver registros* abre la lista de registros; el lápiz abre el editor.
 
+:admin-fig-objects-alt: Tabla con los objetos Contribuyente, Licencia de funcionamiento y Predio, con los botones \
+Ver registros y editar
 [[admin-fig-objects]]
 .Lista de objetos
-image::screenshots/{lang}/admin/01-objects.png[Tabla con los objetos Contribuyente, Licencia de funcionamiento y Predio, con los botones Ver registros y editar,pdfwidth=100%]
+image::screenshots/{lang}/admin/01-objects.png["{admin-fig-objects-alt}",pdfwidth=100%]
 
 [[admin-object-create]]
 === Crear un objeto
@@ -37,7 +39,7 @@ Definir un tipo de información nuevo, con sus campos.
 
 [[admin-fig-object-new]]
 .Alta de un objeto
-image::screenshots/{lang}/admin/04-object-new.png[Formulario Nuevo objeto con nombre técnico, etiquetas, descripción y una fila de campo,pdfwidth=100%]
+image::screenshots/{lang}/admin/04-object-new.png["Formulario Nuevo objeto con nombre técnico, etiquetas, descripción y una fila de campo",pdfwidth=100%]
 
 .Resultado esperado
 El objeto aparece en la lista y en *Inicio*, sin registros.
@@ -80,9 +82,11 @@ para subirlos (se gestionan por API).
 
 El editor (lápiz en la lista) tiene varias tarjetas (<<admin-fig-object-editor>>).
 
+:admin-fig-object-editor-alt: Tarjeta Datos del objeto con nombre técnico bloqueado, etiquetas, descripción, la \
+casilla Activo y las reglas de escritura
 [[admin-fig-object-editor]]
 .Editor de un objeto: datos y reglas de escritura
-image::screenshots/{lang}/admin/02-object-editor.png[Tarjeta Datos del objeto con nombre técnico bloqueado, etiquetas, descripción, la casilla Activo y las reglas de escritura,pdfwidth=100%]
+image::screenshots/{lang}/admin/02-object-editor.png["{admin-fig-object-editor-alt}",pdfwidth=100%]
 
 Datos del objeto::
 Etiquetas y descripción. *Activo*: un objeto inactivo conserva sus datos y se puede leer, pero no admite altas ni
@@ -107,9 +111,11 @@ conceden por rol en *Permisos*. Solo tienen efecto si el código de la aplicaci�
 Eliminar el objeto::
 La zona de peligro (<<admin-object-delete>>).
 
+:admin-fig-object-fields-alt: Tarjeta Campos con las filas Expediente, Establecimiento, Giro, Área del local y \
+Fecha de solicitud y sus opciones
 [[admin-fig-object-fields]]
 .Editor de un objeto: campos
-image::screenshots/{lang}/admin/03-object-fields.png[Tarjeta Campos con las filas Expediente, Establecimiento, Giro, Área del local y Fecha de solicitud y sus opciones,pdfwidth=100%]
+image::screenshots/{lang}/admin/03-object-fields.png["{admin-fig-object-fields-alt}",pdfwidth=100%]
 
 .Casos especiales al cambiar campos
 * Marcar *Obligatorio* falla si hay registros con el campo vacío; marcar *Único* o añadir una unicidad compuesta
@@ -150,9 +156,11 @@ datos. El servidor rechaza la eliminación si otro objeto tiene un campo de refe
 
 menu:Datos[Relaciones] crea y lista las relaciones entre objetos (<<admin-fig-relationships>>).
 
+:admin-fig-relationships-alt: Formulario Nueva relación y la lista con las relaciones Predio, Solicitante y \
+Titular, todas MANY_TO_ONE
 [[admin-fig-relationships]]
 .Relaciones del ejemplo
-image::screenshots/{lang}/admin/05-relationships.png[Formulario Nueva relación y la lista con las relaciones Predio, Solicitante y Titular, todas MANY_TO_ONE,pdfwidth=100%]
+image::screenshots/{lang}/admin/05-relationships.png["{admin-fig-relationships-alt}",pdfwidth=100%]
 
 .Objetivo
 Vincular dos objetos, por ejemplo cada predio con su titular.

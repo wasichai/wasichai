@@ -1,0 +1,34 @@
+[[sys-requirements]]
+== Requirements and versions
+
+[cols="2,2,3",options="header"]
+|===
+|Item |Version |Notes
+|JDK |25 |The build sets `jvmToolchain(25)`. A JRE 25 is enough to run a JAR.
+|Gradle |9.7.1 (wrapper) |It does not need to be installed.
+|Kotlin / Spring Boot |2.4.x / 4.1.x |From the catalog `gradle/libs.versions.toml`.
+|PostgreSQL |18 |Extension `pgcrypto` always; `vector` if it exists on the server.
+|PostGIS |3.6 |Only with the GIS module.
+|Node.js / Yarn |26 / 1.22 |To build the interface and the documentation tools.
+|Browser |Current |The screenshots and tests of this manual use Chromium 141; other browsers were not verified.
+|GeoServer |Optional |To publish layers.
+|Ruby |3.3 |Only to generate these manuals (Asciidoctor).
+|===
+
+The database user of the application needs to be able to create schemas and extensions in the first migration, or
+a database administrator must create them beforehand (`pgcrypto`, `postgis`).
+
+There are no measured hardware requirements for the platform. As the only observed reference: the `full-sample`
+JAR, with the default JVM, started in about 11 seconds on the demo database on a machine with 4 CPUs and 15 GB.
+Size production with your own load tests.
+
+=== Ports
+
+[cols="1,3",options="header"]
+|===
+|Port |Use
+|8090 |Server of `full-sample` (variable `PORT`).
+|5173 / 4173 |Development server / preview of the `full-sample` web app (Vite), with a proxy of `/api` to 8090.
+|5432 |PostgreSQL by default. Tests never use it; `full-sample` uses 5433 with its `docker-compose.yml`.
+|8081 |GeoServer by default (`wasichai.gis.geoserver.url`).
+|===

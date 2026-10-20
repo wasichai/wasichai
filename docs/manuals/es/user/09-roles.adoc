@@ -29,16 +29,23 @@ observaciones, pero no aprobar ni rechazar.
 Revisor técnico (_Raúl Revisor_)::
 Lee los tres objetos y modifica licencias. Puede observar, aprobar y rechazar licencias en revisión.
 Consulta (_Carmen Consulta_)::
-Solo lee. Además, no ve el documento de identidad ni el teléfono de los contribuyentes
+Solo lee, aunque su menú es el mismo que el de un administrador (<<user-fig-home-consulta>>). Además, no ve el
+documento de identidad ni el teléfono de los contribuyentes
 (<<user-fig-field-permissions>>).
 
+[[user-fig-home-consulta]]
+.Inicio del rol Consulta: el mismo menú que un administrador
+image::screenshots/{lang}/user/18-home-consulta.png["Página Inicio de Carmen Consulta, con el menú completo y las tres tarjetas de objetos",pdfwidth=100%]
+
+:user-fig-field-permissions-alt: Detalle de un contribuyente con los campos Código, Nombre, Tipo, Correo, Dirección \
+fiscal y Activo; faltan DNI/RUC y Teléfono
 [[user-fig-field-permissions]]
 .Un contribuyente visto por el rol Consulta: sin DNI/RUC ni teléfono
-image::screenshots/{lang}/user/19-field-permissions-consulta.png[Detalle de un contribuyente con los campos Código, Nombre, Tipo, Correo, Dirección fiscal y Activo; faltan DNI/RUC y Teléfono,pdfwidth=100%]
+image::screenshots/{lang}/user/19-field-permissions-consulta.png["{user-fig-field-permissions-alt}",pdfwidth=100%]
 
 [[user-fig-forbidden]]
 .El rol Consulta intenta guardar: el servidor lo rechaza
-image::screenshots/{lang}/user/22-forbidden-consulta.png[El mismo formulario con el aviso rojo Missing permission UPDATE encima de los campos,pdfwidth=100%]
+image::screenshots/{lang}/user/22-forbidden-consulta.png["El mismo formulario con el aviso rojo Missing permission UPDATE encima de los campos",pdfwidth=100%]
 
 TIP: Si necesita hacer algo que su rol no permite, pida al administrador que revise sus roles. No comparta su
 cuenta: todo lo que se hace con ella queda registrado a su nombre en la auditoría.

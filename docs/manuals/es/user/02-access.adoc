@@ -25,9 +25,11 @@ Una cuenta activa en la organización.
 . Escriba su correo en *Correo* y su contraseña en *Contraseña*.
 . Pulse *Iniciar sesión*.
 
+:user-fig-login-alt: Tarjeta de acceso con el nombre de la aplicación, los campos Correo y Contraseña y el botón \
+Iniciar sesión
 [[user-fig-login]]
 .Pantalla de acceso
-image::screenshots/{lang}/user/01-login.png[Tarjeta de acceso con el nombre de la aplicación, los campos Correo y Contraseña y el botón Iniciar sesión,pdfwidth=50%]
+image::screenshots/{lang}/user/01-login.png["{user-fig-login-alt}",pdfwidth=50%]
 
 .Resultado esperado
 Se abre la página *Inicio* (<<user-fig-home>>). En el pie del menú lateral aparecen su nombre y su correo.
@@ -45,7 +47,7 @@ Su nombre en el pie del menú confirma con qué cuenta entró.
 
 [[user-fig-login-error]]
 .Correo o contraseña incorrectos
-image::screenshots/{lang}/user/20-login-error.png[La tarjeta de acceso con el mensaje Invalid email or password en rojo,pdfwidth=50%]
+image::screenshots/{lang}/user/20-login-error.png["La tarjeta de acceso con el mensaje Invalid email or password en rojo",pdfwidth=50%]
 
 [[user-session]]
 === Duración de la sesión

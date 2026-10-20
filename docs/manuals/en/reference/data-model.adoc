@@ -1,9 +1,12 @@
 [[sys-data-model]]
 == Data model
 
+:sys-data-model-alt: Entity-relationship diagram: organizations with users, roles, custom_objects, org_units, \
+service_accounts and audit_log; custom_objects with their fields, relationships, data table and the configuration of \
+each module
 [[sys-fig-data-model]]
 .Main metadata entities
-image::diagrams/en-data-model.png[Entity-relationship diagram: organizations with users, roles, custom_objects, org_units, service_accounts and audit_log; custom_objects with their fields, relationships, data table and the configuration of each module,pdfwidth=100%,role=diagram]
+image::diagrams/en-data-model.png["{sys-data-model-alt}",pdfwidth=100%,role=diagram]
 
 === Schemas
 

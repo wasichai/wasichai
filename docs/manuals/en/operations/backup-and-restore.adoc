@@ -1,0 +1,75 @@
+[[sys-backup]]
+== Backup and restore
+
+All the state of a {product-name} application is in its PostgreSQL database (metadata, records, audit, module
+configuration), except:
+
+* the configuration and secrets of the environment (`WASICHAI_JWT_SECRET`, credentials);
+* the files of the `files` module when the store is local (`wasichai.files.local.path`) or S3;
+* the state of GeoServer (the layers can be published again from *Layers*).
+
+=== Database backup
+
+For production, back up the whole database with the PostgreSQL tools (a `pg_dump` of the same major version
+number as the server, or higher):
+
+[source,bash]
+----
+# from any computer with access to the database; credentials through PGPASSWORD or ~/.pgpass
+pg_dump --format=custom --no-owner --file=wasichai-$(date +%F).dump \
+  --host=db.example.org --port=5432 --username=wasichai wasichai
+----
+
+* `--format=custom` compresses and allows selective restores with `pg_restore`.
+* Include *the whole database*, not only the `wasichai` and `app_data` schemas: the extensions live in `public`.
+* Keep the backups off the server and encrypted; they contain personal data and password fingerprints.
+* Back up the files of the local store at the same time, if one is used.
+
+NOTE: The platform does not schedule backups: that is the responsibility of the installation (cron, managed
+database service, snapshots). Test the restore periodically; a backup without a tested restore is not a reliable
+backup.
+
+=== Restoring
+
+WARNING: Restoring over the database in use replaces all its data with that of the backup. Restore first into a new
+database, check it and then switch the application to it.
+
+[source,bash]
+----
+createdb --host=db.example.org --username=wasichai wasichai_restaurada
+pg_restore --no-owner --dbname=wasichai_restaurada --host=db.example.org --username=wasichai wasichai-2026-10-20.dump
+psql -v ON_ERROR_STOP=1 -d wasichai_restaurada -f docs/manuals/database/verify.sql   # integrity checks
+----
+
+`verify.sql` (included in this package) checks the extensions, the _triggers_ of the audit log, that each object
+has its table, that there are no orphan foreign keys, that the sequences are not behind and that the geometries
+have their SRID. It ends with an error if anything fails.
+
+Afterwards:
+
+. Point the application at the restored database (`WASICHAI_DB_NAME`) and start it. Flyway must report that there
+  are no pending migrations (or apply those of a newer version).
+. Run the smoke tests of <<sys-operation>>.
+. Tell people: everything done after the backup was lost.
+
+[[sys-purge-audit]]
+=== Purging the audit log
+
+The audit log is append-only even for the application. To delete old entries:
+
+. Create a dedicated login role in PostgreSQL, grant it `DELETE` on `wasichai.audit_log` and configure its name in
+  `wasichai.audit.purge-role`. The repeatable migration `R__audit_purge_role.sql` records that name in the
+  function `audit_log_purge_role()`, which the _triggers_ consult.
+. Sign in *with that role* (the _trigger_ checks `session_user`; `SET ROLE` does not work) and delete inside a
+  transaction that turns on the purge:
++
+[source,sql]
+----
+BEGIN;
+SET LOCAL wasichai.audit.purge = 'on';
+DELETE FROM wasichai.audit_log WHERE occurred_at < now() - interval '5 years';
+COMMIT;
+----
+
+CAUTION: Purging is irreversible and may have legal implications. Take a backup first and keep the written
+authorization.

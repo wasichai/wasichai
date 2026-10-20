@@ -25,9 +25,11 @@ Generate a numbered document from a record.
 The document appears in the table of the panel with its *Number*, the date and time it was *Issued* and the
 *Status* *Valid* (<<user-fig-documents>>).
 
+:user-documents-alt: Foot of the page of a licence with the form and the Issued documents panel with the valid \
+certificate CLF-2026-001
 [[user-fig-documents]]
 .Issued documents panel of an approved licence
-image::screenshots/{lang}/user/12-record-documents.png[Foot of the page of a licence with the form and the Issued documents panel with the valid certificate CLF-2026-001,pdfwidth=100%]
+image::screenshots/{lang}/user/12-record-documents.png["{user-documents-alt}",pdfwidth=100%]
 
 .Verification
 The history of the record shows an *Issue* entry.
@@ -49,9 +51,11 @@ The history of the record shows an *Issue* entry.
 . Click *Print*. The printable sheet opens in a new tab (<<user-fig-print>>).
 . Click *Print / Save PDF* and pick the printer, or _Save as PDF_ in the print dialog of the browser.
 
+:user-print-alt: A4 sheet with the title Certificado de licencia CLF-2026-001 and the text of the certificate; at the \
+top, the number and the Print / Save PDF button
 [[user-fig-print]]
 .Printable sheet of the certificate
-image::screenshots/{lang}/user/13-document-print.png[A4 sheet with the title Certificado de licencia CLF-2026-001 and the text of the certificate; at the top, the number and the Print / Save PDF button,pdfwidth=100%]
+image::screenshots/{lang}/user/13-document-print.png["{user-print-alt}",pdfwidth=100%]
 
 NOTE: The printable sheet is always shown with the light theme, whatever theme was chosen. An archived document is
 printed with the mark *ARCHIVED*.
