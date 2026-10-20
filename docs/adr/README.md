@@ -104,3 +104,4 @@ supersedes it and says so in its status line.
   definition](0067-the-rest-of-the-model-a-request-reads-is-cached.md)
 - [ADR-068: The platform stages, attaches and opens files within its own
   run](0068-the-platform-stages-attaches-and-opens-files-within-its-own-run.md)
+- [ADR-069: An optional Ant Design theme pair](0069-an-optional-ant-design-theme-pair.md)
