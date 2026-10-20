@@ -2,6 +2,20 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-20 — An optional Ant Design theme for wasichai-ui
+
+wasichai-ui ships a second optional theme, `ant-design`, light only
+([wasichai/wasichai-ui#64](https://github.com/wasichai/wasichai-ui/pull/64),
+[ADR-069](adr/0069-an-optional-ant-design-theme-pair.md)). An app imports `@wasichai/ui/themes/ant-design.css` after
+`theme.css` and lists `ANT_DESIGN_THEME` from `@wasichai/core` in `config.themes`. Its values are the Ant Design
+spec's and antd 5.24's default tokens: the system font stack, 14px on 22px, 6/4/8px corners, white containers on a
+`#f5f5f5` layout, `#d9d9d9` borders, `#f0f0f0` splits and the `#001529` sider as the shell. Its partials paint
+`Button`, the fields, `Card`, `Badge` (as antd's Tag), `Table`, `Tabs`, `Alert` and `NavTree` (as antd's inline Menu)
+through ADR-035's `data-slot` hooks. antd colours that miss AA as text take the nearest palette step that holds it:
+brand `#1668dc`, danger `#cf1322`, success `#237804`, warning `#874d00`; the focus ring is the brand. The dark half,
+`ant-design-dark` from antd's dark algorithm, follows in the same sheet, with an app pairing the two through
+`systemThemes`. No REST change, no ADR-031 entry: the theme is opt-in.
+
 ## 2026-10-15 — A related table with an empty cell no longer fails the issue
 
 Issuing a document whose template draws a `relatedTable` failed with `InvalidNullException` as soon as one related
