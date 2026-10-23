@@ -39,7 +39,8 @@ data class WorkflowStateRequest(
     val type: String? = null,
     // canvas coordinates. presentation, not behaviour: nothing validates them.
     val x: Double? = null,
-    val y: Double? = null
+    val y: Double? = null,
+    val labels: Map<String, String?>? = null
 )
 
 data class WorkflowTransitionRequest(
@@ -47,7 +48,8 @@ data class WorkflowTransitionRequest(
     val label: String? = null,
     val from: String? = null,
     val to: String? = null,
-    val roles: List<String> = emptyList()
+    val roles: List<String> = emptyList(),
+    val labels: Map<String, String?>? = null
 )
 
 data class WorkflowDefinitionRequest(
@@ -69,7 +71,10 @@ data class AvailableTransition(
     val to: String,
     val toLabel: String,
     val allowed: Boolean,
-    val reason: String? = null
+    val reason: String? = null,
+    // per language, as the definition holds them; label and toLabel stay the fallback
+    val labels: Map<String, String> = emptyMap(),
+    val toLabels: Map<String, String> = emptyMap()
 )
 
 @Service
@@ -188,7 +193,9 @@ class WorkflowService(
                     to = transition.to,
                     toLabel = workflow.definition.state(transition.to)?.label ?: transition.to,
                     allowed = reason == null,
-                    reason = reason
+                    reason = reason,
+                    labels = transition.labels,
+                    toLabels = workflow.definition.state(transition.to)?.labels ?: emptyMap()
                 )
             }
     }
@@ -350,7 +357,8 @@ class WorkflowService(
                     label = state.label?.trim()?.ifBlank { null } ?: name,
                     type = parseStateType(state.type),
                     x = if (placed) state.x else null,
-                    y = if (placed) state.y else null
+                    y = if (placed) state.y else null,
+                    labels = labelsOf(state.labels, "states")
                 )
             }
 
@@ -396,7 +404,8 @@ class WorkflowService(
                     label = transition.label?.trim()?.ifBlank { null } ?: name,
                     from = from,
                     to = to,
-                    roles = roles
+                    roles = roles,
+                    labels = labelsOf(transition.labels, "transitions")
                 )
             }
 
@@ -411,6 +420,21 @@ class WorkflowService(
 
         return WorkflowDefinition(states, transitions)
     }
+
+    // a blank text drops its language: the client falls back to `label` for it
+    private fun labelsOf(
+        raw: Map<String, String?>?,
+        field: String
+    ): Map<String, String> =
+        raw
+            .orEmpty()
+            .mapNotNull { (tag, text) ->
+                val language = tag.trim()
+                if (!LANGUAGE_TAG.matches(language)) {
+                    throw ValidationException("Invalid language '$tag'", field, "label languages must match ${LANGUAGE_TAG.pattern}")
+                }
+                text?.trim()?.ifBlank { null }?.let { language to it }
+            }.toMap()
 
     private fun parseStateType(raw: String?): StateType {
         if (raw.isNullOrBlank()) return StateType.INTERMEDIATE
@@ -439,5 +463,8 @@ class WorkflowService(
     companion object {
         // like an object name, but hyphens read better in a url
         private val VALID_NAME = Regex("^[a-z][a-z0-9_-]{0,48}$")
+
+        // a BCP 47 language tag, as config.languages and the user's locale preference hold it: es, en, pt-BR
+        private val LANGUAGE_TAG = Regex("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
     }
 }

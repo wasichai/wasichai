@@ -2,6 +2,16 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-23 — Workflow labels per language
+
+A workflow state and a transition may carry `labels`, a text per language tag beside `label`, which stays the fallback
+([wasichai/wasichai-ui#69](https://github.com/wasichai/wasichai-ui/issues/69), W-08;
+[ADR-070](adr/0070-per-language-workflow-labels-resolved-by-the-client.md)). `PUT …/workflow` refuses a key that is not
+a language tag (`400`) and drops a blank text; the transition listing adds `labels` and `toLabels`, `{}` when there are
+none. The definition is jsonb, so stored workflows read with empty maps and there is no migration. The agent's
+`AgentTransition` carries the same two maps. REST change: additive, every field a client read keeps its value. New
+tests: `WorkflowDefinitionJsonTest` (unit) and three cases in `WorkflowApiTest` (integration).
+
 ## 2026-10-20 — An optional Ant Design theme for wasichai-ui
 
 wasichai-ui ships a second optional theme, `ant-design`, light only
