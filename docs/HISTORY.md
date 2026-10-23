@@ -11,6 +11,11 @@ a language tag (`400`) and drops a blank text; the transition listing adds `labe
 none. The definition is jsonb, so stored workflows read with empty maps and there is no migration. The agent's
 `AgentTransition` carries the same two maps. REST change: additive, every field a client read keeps its value. New
 tests: `WorkflowDefinitionJsonTest` (unit) and three cases in `WorkflowApiTest` (integration).
+## 2026-10-23 — Dependabot pull requests merge themselves, except majors
+
+A new workflow, `.github/workflows/dependabot-auto-merge.yml`, turns on auto-merge (squash) for every Dependabot pull
+request whose update is not a semver major, read with `dependabot/fetch-metadata`. The merge waits for the branch's
+required checks. A major stays open for a person to review. No code or REST change.
 
 ## 2026-10-20 — An optional Ant Design theme for wasichai-ui
 
