@@ -2,6 +2,12 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-23 — Dependabot pull requests merge themselves, except majors
+
+A new workflow, `.github/workflows/dependabot-auto-merge.yml`, turns on auto-merge (squash) for every Dependabot pull
+request whose update is not a semver major, read with `dependabot/fetch-metadata`. The merge waits for the branch's
+required checks. A major stays open for a person to review. No code or REST change.
+
 ## 2026-10-20 — An optional Ant Design theme for wasichai-ui
 
 wasichai-ui ships a second optional theme, `ant-design`, light only
