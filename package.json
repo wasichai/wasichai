@@ -21,8 +21,8 @@
         "docs:db:restore": "docs/manuals/scripts/restore-demo-db.sh"
     },
     "devDependencies": {
-        "@commitlint/cli": "21.2.3",
-        "@commitlint/config-conventional": "21.2.3",
+        "@commitlint/cli": "21.2.4",
+        "@commitlint/config-conventional": "21.2.4",
         "husky": "9.1.7",
         "prettier": "3.9.10"
     }
