@@ -10,7 +10,9 @@ data class WorkflowState(
     val type: StateType,
     // where the editor put the box. null means the client places it.
     val x: Double? = null,
-    val y: Double? = null
+    val y: Double? = null,
+    // label per language tag ({es, en}). the client picks its language's, else `label` (ADR-070)
+    val labels: Map<String, String> = emptyMap()
 )
 
 // roles empty = anyone who may update the object
@@ -19,7 +21,8 @@ data class WorkflowTransition(
     val label: String,
     val from: String,
     val to: String,
-    val roles: List<String> = emptyList()
+    val roles: List<String> = emptyList(),
+    val labels: Map<String, String> = emptyMap()
 )
 
 data class WorkflowDefinition(

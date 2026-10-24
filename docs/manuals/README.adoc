@@ -1,7 +1,7 @@
 = Wasichai manuals
 
 User, administrator and system manuals of Wasichai, in Spanish (`es/`) and English (`en/`), written in AsciiDoc and
-built to an HTML site and six PDF books (ADR-070). The Markdown reference in `docs/` (API, modules, ADRs, history)
+built to an HTML site and six PDF books (ADR-071). The Markdown reference in `docs/` (API, modules, ADRs, history)
 stays canonical for what it covers; the manuals link to it.
 
 == Layout

@@ -1517,10 +1517,12 @@ POST   /api/objects/{object}/records/{id}/transitions/{name}   move the record
   "definition": {
     "states": [
       { "name": "draft", "label": "Borrador", "type": "INITIAL", "x": 40, "y": 40 },
-      { "name": "approved", "label": "Aprobado", "type": "FINAL", "x": 300, "y": 40 }
+      { "name": "approved", "label": "Aprobado", "type": "FINAL", "x": 300, "y": 40,
+        "labels": { "es": "Aprobado", "en": "Approved" } }
     ],
     "transitions": [
-      { "name": "approve", "label": "Aprobar", "from": "draft", "to": "approved", "roles": ["SUPERVISOR"] }
+      { "name": "approve", "label": "Aprobar", "from": "draft", "to": "approved", "roles": ["SUPERVISOR"],
+        "labels": { "en": "Approve" } }
     ]
   }
 }
@@ -1532,8 +1534,14 @@ so the UI can explain a disabled button instead of hiding it:
 
 ```json
 [ { "name": "approve", "label": "Aprobar", "to": "approved", "toLabel": "Aprobado",
-    "allowed": false, "reason": "requires role SUPERVISOR" } ]
+    "allowed": false, "reason": "requires role SUPERVISOR",
+    "labels": { "en": "Approve" }, "toLabels": { "es": "Aprobado", "en": "Approved" } } ]
 ```
+
+`labels` is optional on a state and a transition: a text per language tag (`es`, `en`, `pt-BR`), with `label` as the
+text for any language it lacks (ADR-070). A key that is not a language tag answers `400`; a blank text drops its
+language. The server never picks one: the listing hands out the transition's `labels` and its target state's as
+`toLabels`, both `{}` when the definition has none, and the client shows its language's.
 
 `x` and `y` are where the visual editor put the state (ADR-018). They are optional and nothing
 validates them: a state saved without them comes back with both null and the client lays it out.

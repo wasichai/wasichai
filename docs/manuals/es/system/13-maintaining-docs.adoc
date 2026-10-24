@@ -3,7 +3,7 @@
 
 === Organización
 
-Los manuales viven en `docs/manuals/` del repositorio `wasichai`, en AsciiDoc (ADR-070). Son la fuente canónica de
+Los manuales viven en `docs/manuals/` del repositorio `wasichai`, en AsciiDoc (ADR-071). Son la fuente canónica de
 los manuales de usuario, administrador y sistema; la referencia de desarrollo en Markdown (`docs/api`,
 `docs/modules`, `docs/adr`) sigue siendo canónica para su tema, y los manuales la enlazan en lugar de copiarla.
 

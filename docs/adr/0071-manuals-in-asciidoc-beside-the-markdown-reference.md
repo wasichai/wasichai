@@ -1,4 +1,4 @@
-# ADR-070: Manuals in AsciiDoc beside the Markdown reference
+# ADR-071: Manuals in AsciiDoc beside the Markdown reference
 
 **Status**: accepted · 2026-10-20 · builds on [ADR-032](0032-rebrand-to-wasichai-and-split-repositories.md) and
 [ADR-033](0033-samples-and-infrastructure-in-their-own-repositories.md)

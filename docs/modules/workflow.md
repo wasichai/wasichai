@@ -28,6 +28,8 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
 ## What it adds
 
 - The `workflows` table: one definition per object (states, transitions, roles), edited on an xyflow canvas.
+  A state's and a transition's `label` may come with `labels`, one text per language, that the UI shows in the
+  user's language ([ADR-070](../adr/0070-per-language-workflow-labels-resolved-by-the-client.md)).
 - The transitions REST API:
 
   | Method | Path |

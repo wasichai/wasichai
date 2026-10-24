@@ -3,7 +3,7 @@
 
 === Layout
 
-The manuals live in `docs/manuals/` of the `wasichai` repository, in AsciiDoc (ADR-070). They are the canonical
+The manuals live in `docs/manuals/` of the `wasichai` repository, in AsciiDoc (ADR-071). They are the canonical
 source of the user, administrator and system manuals; the Markdown development reference (`docs/api`,
 `docs/modules`, `docs/adr`) stays canonical for its topic, and the manuals link to it instead of copying it.
 

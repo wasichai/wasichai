@@ -20,7 +20,7 @@
 :pdf-themesdir: {docdir}/../theme/pdf
 :pdf-theme: wasichai
 :title-logo-image: image:branding/emblem.svg[width=64]
-// repository links: the markdown reference stays canonical for api, modules and decisions (ADR-070)
+// repository links: the markdown reference stays canonical for api, modules and decisions (ADR-071)
 :repo-url: https://github.com/wasichai/wasichai/blob/main
 :ui-repo-url: https://github.com/wasichai/wasichai-ui/blob/main
 :sample-repo-url: https://github.com/wasichai/full-sample

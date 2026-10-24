@@ -2,10 +2,24 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-23 — Workflow labels per language
+
+A workflow state and a transition may carry `labels`, a text per language tag beside `label`, which stays the fallback
+([wasichai/wasichai-ui#69](https://github.com/wasichai/wasichai-ui/issues/69), W-08;
+[ADR-070](adr/0070-per-language-workflow-labels-resolved-by-the-client.md)). `PUT …/workflow` refuses a key that is not
+a language tag (`400`) and drops a blank text; the transition listing adds `labels` and `toLabels`, `{}` when there are
+none. The definition is jsonb, so stored workflows read with empty maps and there is no migration. The agent's
+`AgentTransition` carries the same two maps. REST change: additive, every field a client read keeps its value. New
+tests: `WorkflowDefinitionJsonTest` (unit) and three cases in `WorkflowApiTest` (integration).
+## 2026-10-23 — Dependabot pull requests merge themselves, except majors
+
+A new workflow, `.github/workflows/dependabot-auto-merge.yml`, turns on auto-merge (squash) for every Dependabot pull
+request whose update is not a semver major, read with `dependabot/fetch-metadata`. The merge waits for the branch's
+required checks. A major stays open for a person to review. No code or REST change.
 ## 2026-10-20 — User, administrator and system manuals, in Spanish and English
 
 `docs/manuals/` holds three manuals, each in Spanish and English, written in AsciiDoc and built to an HTML site and
-six PDF books ([ADR-070](adr/0070-manuals-in-asciidoc-beside-the-markdown-reference.md)): working with records, views,
+six PDF books ([ADR-071](adr/0071-manuals-in-asciidoc-beside-the-markdown-reference.md)): working with records, views,
 workflows, documents and maps; administering the model, users, roles, permissions, service accounts, the builders,
 automation, GIS layers and the audit, with the API-only functions (org units, notifications, tenants) as curl
 procedures; and the architecture, configuration of every `wasichai.*` property, data model, security, operation,

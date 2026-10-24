@@ -10,7 +10,9 @@ data class AgentTransition(
     val to: String,
     val toLabel: String,
     val allowed: Boolean,
-    val reason: String? = null
+    val reason: String? = null,
+    val labels: Map<String, String> = emptyMap(),
+    val toLabels: Map<String, String> = emptyMap()
 )
 
 // what the assistant may ask about transitions. wasichai-workflow answers when it is installed;
