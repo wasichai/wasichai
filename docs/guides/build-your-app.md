@@ -128,9 +128,9 @@ createRoot(document.getElementById('root')!).render(
 `theme.css` ships `light` and `dark`; `<html>` carries `data-theme="<id>"`, and every Tailwind class from
 `@wasichai/ui` (`bg-surface`, `text-ink`, …) resolves against whichever theme is active — no component to rewrite.
 `config.themes?: ThemeDefinition[]` (`{ id, label, colorScheme: 'light' | 'dark' }`) adds your own themes to the two
-built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token (all 28, including
-the ten extension tokens such as `danger-soft`, `link` and `table-stripe`; `--font-sans` and the radii are yours to
-set too), e.g.:
+built-ins; `label` is an i18n key. An app adds a theme with one CSS block that sets every token (all 31, including
+the thirteen extension tokens such as `danger-soft`, `link` and `table-stripe`, and `surface-raised` for menus and
+dialogs, `border-control` and `placeholder` for the fields; `--font-sans` and the radii are yours to set too), e.g.:
 
 ```css
 [data-theme='high-contrast'] { --surface: oklch(...); --ink: oklch(...); /* every token in theme.css */ }
