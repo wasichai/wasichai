@@ -1,0 +1,22 @@
+[[sys-background]]
+== Background processes
+
+[cols="2,2,3",options="header"]
+|===
+|Process |Frequency |What it does
+|Flyway migrations |On startup |Applies the pending migrations of each module.
+|`DeclaredIndexReconciler` |On startup |Creates the missing declared indexes.
+|`AutomationDrain` |`wasichai.automation.poll-interval` (1 s) |Takes `PENDING` runs (`FOR UPDATE SKIP LOCKED`)
+and runs their actions.
+|`IdempotencyKeyPurge` |`wasichai.idempotency.purge-interval` (1 h) |Deletes expired idempotency keys.
+|`StoredFileCleanup` |`wasichai.files.cleanup.interval` (1 h) |Deletes the files no `FILE`/`IMAGE` field names any
+more (replaced, from deleted records…) and older than `cleanup.delay`.
+|`NotificationLoop` |`wasichai.notifications.tick` (30 s) |Sources, notice rules, email deliveries and daily
+purge.
+|`LISTEN/NOTIFY` listener |Continuous |Pushes notification changes to the SSE stream.
+|===
+
+The periodic processes of several instances coordinate with a cluster lock in PostgreSQL (ADR-039): only one
+instance runs each cycle. They work as _the platform_, without a user, and go through the organizations by means of
+a tenant directory (ADR-057). They are stopped by setting their interval to `0s` (that is how the integration tests
+do it).

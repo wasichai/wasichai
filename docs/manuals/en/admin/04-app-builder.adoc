@@ -1,0 +1,114 @@
+[[admin-app-builder]]
+== Configurable screens (App Builder)
+
+The *App Builder* section of the menu configures how the data is shown, without programming. All its screens start
+the same way: you pick the *Object* in a selector and its configuration appears. Common requirement:
+`MANAGE_METADATA` on the object. Reading the configuration only needs `READ`.
+
+[[admin-views]]
+=== Views
+
+A view is a saved way of listing an object. menu:App Builder[Views] (<<admin-fig-views>>).
+
+:admin-views-alt: View builder: technical name, label, records per page, Default view checkbox, list of columns with \
+arrows to reorder them, filters and sort
+[[admin-fig-views]]
+.View builder with the view "Bandeja de licencias"
+image::screenshots/{lang}/admin/11-views-builder.png["{admin-views-alt}",pdfwidth=100%]
+
+.Procedure
+. Pick the *Object* and, in *View*, an existing one or the option to create a new one.
+. Fill in *Technical name* (lower case), *Label* and *Records per page* (1 to 200).
+. Check *Default view* if the list must open with it (it unchecks the previous default).
+. In *Columns*, add fields with *Add column* and order them with the arrows.
+. In *Filters*, add equality conditions (_field = value_).
+. In *Sort*, pick the *Field* and the *Direction*.
+. Click *Save*.
+
+.Verification
+Open the list of the object: the view selector offers the new view (_User manual_, _Using a saved view_).
+
+*Reset to default* deletes the saved view; with no views, the object uses a generated view with its first eight
+visible fields.
+
+[[admin-forms]]
+=== Forms
+
+A form arranges the editable fields of an object into titled sections. menu:App Builder[Forms]
+(<<admin-fig-forms>>).
+
+:admin-forms-alt: Form builder with the sections Identificación, Local and Evaluación and the fields of each one
+[[admin-fig-forms]]
+.Form builder with the form "Solicitud de licencia"
+image::screenshots/{lang}/admin/12-forms-builder.png["{admin-forms-alt}",pdfwidth=100%]
+
+.Procedure
+. Pick the *Object* and the *Form* (or create one).
+. Click *Add section*, type its *Section title* and add fields with *Add field*. Order sections and fields with the
+  arrows.
+. Click *Save*.
+
+.Special cases
+* A field can only be in one section, and only editable fields.
+* A form is shown on a detail page through a *Form* component (<<admin-pages>>). Creating a new record uses the
+  generated form (all editable fields), not the saved one.
+
+[[admin-pages]]
+=== Detail pages
+
+menu:App Builder[Pages] composes the detail page of an object by dragging components (<<admin-fig-pages>>).
+
+:admin-pages-alt: Page builder: template Main and right sidebar, component palette, canvas with tabs and properties
+[[admin-fig-pages]]
+.Page builder with the licence page
+image::screenshots/{lang}/admin/13-pages-builder.png["{admin-pages-alt}",pdfwidth=100%]
+
+The screen has three columns:
+
+Components::
+The palette. *Containers*: *Tabs*, *Tab* and *Section*. *Content*: *Form*, *Dynamic form*, *Related list*,
+*History*, *Text*, *Map* (with GIS), *Workflow* (state and transitions) and *Action* (a button that applies a
+transition or navigates).
+Canvas::
+The regions of the *Template* (for example, _MAIN_ and _RIGHT_). Drag components into them.
+Properties::
+The data of the selected component: title, fields or form it shows, relationship of a list, text of a note,
+transition of an action, key of a tab…
+
+.Procedure
+. Pick the *Object*. If it has no saved page, the generated one is shown.
+. Click *Change* to pick a template (nine available, from one to several regions).
+. Drag components from the palette onto the canvas and configure them in *Properties*.
+. Click *Save*.
+
+.Special cases
+* The first *Form* of the page is the one that saves; the others are shown read-only.
+* The page accepts up to 200 components and 12 levels of nesting.
+* *Reset to default* deletes the saved page and goes back to the generated one.
+
+[[admin-documents]]
+=== Document types
+
+menu:App Builder[Documents] drafts the templates a record can issue (<<admin-fig-documents>>).
+
+:admin-documents-alt: Editor of the type Certificado de licencia: name, label, prefix CLF and the text of the template \
+with field placeholders
+[[admin-fig-documents]]
+.Template of the licence certificate
+image::screenshots/{lang}/admin/14-document-types.png["{admin-documents-alt}",pdfwidth=100%]
+
+.Procedure
+. Pick the *Object*. In *Types*, click *+* to create one or pick an existing one.
+. Fill in *Name* (lower case), *Label* and *Sigla* (upper case letters and digits; it is the prefix of the number,
+  such as `CLF` in `CLF-2026-001`).
+. Draft the template. The toolbar offers *Bold*, *Italic*, *Heading* and *List*, and three insertions: *Field* (a
+  field of the record), *Value* (date, date and time, user, record id, name, prefix, serial or number of the
+  document) and *Table* (the records of a relationship).
+. Click *Save*.
+
+.Special cases
+* The prefix cannot be repeated among the types of the organization: each type numbers on its own, per year.
+* A type that has already issued documents cannot be deleted.
+* Editing a template does not change the documents already issued, which keep the template and the values of their
+  issue.
+* To issue automatically when a state is reached, use a rule with the action _Issue a document_ (<<admin-rules>>).

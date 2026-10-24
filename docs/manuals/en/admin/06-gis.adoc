@@ -1,0 +1,30 @@
+[[admin-gis]]
+== GIS layers
+
+With the GIS module, each geometry field can be published to GeoServer as a WMS/WFS layer for other mapping tools.
+menu:GIS[Layers] lists one row per geometry of each object, with its type, its coordinate system (CRS), its status
+and the links of the layer (<<admin-fig-layers>>).
+
+:admin-layers-alt: GIS layers screen with the notice GeoServer is not configured and the row predio.lote Not published
+[[admin-fig-layers]]
+.GIS layers with GeoServer disabled
+image::screenshots/{lang}/admin/18-gis-layers.png["{admin-layers-alt}",pdfwidth=100%]
+
+.Objective
+Publish the geometry of an object to GeoServer.
+
+.Prerequisites
+* `MANAGE_METADATA`.
+* GeoServer configured and reachable from the server (`wasichai.gis.geoserver.*`, see the _System manual_).
+
+.Procedure
+. In menu:GIS[Layers], click *Publish* in the row of the geometry.
+
+.Expected result
+The status changes to published and the name of the layer and the WMS/WFS links appear.
+
+.Special cases
+* Publishing is idempotent; unpublishing withdraws the layer.
+* If GeoServer is not configured or is down, the screen says so (*GeoServer is not configured*) and only the
+  publishing fails: objects, records and the map keep working. The screenshots in this manual were taken that way.
+* Deleting an object first unpublishes its layer.

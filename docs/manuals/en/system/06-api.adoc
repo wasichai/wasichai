@@ -1,0 +1,62 @@
+[[sys-api]]
+== REST API
+
+The REST API is the contract between the server and the interface (ADR-032), and the integration path with other
+systems. The full reference, route by route, is {rest-doc}[docs/api/rest.md]; this chapter summarizes its
+conventions.
+
+=== Conventions
+
+Base and format::
+Everything under `/api`, JSON in UTF-8. Dates are ISO-8601; instants, in UTC.
+Errors::
+RFC 7807 (`application/problem+json`) with `type`, `title`, `status`, `detail` and `errors[]` (`field`, `message`).
+Pagination::
+`page` (from 0), `size` (25 by default, 200 at most), `sort`, `dir` (`asc`/`desc`); the response is
+`{content, page, size, totalElements, totalPages, nextCursor}`. `count=false` skips the count; `after=<cursor>`
+pages by key (keyset) for large traversals.
+Filters::
+`q` (text in text fields, case-insensitive), and `field=value` for exact equality. With GIS, `bbox` and
+`geometry`.
+Concurrency::
+`ETag` on each record; `If-Match` on `PUT`, `PATCH`, `DELETE` and transitions (`412` if it changed).
+Retries::
+`Idempotency-Key` on `POST …/records` makes retrying a creation safe (24 h).
+Reason::
+`X-Change-Reason` (RFC 8187 for non-ASCII: `UTF-8''` + encoded text) on every record write.
+Traceability::
+`X-Correlation-Id` on every response.
+
+=== Route groups
+
+[cols="2,3",options="header"]
+|===
+|Routes |Content
+|`/api/auth/**` |Sign-in and sign-out, service token, current user, permissions, preferences, own units and
+notifications.
+|`/api/organizations/**` |Current organization, creating and deleting organizations.
+|`/api/users`, `/api/roles/**`, `/api/service-accounts/**`, `/api/org-units/**` |Administration.
+|`/api/objects/**`, `/api/metadata/**`, `/api/relationships/**` |Model and records.
+|`/api/audit`, `…/records/{id}/history` |Audit.
+|Module routes |`views`, `forms`, `pages`, `workflow`, `automations`, `documents`, `gis`, `files`,
+`notifications`, `agent`.
+|`/api/health` |Status: `{"status":"UP","application":…}`.
+|===
+
+=== Example: extracting the records of an object
+
+[source,bash]
+----
+# from any directory; BASE_URL and TOKEN as in the Administrator manual
+after=""
+while : ; do
+  page=$(curl -sS -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/objects/licencia/records?size=200&count=false&sort=codigo${after:+&after=$after}")
+  echo "$page" | jq -c '.content[] | {id, state} + .attributes' >> licencias.jsonl
+  after=$(echo "$page" | jq -r '.nextCursor // empty')
+  [ -z "$after" ] && break
+done
+----
+
+The result, `licencias.jsonl`, has one JSON record per line. It is the way to export data, since the interface
+does not export.

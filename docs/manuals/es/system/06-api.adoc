@@ -1,0 +1,61 @@
+[[sys-api]]
+== API REST
+
+La API REST es el contrato entre el servidor y la interfaz (ADR-032), y la vía de integración con otros sistemas.
+La referencia completa, ruta por ruta, es {rest-doc}[docs/api/rest.md]; este capítulo resume sus convenciones.
+
+=== Convenciones
+
+Base y formato::
+Todo bajo `/api`, JSON en UTF-8. Las fechas son ISO-8601; los instantes, en UTC.
+Errores::
+RFC 7807 (`application/problem+json`) con `type`, `title`, `status`, `detail` y `errors[]` (`field`, `message`).
+Paginación::
+`page` (desde 0), `size` (por defecto 25, máximo 200), `sort`, `dir` (`asc`/`desc`); la respuesta es
+`{content, page, size, totalElements, totalPages, nextCursor}`. `count=false` evita el recuento; `after=<cursor>`
+pagina por clave (keyset) para recorridos grandes.
+Filtros::
+`q` (texto en campos de texto, sin distinguir mayúsculas), y `campo=valor` por igualdad exacta. Con GIS, `bbox` y
+`geometry`.
+Concurrencia::
+`ETag` en cada registro; `If-Match` en `PUT`, `PATCH`, `DELETE` y transiciones (`412` si cambió).
+Reintentos::
+`Idempotency-Key` en `POST …/records` hace seguro reintentar un alta (24 h).
+Motivo::
+`X-Change-Reason` (RFC 8187 para no ASCII: `UTF-8''` + texto codificado) en toda escritura de registros.
+Trazabilidad::
+`X-Correlation-Id` en cada respuesta.
+
+=== Grupos de rutas
+
+[cols="2,3",options="header"]
+|===
+|Rutas |Contenido
+|`/api/auth/**` |Inicio y cierre de sesión, token de servicio, usuario actual, permisos, preferencias, unidades y
+notificaciones propias.
+|`/api/organizations/**` |Organización actual, alta y baja de organizaciones.
+|`/api/users`, `/api/roles/**`, `/api/service-accounts/**`, `/api/org-units/**` |Administración.
+|`/api/objects/**`, `/api/metadata/**`, `/api/relationships/**` |Modelo y registros.
+|`/api/audit`, `…/records/{id}/history` |Auditoría.
+|Rutas de módulos |`views`, `forms`, `pages`, `workflow`, `automations`, `documents`, `gis`, `files`,
+`notifications`, `agent`.
+|`/api/health` |Estado: `{"status":"UP","application":…}`.
+|===
+
+=== Ejemplo: extraer los registros de un objeto
+
+[source,bash]
+----
+# desde cualquier directorio; BASE_URL y TOKEN como en el Manual del administrador
+after=""
+while : ; do
+  page=$(curl -sS -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/objects/licencia/records?size=200&count=false&sort=codigo${after:+&after=$after}")
+  echo "$page" | jq -c '.content[] | {id, state} + .attributes' >> licencias.jsonl
+  after=$(echo "$page" | jq -r '.nextCursor // empty')
+  [ -z "$after" ] && break
+done
+----
+
+El resultado, `licencias.jsonl`, tiene un registro JSON por línea. Es la vía para exportar datos, ya que la interfaz
+no exporta.

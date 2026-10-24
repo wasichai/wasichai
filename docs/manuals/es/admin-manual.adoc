@@ -1,0 +1,36 @@
+= Manual del administrador: Configurar y administrar una aplicación Wasichai
+:manual-title: Manual del administrador
+:description: Administración funcional desde la aplicación y administración técnica de una aplicación Wasichai.
+include::../attributes.adoc[]
+include::locale.adoc[]
+:author: Documentación de Wasichai
+:toc:
+:title-page:
+
+include::admin/00-about.adoc[]
+
+include::admin/01-role.adoc[]
+
+include::admin/02-data-model.adoc[]
+
+include::admin/03-access.adoc[]
+
+include::admin/04-app-builder.adoc[]
+
+include::admin/05-automation.adoc[]
+
+include::admin/06-gis.adoc[]
+
+include::admin/07-audit.adoc[]
+
+include::admin/08-api-only.adoc[]
+
+include::admin/09-technical.adoc[]
+
+include::admin/10-checklists.adoc[]
+
+[appendix]
+include::reference/permissions.adoc[]
+
+[appendix]
+include::reference/glossary.adoc[]

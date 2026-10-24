@@ -1,0 +1,32 @@
+[[sys-dr]]
+== Disaster recovery
+
+{product-name} has no components with state of their own outside PostgreSQL (and the file store, if one is used).
+Recovering the system means recovering the database and deploying the application again with its configuration.
+
+=== What to prepare beforehand
+
+* Database backups at a frequency that matches the tolerable data loss (RPO), kept off the server. For losses
+  smaller than the backup frequency, use PostgreSQL continuous archiving (WAL) or a managed service with
+  point-in-time recovery.
+* A backup of the file store at the same frequency.
+* The versioned deployable artifacts (JAR or image, and `web/dist`) and the configuration, recoverable without the
+  failed server.
+* The secrets (`WASICHAI_JWT_SECRET`, credentials) in a secret manager.
+* A restore tested at least every quarter, with the time it took (RTO).
+
+=== Procedure
+
+. Declare the incident and stop the application if it is still running against damaged data.
+. Prepare a PostgreSQL 18 server with PostGIS 3.6.
+. Restore the last valid backup into a new database (<<sys-backup>>) and run `verify.sql`.
+. Restore the file store, if there is one.
+. Deploy the same version of the application that produced the backup, with its configuration and secrets.
+. Start it: Flyway must have no pending migrations (if it has, the deployed version is newer than the backup; apply
+  them only if that is the intention).
+. Run the smoke tests of <<sys-operation>> and a quick functional review with one account of each role.
+. Publish the GeoServer layers again from *Layers* if GeoServer was also lost.
+. Tell people the point in time of the backup: whatever came after it was lost.
+
+CAUTION: If you change `WASICHAI_JWT_SECRET` during the recovery, every session expires and people must sign in
+again. The secrets of the service accounts stay valid (they are in the database).

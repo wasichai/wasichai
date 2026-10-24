@@ -1,0 +1,191 @@
+[[admin-data-model]]
+== El modelo de datos: objetos, campos y relaciones
+
+Todo el modelo se define desde menu:Datos[Objetos] y menu:Datos[Relaciones]. Cada operación de este capítulo
+cambia la base de datos en el momento: crear un objeto crea su tabla, añadir un campo añade una columna, eliminar un
+campo borra la columna con sus datos.
+
+Requisito común: permiso `MANAGE_METADATA` (o rol `ADMIN`).
+
+[[admin-objects]]
+=== La lista de objetos
+
+menu:Datos[Objetos] lista los objetos de la organización con su etiqueta, su nombre técnico y su geometría
+(<<admin-fig-objects>>). *Ver registros* abre la lista de registros; el lápiz abre el editor.
+
+:admin-fig-objects-alt: Tabla con los objetos Contribuyente, Licencia de funcionamiento y Predio, con los botones \
+Ver registros y editar
+[[admin-fig-objects]]
+.Lista de objetos
+image::screenshots/{lang}/admin/01-objects.png["{admin-fig-objects-alt}",pdfwidth=100%]
+
+[[admin-object-create]]
+=== Crear un objeto
+
+.Objetivo
+Definir un tipo de información nuevo, con sus campos.
+
+.Requisitos previos
+* `MANAGE_METADATA`.
+* Un nombre técnico: minúsculas, sin espacios (por ejemplo, `predio`). No se podrá cambiar.
+
+.Procedimiento
+. En menu:Datos[Objetos], pulse *Nuevo objeto* (<<admin-fig-object-new>>).
+. Complete *Nombre técnico*, *Etiqueta* (singular), *Etiqueta plural* y, si quiere, *Descripción*.
+. En *Campos*, pulse *Añadir campo* por cada campo: *Nombre* técnico, *Etiqueta*, *Tipo* y, si corresponde,
+  *Obligatorio* y *Único*. Para un campo de opciones (`ENUM`) escriba las *Opciones (separadas por coma)*; para una
+  referencia (`RELATION`), elija el *Objeto destino*.
+. Pulse *Guardar*.
+
+[[admin-fig-object-new]]
+.Alta de un objeto
+image::screenshots/{lang}/admin/04-object-new.png["Formulario Nuevo objeto con nombre técnico, etiquetas, descripción y una fila de campo",pdfwidth=100%]
+
+.Resultado esperado
+El objeto aparece en la lista y en *Inicio*, sin registros.
+
+.Verificación
+Abra *Ver registros*: la lista está vacía y *Nuevo registro* muestra los campos definidos.
+
+.Casos especiales
+* Los nombres `id`, `organization_id`, `created_at`, `updated_at`, `created_by`, `updated_by`, `workflow_state`,
+  `version`, `count` y `after` los reserva la plataforma; el editor los rechaza.
+* Un nombre técnico repetido en la organización se rechaza.
+* Ningún rol, salvo `ADMIN`, puede usar el objeto nuevo hasta que se le concedan permisos (<<admin-permissions>>).
+
+[[admin-field-types]]
+=== Tipos de campo
+
+[cols="1,1,3",options="header"]
+|===
+|Tipo |Columna |Uso
+|`TEXT` |`text` |Texto corto. Entra en la búsqueda.
+|`LONG_TEXT` |`text` |Texto largo (observaciones). Entra en la búsqueda; no se puede indexar.
+|`INTEGER` |`bigint` |Números enteros.
+|`DECIMAL` |`numeric` |Importes, áreas.
+|`BOOLEAN` |`boolean` |Sí/no (casilla).
+|`DATE` |`date` |Fecha sin hora.
+|`DATETIME` |`timestamptz` |Instante. Puede indicar una *Zona horaria* IANA (`America/Lima`) o un desfase fijo
+(`-05:00`) en la que se muestra.
+|`ENUM` |`text` + `CHECK` |Lista cerrada de opciones.
+|`EMAIL` |`text` |Correo.
+|`URL` |`text` |Dirección web.
+|`UUID` |`uuid` |Identificador.
+|`RELATION` |`uuid` + clave foránea |Referencia a un registro de otro objeto. La crea una relación.
+|`GEOMETRY` |PostGIS |Punto, línea, polígono o sus variantes múltiples, con su SRID. Requiere el módulo GIS.
+|`FILE`, `IMAGE` |descriptor |Archivos. Requiere el módulo de archivos; la interfaz web actual no ofrece un control
+para subirlos (se gestionan por API).
+|===
+
+[[admin-object-edit]]
+=== Editar un objeto
+
+El editor (lápiz en la lista) tiene varias tarjetas (<<admin-fig-object-editor>>).
+
+:admin-fig-object-editor-alt: Tarjeta Datos del objeto con nombre técnico bloqueado, etiquetas, descripción, la \
+casilla Activo y las reglas de escritura
+[[admin-fig-object-editor]]
+.Editor de un objeto: datos y reglas de escritura
+image::screenshots/{lang}/admin/02-object-editor.png["{admin-fig-object-editor-alt}",pdfwidth=100%]
+
+Datos del objeto::
+Etiquetas y descripción. *Activo*: un objeto inactivo conserva sus datos y se puede leer, pero no admite altas ni
+cambios; es la alternativa reversible a eliminarlo. Pulse *Guardar*: aparece *Cambios guardados*.
+Reglas de escritura::
+* *Solo anexado*: los registros se crean y nunca se editan ni eliminan, ni siquiera `ADMIN`.
+* *Solo por la aplicación*: la API genérica (y por tanto la interfaz) no escribe sus registros; solo el código
+  propio de la aplicación.
+* *Pide motivo*: cada alta, cambio, borrado o transición exige un motivo, que queda en el historial.
+Campos::
+Una fila por campo, con su etiqueta editable y las opciones *Obligatorio*, *Único*, *Visible*, *Editable* e
+*Indexado* (y la *Zona horaria* en los `DATETIME`). *Campos del sistema* despliega los que mantiene la plataforma.
+El nombre y el tipo de un campo no se pueden cambiar (<<admin-fig-object-fields>>).
+Índices compuestos y unicidad compuesta::
+Listas de campos separados por coma. Un índice acelera las búsquedas por esa combinación; una unicidad compuesta
+impide que dos registros repitan juntos esos valores (de 2 a 32 campos).
+Relaciones::
+Las relaciones en las que participa el objeto.
+Acciones propias::
+Verbos del objeto más allá de leer, crear, modificar y eliminar (por ejemplo, `ANULAR`). Se declaran aquí y se
+conceden por rol en *Permisos*. Solo tienen efecto si el código de la aplicación los comprueba.
+Eliminar el objeto::
+La zona de peligro (<<admin-object-delete>>).
+
+:admin-fig-object-fields-alt: Tarjeta Campos con las filas Expediente, Establecimiento, Giro, Área del local y \
+Fecha de solicitud y sus opciones
+[[admin-fig-object-fields]]
+.Editor de un objeto: campos
+image::screenshots/{lang}/admin/03-object-fields.png["{admin-fig-object-fields-alt}",pdfwidth=100%]
+
+.Casos especiales al cambiar campos
+* Marcar *Obligatorio* falla si hay registros con el campo vacío; marcar *Único* o añadir una unicidad compuesta
+  falla si ya hay valores repetidos (`409`). Corrija los datos primero.
+* Cambiar las *Opciones* de un `ENUM` reemplaza la restricción de la columna; las opciones nuevas deben incluir el
+  valor por defecto si lo hay.
+* Un valor por defecto solo rellena los registros que se creen después.
+
+[[admin-field-add]]
+=== Añadir o eliminar un campo
+
+.Procedimiento para añadir
+. En el editor del objeto, pulse *Añadir campo*, complete nombre, etiqueta, tipo y opciones, y guarde.
+
+Se añade una columna a la tabla. El tipo no se puede cambiar después: si se equivocó, añada un campo nuevo.
+
+.Procedimiento para eliminar
+. Pulse la papelera de la fila del campo y confirme.
+
+WARNING: Se elimina la columna con todos sus valores, en todos los registros. No se puede deshacer. El servidor lo
+rechaza (`409`) si el campo pertenece a una relación (elimine la relación), si lo usa un índice o una unicidad
+compuesta (quítelo de ella), o si lo usa una regla de automatización (la respuesta nombra las reglas).
+
+[[admin-object-delete]]
+=== Eliminar un objeto
+
+.Procedimiento
+. En el editor, vaya a *Eliminar el objeto*.
+. Escriba el nombre técnico del objeto para confirmar y pulse *Eliminar objeto*.
+
+WARNING: Se borran la tabla con todos sus registros y las vistas, formularios, páginas, permisos, flujo y
+automatizaciones del objeto. No se puede deshacer. Si solo quiere retirarlo, desactívelo (*Activo*): conserva los
+datos. El servidor rechaza la eliminación si otro objeto tiene un campo de referencia hacia este (la respuesta nombra
+`objeto.campo`) o si el objeto es _solo anexado_.
+
+[[admin-relationships]]
+=== Relaciones
+
+menu:Datos[Relaciones] crea y lista las relaciones entre objetos (<<admin-fig-relationships>>).
+
+:admin-fig-relationships-alt: Formulario Nueva relación y la lista con las relaciones Predio, Solicitante y \
+Titular, todas MANY_TO_ONE
+[[admin-fig-relationships]]
+.Relaciones del ejemplo
+image::screenshots/{lang}/admin/05-relationships.png["{admin-fig-relationships-alt}",pdfwidth=100%]
+
+.Objetivo
+Vincular dos objetos, por ejemplo cada predio con su titular.
+
+.Procedimiento
+. En *Nueva relación*, escriba el *Nombre técnico* (`predio_titular`), la *Etiqueta* (lo que se lee desde el origen:
+  _Titular_) y la *Etiqueta inversa* (lo que se lee desde el destino: _Predios_).
+. Elija el *Tipo*, el *Objeto origen* y el *Objeto destino*.
+. En *Campo*, el nombre de la columna que guardará la referencia (por defecto, el nombre del objeto destino).
+. Pulse *Crear*.
+
+[cols="1,3",options="header"]
+|===
+|Tipo |Qué crea
+|`MANY_TO_ONE` |Muchos registros del origen apuntan a uno del destino (muchos predios, un titular). Columna en el
+origen, con clave foránea.
+|`ONE_TO_MANY` |Lo mismo visto al revés: la columna va en el destino.
+|`ONE_TO_ONE` |Una referencia en cada sentido como mucho.
+|`MANY_TO_MANY` |Una tabla intermedia; ningún objeto gana columna. Los vínculos se añaden y quitan desde las listas
+relacionadas.
+|===
+
+.Casos especiales
+* Solo se pueden cambiar las etiquetas. Para cambiar el tipo, el origen o el destino hay que eliminar la relación y
+  crearla de nuevo.
+* El origen y el destino pueden ser el mismo objeto (por ejemplo, una unidad y su unidad padre).
+
+WARNING: Eliminar una relación elimina el campo o la tabla intermedia que creó, con todos los vínculos.

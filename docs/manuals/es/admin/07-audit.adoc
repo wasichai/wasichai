@@ -1,0 +1,38 @@
+[[admin-audit]]
+== Auditoría
+
+La auditoría guarda cada alta, modificación, eliminación, transición y emisión de documento, y los cambios de
+administración (usuarios, roles, permisos, cuentas de servicio, unidades, objetos, campos, relaciones y la
+organización). Es de solo anexado: la base de datos impide modificar o borrar sus filas, también a la aplicación.
+
+menu:Administración[Auditoría] (<<admin-fig-audit>>).
+
+:admin-fig-audit-alt: Tabla de auditoría con operación, objeto, registro, usuario, motivo y fecha; una entrada \
+desplegada muestra el campo Resultado cambiado
+[[admin-fig-audit]]
+.Auditoría con una entrada desplegada
+image::screenshots/{lang}/admin/10-audit.png["{admin-fig-audit-alt}",pdfwidth=100%]
+
+.Objetivo
+Saber quién cambió qué y cuándo.
+
+.Procedimiento
+. Filtre por *Objeto*, por *Operación* y elija el *Máximo* de entradas.
+. Despliegue una entrada con la flecha para ver los campos que cambiaron, con el valor anterior y el nuevo.
+
+Cada entrada muestra la operación, el objeto, el identificador del registro, el usuario (o *Sistema* para las
+reglas), el motivo y la fecha.
+
+.Casos especiales
+* La auditoría respeta los permisos: cada cual ve las entradas de los objetos que puede leer, sin los campos que no
+  puede leer.
+* Las entradas de administración (`admin:user`, `admin:permission`…) solo las ven quienes tienen
+  `MANAGE_ORGANIZATION`. Nunca contienen contraseñas ni secretos: un cambio de contraseña figura como
+  `passwordChanged: true`.
+* La pantalla filtra por objeto y operación. La API admite además periodo (`from`, `to`), usuario (`userId`),
+  cuenta de servicio, origen (`source`) e identificador de correlación, con paginación por cursor
+  (`GET /api/audit`, ver la referencia REST).
+* Eliminar una cuenta de servicio quita su nombre de sus entradas; desactivarla lo conserva.
+
+NOTE: Purgar entradas antiguas solo es posible con un rol de base de datos dedicado
+(`wasichai.audit.purge-role`), fuera de la aplicación. Es una tarea técnica (<<admin-technical>>).

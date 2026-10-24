@@ -1,0 +1,78 @@
+[[user-access]]
+== Accessing the application
+
+=== Requirements
+
+* A current web browser (the interface uses React 19 and modern browser features; the screenshots in this manual
+  were taken with Chromium). Nothing needs to be installed on the computer.
+* The address (URL) of the application, which your organization gives you.
+* An account: an email and a password created by an administrator (chapter _Users, roles and permissions_ of the
+  _Administrator manual_). There is no self-registration and no password recovery from the sign-in screen: if you
+  forget your password, ask an administrator to assign you a new one.
+
+[[user-sign-in]]
+=== Signing in
+
+.Objective
+Enter the application with your account.
+
+.Prerequisites
+An active account in the organization.
+
+.Procedure
+. Open the address of the application. If you have not signed in, the application takes you to the sign-in screen
+  (<<user-fig-login>>).
+. Type your email in *Email* and your password in *Password*.
+. Click *Sign in*.
+
+[[user-fig-login]]
+.Sign-in screen
+image::screenshots/{lang}/user/01-login.png["Sign-in card with the name of the application, the Email and Password fields and the Sign in button",pdfwidth=50%]
+
+.Expected result
+The *Home* page opens (<<user-fig-home>>). Your name and your email appear at the foot of the side menu.
+
+.Verification
+Your name at the foot of the menu confirms which account you signed in with.
+
+.Special cases
+* If the email or the password is not correct, the card shows the message *Invalid email or password*
+  (<<user-fig-login-error>>). The server sends this message and writes it in English, whatever the interface
+  language. For security, the message is the same whether the email does not exist or the password is wrong.
+* An account disabled by an administrator cannot sign in and gets the same message.
+* If the organization turned on the attempt limit, after several failed attempts in a row sign-in is blocked for a
+  while, even with the right password (<<user-messages>>).
+
+[[user-fig-login-error]]
+.Wrong email or password
+image::screenshots/{lang}/user/20-login-error.png[The sign-in card with the message Invalid email or password in red,pdfwidth=50%]
+
+[[user-session]]
+=== Session length
+
+When you sign in, the server gives your browser a temporary credential (a _token_). While it is valid, the
+application does not ask for your password again, even if you close the tab. By default it lasts 8 hours; your
+organization may have configured another length.
+
+When the credential expires, or when an administrator disables your account or changes your password, the next
+action you take gets a "not authenticated" response and the application sends you back to the sign-in screen.
+Whatever you were typing and had not saved is lost.
+
+TIP: If you are going to leave a long form half done, save it first: the application does not keep drafts.
+
+[[user-sign-out]]
+=== Signing out
+
+.Objective
+Leave the application so that nobody else uses your session on that computer.
+
+.Procedure
+. Click *Sign out*, at the foot of the side menu.
+
+.Expected result
+The application deletes the credential from the browser and shows the sign-in screen.
+
+.Special cases
+NOTE: If your organization turned on credential revocation, when you sign out the server also invalidates every
+credential issued to you up to that moment, including those of other browsers. Without that option, a credential
+copied out of the browser would stay valid until it expires. Always sign out on shared computers.

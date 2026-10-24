@@ -1,0 +1,147 @@
+[[admin-access]]
+== Users, roles and permissions
+
+Common requirement: `MANAGE_ORGANIZATION` (or `ADMIN`). A service account can never use these screens.
+
+[[admin-users]]
+=== Users
+
+menu:Administration[Users] has the *New user* form at the top and below it the list of people with their name,
+email, roles, status and creation date (<<admin-fig-users>>). Your own row carries the mark _This is you_.
+
+:admin-users-alt: New user form and the list with four people and their roles ADMIN, CONSULTA, REGISTRADOR and \
+REVISOR
+[[admin-fig-users]]
+.Users of the example
+image::screenshots/{lang}/admin/06-users.png["{admin-users-alt}",pdfwidth=100%]
+
+.Objective
+Add a person.
+
+.Prerequisites
+Their email, their name, an initial password that meets the policy of the organization (by default, at least 8
+characters) and the roles they need.
+
+.Procedure
+. Fill in *Email*, *Name* and *Password*.
+. Check their *Roles*.
+. Click *Create*.
+
+.Expected result
+The person appears in the list as *Active* and can sign in.
+
+.Verification
+Ask the person to sign in; their name appears at the foot of the menu.
+
+.Special cases
+* An email repeated in the organization is rejected.
+* A password that does not meet the policy is rejected with the reason (`Password too short` or
+  `Password does not meet the password policy`).
+* The initial password is passed on through a secure channel; the person cannot change it on their own from the
+  interface.
+
+Edit, disable or delete::
+The pencil opens the edit form: name, *New password* (leave it empty to keep the current one), roles and status.
+Disabling prevents signing in and keeps the account and its trail. You cannot disable or delete yourself.
+
+CAUTION: With `wasichai.security.jwt.revocation=true`, disabling a person, changing their password or their roles,
+or deleting them invalidates at once the credentials they already had. Without that option, the issued credentials
+stay valid until they expire (8 hours by default). To withdraw access immediately, ask the technical team to turn
+on revocation.
+
+WARNING: Deleting a person cannot be undone. Prefer disabling them: their history stays readable.
+
+[[admin-roles]]
+=== Roles
+
+menu:Administration[Roles] creates roles and shows how many permissions and restricted fields each one has
+(<<admin-fig-roles>>).
+
+:admin-roles-alt: New role form and the list with Administrator, Consulta, Registrador de licencias and Revisor \
+técnico
+[[admin-fig-roles]]
+.Roles of the example
+image::screenshots/{lang}/admin/07-roles.png["{admin-roles-alt}",pdfwidth=100%]
+
+.Procedure
+. Type the *Technical name* in upper case (`INSPECTOR`) and the *Label*.
+. Check *Own records only* if the role must only see the records the person created.
+. Click *Create*. Then grant its permissions (<<admin-permissions>>) and assign it to people.
+
+.Special cases
+* `ADMIN` cannot be deleted.
+* *Own records only* applies when every role of the person has it; if they also have a role without that mark,
+  they see everything that other role allows.
+* Role names are used in workflows (reserved transitions) and in notifications.
+
+[[admin-permissions]]
+=== Permissions
+
+menu:Administration[Permissions] edits what a role can do (<<admin-fig-permissions>>).
+
+:admin-permissions-alt: Permission matrix with READ checked on the three objects and field permissions of \
+Contribuyente with DNI/RUC and Teléfono without read
+[[admin-fig-permissions]]
+.Permission matrix and field permissions of the Consulta role
+image::screenshots/{lang}/admin/08-permissions.png["{admin-permissions-alt}",pdfwidth=100%]
+
+.Objective
+Grant actions to a role, or withdraw them, object by object, and restrict fields.
+
+.Procedure
+. Pick the *Role*.
+. In *Permission matrix*, check per object `READ`, `CREATE`, `UPDATE` and `DELETE`, and the *Own actions* the
+  object declares. The *Every object* row grants the action on any object, present or future; only that row has
+  `MANAGE_METADATA` and `MANAGE_ORGANIZATION`.
+. Click *Save permissions*.
+. To restrict fields, in *Field permissions* pick an object and uncheck *Read* or *Write* for each field. Click
+  *Save field permissions*.
+
+.Expected result
+The role list reflects the new number of permissions and restricted fields.
+
+.Verification
+Sign in with a test account with that role and check what it sees and what it can save. The audit log records the
+change as `admin:permission` (<<admin-audit>>).
+
+.Special cases
+* Field permissions are a restriction, not a grant: an object with no field rules for a role shows all its fields
+  to that role.
+* Editing the matrix of the `ADMIN` role changes nothing: `ADMIN` skips the checks.
+* Saving replaces the whole set of the role.
+* The changes apply from each person's next operation; the interface may need a reload to reflect them.
+
+CAUTION: The interface does not hide screens or buttons according to permissions: the server rejects them
+(_User manual_, chapter _What changes with your role_). Explain to people with read-only roles that they will see
+buttons they cannot use.
+
+[[admin-service-accounts]]
+=== Service accounts
+
+A service account identifies another system (for example, the revenue system) that calls the API with a client id
+and a secret. It has roles like a person, but it never administers the organization.
+
+:admin-service-accounts-alt: New service account form and the account integracion-rentas with its client id, role \
+CONSULTA and status Enabled
+[[admin-fig-service-accounts]]
+.Service accounts
+image::screenshots/{lang}/admin/09-service-accounts.png["{admin-service-accounts-alt}",pdfwidth=100%]
+
+.Procedure
+. In menu:Administration[Service accounts], type the *Name* (lower case, digits, `_` or `-`; it cannot be changed
+  later) and check the *Roles* (`ADMIN` is not offered).
+. Click *Create*.
+. Copy the *Secret* shown and hand it to the owner of the system through a secure channel. Click *I saved it*.
+
+.Expected result
+The account appears *Enabled*, with its *Client id*. The system gets credentials with `POST /api/auth/token`
+(`clientId`, `clientSecret`), valid for 15 minutes by default.
+
+CAUTION: The secret is only shown once; the server stores only its fingerprint. If it is lost, rotate it.
+
+Row actions::
+Edit roles; *Disable* / *Enable* (when disabled it gets no credentials); *Rotate secret* (the previous one stops
+serving to request credentials; those already issued stay valid until they expire, unless revocation is on);
+delete.
+
+WARNING: Deleting a service account makes its audit entries lose the name of the account. Disabling it keeps it.

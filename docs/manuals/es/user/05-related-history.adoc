@@ -1,0 +1,54 @@
+[[user-related-history]]
+== Registros relacionados e historial
+
+[[user-related]]
+=== Ver los registros relacionados
+
+Un registro se vincula con otros mediante relaciones: una licencia tiene un _Predio_ y un _Solicitante_; un
+contribuyente tiene sus _Predios_ y sus _Licencias_. La página de detalle muestra estos vínculos en listas
+relacionadas (<<user-fig-related>>).
+
+.Procedimiento
+. Abra el registro.
+. Vaya a la pestaña que contiene las listas relacionadas: en el ejemplo, *Predio y solicitante*; en una página
+  generada, *Relacionados*.
+
+:user-fig-related-alt: Pestaña Predio y solicitante con dos tablas: el predio P-0004 y el solicitante C-0012, cada \
+una con su enlace Editar
+[[user-fig-related]]
+.Listas relacionadas de una licencia
+image::screenshots/{lang}/user/10-record-related.png["{user-fig-related-alt}",pdfwidth=100%]
+
+Cada lista indica el nombre de la relación, su tipo (por ejemplo, `MANY_TO_ONE`, «muchos a uno») y cuántos registros
+contiene. *Editar* abre el registro relacionado. Las listas funcionan en los dos sentidos: desde un contribuyente se
+ven sus licencias, desde una licencia, su solicitante.
+
+NOTE: Para cambiar el solicitante o el predio de una licencia, cambie el campo correspondiente en el formulario y
+guarde. Las relaciones de tipo «muchos a muchos» se gestionan desde la lista relacionada.
+
+[[user-history]]
+=== Consultar el historial de un registro
+
+Cada alta, modificación, eliminación, transición y emisión de documento queda registrada en el historial del
+registro, que no se puede modificar ni borrar desde la aplicación.
+
+.Procedimiento
+. Abra el registro y vaya a la pestaña *Historial*.
+
+:user-fig-history-alt: Pestaña Historial con dos entradas: Creación y Modificación, cada una con usuario, fecha \
+relativa, motivo y el cambio de estado de borrador a en_revision
+[[user-fig-history]]
+.Historial de una licencia
+image::screenshots/{lang}/user/11-record-history.png["{user-fig-history-alt}",pdfwidth=100%]
+
+Cada entrada muestra:
+
+* El tipo de operación: *Creación*, *Modificación*, *Eliminación* o *Emisión* (de un documento).
+* Quién la hizo: el correo del usuario, o *Sistema* cuando la hizo una regla automática.
+* Cuándo, en tiempo relativo (_hace 9 minutos_).
+* El *Motivo*, si se indicó.
+* Los campos que cambiaron, con el valor anterior y el nuevo. Un cambio de estado del flujo aparece como `state`
+  con los nombres técnicos de los estados (por ejemplo, `borrador → en_revision`).
+
+NOTE: El historial respeta los permisos de campo: si su rol no puede leer un campo, sus cambios tampoco aparecen en
+el historial.

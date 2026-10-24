@@ -1,0 +1,53 @@
+[[user-related-history]]
+== Related records and history
+
+[[user-related]]
+=== Seeing the related records
+
+A record is linked to others through relationships: a licence has a _Predio_ and a _Solicitante_; a taxpayer has
+their _Predios_ and their _Licencias_. The detail page shows these links in related lists (<<user-fig-related>>).
+
+.Procedure
+. Open the record.
+. Go to the tab that holds the related lists: in the example, *Predio y solicitante*; in a generated page,
+  *Related*.
+
+:user-related-alt: Predio y solicitante tab with two tables: the plot P-0004 and the applicant C-0012, each with its \
+Edit link
+[[user-fig-related]]
+.Related lists of a licence
+image::screenshots/{lang}/user/10-record-related.png["{user-related-alt}",pdfwidth=100%]
+
+Each list shows the name of the relationship, its type (for example, `MANY_TO_ONE`) and how many records it holds.
+*Edit* opens the related record. The lists work both ways: from a taxpayer you see their licences, from a licence,
+its applicant.
+
+NOTE: To change the applicant or the plot of a licence, change the matching field in the form and save.
+Many-to-many relationships are managed from the related list.
+
+[[user-history]]
+=== Looking at the history of a record
+
+Every creation, change, deletion, transition and document issue is recorded in the history of the record, which
+cannot be changed or deleted from the application.
+
+.Procedure
+. Open the record and go to the *Historial* tab.
+
+:user-history-alt: Historial tab with two entries: Create and Update, each with user, relative date, reason and the \
+change of state from borrador to en_revision
+[[user-fig-history]]
+.History of a licence
+image::screenshots/{lang}/user/11-record-history.png["{user-history-alt}",pdfwidth=100%]
+
+Each entry shows:
+
+* The type of operation: *Create*, *Update*, *Delete* or *Issue* (of a document).
+* Who did it: the email of the user, or *System* when an automatic rule did it.
+* When, in relative time (_9 minutes ago_).
+* The *Reason*, if one was given.
+* The fields that changed, with the previous value and the new one. A change of workflow state appears as `state`
+  with the technical names of the states (for example, `borrador → en_revision`).
+
+NOTE: The history respects field permissions: if your role cannot read a field, its changes do not appear in the
+history either.

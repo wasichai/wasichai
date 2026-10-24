@@ -1,0 +1,20 @@
+[preface]
+[[sys-about]]
+== Acerca de este manual
+
+Este manual es la referencia técnica de {product-name} {product-version} para quien instala, configura, opera,
+mantiene o recupera una aplicación construida con la plataforma, y para quien desarrolla sobre ella. Describe el
+sistema tal como está en el código de los repositorios `wasichai` (servidor y documentación), `wasichai-ui`
+(interfaz) y `full-sample` (aplicación de ejemplo).
+
+La documentación de referencia para desarrollo sigue en Markdown dentro del repositorio y es la fuente canónica de
+su tema; este manual la resume y enlaza:
+
+* API REST: {rest-doc}[docs/api/rest.md]
+* Módulos: {repo-url}/docs/modules/README.md[docs/modules/]
+* Construir una aplicación: {repo-url}/docs/guides/build-your-app.md[docs/guides/build-your-app.md]
+* Decisiones de arquitectura (ADR): {adr-index}[docs/adr/]
+* Historial de cambios: {repo-url}/docs/HISTORY.md[docs/HISTORY.md]
+
+Cada comando indica desde qué directorio se ejecuta. Los valores de ejemplo de contraseñas y secretos son
+ficticios y solo válidos para entornos locales.

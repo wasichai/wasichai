@@ -1,0 +1,35 @@
+= User manual: Working with the data of a Wasichai application
+:manual-title: User manual
+:description: How to sign in to a Wasichai application and work with its records, workflows, documents and maps.
+include::../attributes.adoc[]
+include::locale.adoc[]
+:author: Wasichai documentation
+:toc:
+:title-page:
+
+include::user/00-about.adoc[]
+
+include::user/01-introduction.adoc[]
+
+include::user/02-access.adoc[]
+
+include::user/03-interface.adoc[]
+
+include::user/04-records.adoc[]
+
+include::user/05-related-history.adoc[]
+
+include::user/06-workflow.adoc[]
+
+include::user/07-documents.adoc[]
+
+include::user/08-maps.adoc[]
+
+include::user/09-roles.adoc[]
+
+include::user/10-messages.adoc[]
+
+include::user/11-faq.adoc[]
+
+[appendix]
+include::reference/glossary.adoc[]

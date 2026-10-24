@@ -1,0 +1,34 @@
+[[user-faq]]
+== Preguntas frecuentes
+
+¿Puedo recuperar un registro que eliminé?::
+No desde la aplicación. La eliminación es definitiva; la auditoría guarda que existió y quién lo eliminó. Solo una
+restauración técnica de una copia de seguridad podría recuperarlo, y afectaría a toda la base de datos.
+
+¿Por qué no puedo cambiar el estado de un registro desde el formulario?::
+Porque el estado no es un campo: solo cambia mediante las transiciones del flujo (<<user-workflow>>), que comprueban
+su rol y quedan registradas.
+
+¿Por qué una columna muestra un código largo como `a8a1e643-…`?::
+Es el identificador interno del registro relacionado. Abra el registro para ver el vínculo por su código, o pida al
+administrador una vista sin esa columna.
+
+¿Puedo exportar una lista a Excel o CSV?::
+La interfaz no tiene exportación. Un administrador técnico puede extraer los datos por la API.
+
+¿Por qué veo en el menú pantallas que no puedo usar?::
+El menú es igual para todas las personas. Lo que usted puede hacer lo decide el servidor en cada operación
+(<<user-roles>>).
+
+¿Por qué un documento no refleja un cambio que hice en el registro?::
+Los documentos se congelan al emitirse. Emita uno nuevo del mismo tipo: el anterior pasa a *Archivado*.
+
+¿Por qué el mapa no muestra calles?::
+El fondo cartográfico viene de un servicio externo. Si su red no permite acceder a él, solo se ven las geometrías.
+
+¿Mis cambios se guardan solos?::
+No. Pulse *Guardar*. Si la sesión caduca antes, lo escrito se pierde.
+
+¿Quién ve lo que hago?::
+Cada cambio queda en el historial del registro y en la auditoría de la organización, con su usuario, la hora y el
+motivo.

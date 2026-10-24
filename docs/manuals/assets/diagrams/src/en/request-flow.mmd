@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    participant B as Browser (wasichai-ui)
+    participant S as Security filter (JWT)
+    participant R as RecordController
+    participant P as Permissions / field rules
+    participant D as Record store (SQL)
+    participant A as Audit log
+    participant Q as AutomationDispatcher
+    B->>S: PUT /api/objects/licencia/records/{id}<br/>Authorization, If-Match, X-Change-Reason
+    S->>S: verify HS256 token, tenant = org claim
+    S->>R: CurrentUser
+    R->>P: UPDATE on object? fields writable?<br/>appendOnly / apiOnly / requiresReason
+    P-->>R: allowed
+    R->>D: UPDATE … WHERE organization_id AND updated_at = If-Match
+    D-->>R: row (or 412 when stale)
+    R->>A: append entry (changes, reason, correlation id)
+    R->>Q: match rules, queue automation_runs PENDING (same transaction)
+    R-->>B: 200 record + new ETag

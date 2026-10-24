@@ -1,0 +1,21 @@
+:lang: en
+:doc-edition-label: Edition
+:toc-title: Contents
+:figure-caption: Figure
+:table-caption: Table
+:example-caption: Example
+:appendix-caption: Appendix
+:chapter-signifier: Chapter
+:part-signifier: Part
+:section-refsig: Section
+:chapter-refsig: Chapter
+:appendix-refsig: Appendix
+:note-caption: Note
+:tip-caption: Tip
+:important-caption: Important
+:caution-caption: Caution
+:warning-caption: Warning
+:version-label: Version
+:last-update-label: Last updated
+:untitled-label: Untitled
+:listing-caption: Listing

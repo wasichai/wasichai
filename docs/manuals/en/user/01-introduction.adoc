@@ -1,0 +1,61 @@
+[[user-introduction]]
+== Introduction
+
+=== What a {product-name} application is
+
+{product-name} is a platform for building metadata-driven management applications: instead of programming each
+screen, an administrator describes the kinds of information the organization handles (for example,
+_Contribuyente_ (taxpayer), _Predio_ (plot) or _Licencia de funcionamiento_ (business licence)), and from that
+description the platform creates the tables, the API and the screens. All {product-name} applications share the
+same way of working, which is the one this manual describes.
+
+Each organization (also called a _tenant_) has its own data, users and configuration, and never sees those of
+another.
+
+=== Concepts worth knowing
+
+Object::
+A kind of information. For example, _Licencia de funcionamiento_. It is the equivalent of a table.
+Record::
+A specific item of an object: the licence `LF-2026-0001`. It is the equivalent of a row.
+Field::
+A piece of data of a record: _Expediente_ (file number), _Giro_ (line of business), _Fecha de solicitud_
+(application date). Each field has a type (text, number, date, list of options, reference to another record,
+geometry…).
+Relationship::
+A link between objects. A licence has a _Solicitante_ (applicant, a taxpayer) and is located on a _Predio_.
+View::
+A saved way of listing the records of an object: which columns, with which filter and in which order.
+Detail page::
+The screen of a record, organized by the administrator into tabs and sections.
+Workflow::
+The states a record goes through (_Borrador_ (draft), _En revisión_ (in review), _Aprobada_ (approved)…) and the
+transitions that move it from one to another.
+Document::
+A numbered piece of writing (for example, a certificate) that is issued from a record and stays frozen as it was
+issued.
+Role::
+A set of permissions. What you can see and do depends on the roles the administrator assigned to you.
+
+<<user-glossary>> collects these and other terms.
+
+=== The sample case
+
+The Distrito Demo works with three objects:
+
+[cols="1,3",options="header"]
+|===
+|Object |What it holds
+|Contribuyente |Natural persons and legal entities: code, name, type, document, email, phone and tax address.
+|Predio |Cadastral units: code, address, area, use, self-assessed value, owner and the polygon of the lot.
+|Licencia de funcionamiento |Licence applications: file number, establishment, line of business, premises area,
+dates, remarks and outcome. Each one has an applicant and a plot, and moves through a processing workflow.
+|===
+
+The processing workflow of a licence is shown in <<user-fig-demo-workflow>>.
+
+:user-demo-workflow-alt: State diagram: Borrador goes to En revisión; from En revisión to Observada, Aprobada or \
+Rechazada; from Observada back to En revisión
+[[user-fig-demo-workflow]]
+.States and transitions of the sample licence process
+image::diagrams/en-demo-workflow.png["{user-demo-workflow-alt}",pdfwidth=70%,role=diagram]

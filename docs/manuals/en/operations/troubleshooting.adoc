@@ -1,0 +1,57 @@
+[[sys-troubleshooting]]
+== Troubleshooting
+
+[cols="2,3,3",options="header"]
+|===
+|Symptom |Probable cause |What to do
+
+|The application does not start: `wasichai.security.jwt.secret` empty or short
+|`WASICHAI_JWT_SECRET` is missing or has fewer than 32 bytes.
+|Define a secret of at least 32 bytes (`openssl rand -base64 48`).
+
+|It does not start: database connection error
+|Wrong host, port, database or credentials; database unreachable from the server.
+|Check `WASICHAI_DB_*` and connect with `psql` from the same computer.
+
+|It does not start: `permission denied to create extension` or `extension "postgis" is not available`
+|The user cannot create extensions, or PostGIS is not installed on the PostgreSQL server.
+|Create the extensions as database administrator, or install PostGIS 3.6.
+
+|`pg_dump: error: aborting because of server version mismatch`
+|The `pg_dump` client is older than the server.
+|Use `pg_dump` 18 or later.
+
+|The web app loads but every call gives a network error
+|The web app does not reach `/api` (reverse proxy or Vite `API_URL`), or CORS blocks another origin.
+|Check the proxy; add the origin to `wasichai.web.cors-allowed-origin-patterns`.
+
+|Everything answers `401` shortly after signing in
+|Server clock off, different secret between instances, or revocation on after signing out.
+|Synchronize the time (NTP); use the same secret on every instance.
+
+|A model change does not show on another instance
+|Definition cache (`wasichai.metadata.cache.ttl`, 5 s).
+|Wait a few seconds.
+
+|Rules do not act
+|`wasichai.automation.poll-interval` set to `0s`, rule disabled or a condition that is not met.
+|Check menu:Automation[Runs]: a skipped run gives the reason.
+
+|*Publish* fails for a layer
+|GeoServer disabled, unreachable or with wrong credentials.
+|Check `wasichai.gis.geoserver.*`; the *Layers* screen says whether it is configured.
+
+|The map shows no background
+|The browser does not reach the tile provider (OpenStreetMap by default).
+|Allow the access or configure another base map in the web app: `gisModule({ basemap })`.
+
+|Sign-in rejected with `429`
+|Attempt limit on and exceeded.
+|Wait for the `Retry-After` time (15-minute window by default).
+
+|Error when deleting a field or object (`409`)
+|A relationship, an index, a uniqueness, a rule or another object uses it, or it is _append-only_.
+|The message names what prevents it; remove that first.
+|===
+
+For any 5xx error, look in the server logs for the `X-Correlation-Id` the response returned.

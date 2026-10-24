@@ -1,0 +1,97 @@
+[[admin-automation]]
+== Workflows and automation
+
+[[admin-workflows]]
+=== Workflows
+
+An object can have a workflow: states and transitions. menu:Automation[Workflows] draws them on a canvas
+(<<admin-fig-workflow>>).
+
+:admin-workflow-alt: Canvas with the states Borrador, En revisión, Observada, Aprobada and Rechazada joined by \
+transitions, and the Details panel
+[[admin-fig-workflow]]
+.Canvas of the workflow "Trámite de licencia"
+image::screenshots/{lang}/admin/15-workflow-canvas.png["{admin-workflow-alt}",pdfwidth=100%]
+
+.Objective
+Define the life cycle of the records of an object.
+
+.Procedure
+. Pick the *Object*. If it has no workflow, the screen offers a starter template (draft → review →
+  approved/rejected).
+. *Add state* creates a state; in the *Details* panel set its technical name, its label and its type: *Initial*
+  (exactly one), *Intermediate* or *Final*.
+. To create a transition, drag from the dot of one state to another. Select it and fill in name, label and the
+  *roles* that can apply it (empty: anyone with `UPDATE`).
+. Select the empty canvas to edit the technical name and the label of the workflow, and the *Enabled* checkbox.
+. *Rearrange* lays out the drawing automatically. Click *Save workflow*.
+
+.Expected result
+The detail page of the records shows the state and the transition buttons.
+
+.Special cases
+* A disabled workflow shows no buttons on the record.
+* New records start in the initial state. Those that already existed when the workflow was added have no stored
+  state and are treated as if they were in the initial one: they show its transitions.
+* Each transition stays in the audit log and can fire rules (_A record enters a state_, _A transition is
+  applied_).
+
+WARNING: *Delete workflow* deletes the definition. The records keep in the database the last state they had, but
+no transitions can be applied until the object has a new workflow.
+
+[[admin-rules]]
+=== Automation rules
+
+A rule says: _when_ something happens to a record, _if_ some conditions are met, _do_ some actions.
+menu:Automation[Rules] (<<admin-fig-rules>>).
+
+:admin-rules-alt: Editor of a rule: technical name, label, Enabled checkbox, trigger A record enters a state Aprobada, \
+no conditions, and the action Issue a document
+[[admin-fig-rules]]
+.The rule "Emitir certificado al aprobar"
+image::screenshots/{lang}/admin/16-automation-rules.png["{admin-rules-alt}",pdfwidth=100%]
+
+Triggers (*When*)::
+When a record is created, updated or deleted; when a transition is applied (optionally a specific one); when a
+specific state is entered.
+Conditions::
+On a field or on the state: equals, does not equal, greater than, less than, contains, empty, not empty, changed.
+With no conditions, the rule acts every time the trigger happens.
+Actions::
+* *Write a field* of the record.
+* *Create a record* in another object.
+* *Call a webhook*: an HTTP call to a public URL (private addresses are not accepted).
+* *Issue a document* of a type of the object.
+* *Notify* people: user ids or emails, `role:NOMBRE` or `unit:CÓDIGO` (requires the notifications module).
+
+In the texts the record can be read with double braces: `{{codigo}}`, and also `{{id}}`, `{{state}}`, `{{user}}`,
+`{{today}}` and `{{now}}`.
+
+.Procedure
+. Pick the *Object*, click *New rule* and fill in *Technical name*, *Label* and *Enabled*.
+. Configure *When*, *Conditions* (*Add condition*) and *Actions* (*Add action*).
+. Click *Save rule*.
+
+.Special cases
+* The actions run in the background, shortly after the change (by default, the process checks the queue every
+  second), and act as the platform, not as the person: in the history they appear as *System* with the reason
+  `automation '<nombre>'`.
+* A rule can fire others; the chain is cut at 3 levels of depth.
+* A field used by a rule cannot be deleted until it is removed from the rule.
+
+[[admin-runs]]
+=== Runs
+
+menu:Automation[Runs] shows what fired, what did not and why (<<admin-fig-runs>>). It can be filtered by *Status*
+and by amount.
+
+[[admin-fig-runs]]
+.Runs of the rules of the example
+image::screenshots/{lang}/admin/17-automation-runs.png["Table of runs with status Done, rule, trigger, date and the detail of each action",pdfwidth=100%]
+
+Each row shows the status (done, skipped with its reason, failed), the rule, the trigger, when it happened and the
+detail of each action. Reading the runs only requires `READ` on the object, so that whoever saw a record change can
+find out why.
+
+NOTE: In version {ui-version} of the interface, the detail of the _Notify_ action appears with the untranslated key
+`automations.actionTypes.NOTIFY`. It is a defect in the texts of the interface, not a run error.

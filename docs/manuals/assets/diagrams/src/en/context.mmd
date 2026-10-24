@@ -1,0 +1,18 @@
+flowchart TB
+    user(["User<br/>web browser"])
+    svc(["External system<br/>service account"])
+    subgraph app["Wasichai application (for example full-sample)"]
+        direction LR
+        web["Web<br/>React 19 + @wasichai/* packages<br/>(wasichai-ui)"]
+        api["Server<br/>Spring Boot 4 WebFlux<br/>wasichai-* starters"]
+        web -->|"REST /api<br/>JWT bearer"| api
+    end
+    user -->|HTTPS| web
+    svc -->|"POST /api/auth/token<br/>REST /api"| api
+    db[("PostgreSQL 18<br/>+ PostGIS 3.6 with gis")]
+    gs["GeoServer<br/>WMS / WFS, optional"]
+    ext["Anthropic API (agent) · SMTP (email)<br/>optional"]
+    api -->|"R2DBC queries<br/>JDBC Flyway migrations"| db
+    api -->|"REST: publish layers"| gs
+    gs -->|JDBC| db
+    api -.-> ext

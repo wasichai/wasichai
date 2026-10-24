@@ -1,0 +1,24 @@
+= Documentación de Wasichai
+:description: Manuales de usuario, administrador y sistema de Wasichai.
+include::../attributes.adoc[]
+include::locale.adoc[]
+:doctype: article
+:sectnums!:
+:toc!:
+:nofooter:
+
+Versión {product-version} · {doc-edition-label} {edition-date} · link:../en/index.html[English]
+
+[.manuals-grid]
+* *link:user-manual.html[Manual de usuario]* +
+  Acceder, encontrar y registrar información, avanzar trámites, emitir documentos y consultar mapas. +
+  link:../pdf/wasichai-user-manual-es.pdf[PDF]
+* *link:admin-manual.html[Manual del administrador]* +
+  Modelo de datos, usuarios y permisos, pantallas configurables, flujos, automatización, auditoría. +
+  link:../pdf/wasichai-admin-manual-es.pdf[PDF]
+* *link:system-manual.html[Manual técnico del sistema]* +
+  Arquitectura, instalación, configuración, seguridad, operación, copias y recuperación. +
+  link:../pdf/wasichai-system-manual-es.pdf[PDF]
+
+La referencia para desarrollo (API REST, módulos, decisiones de arquitectura) está en el repositorio:
+{repo-url}/docs/api/rest.md[API REST] · {repo-url}/docs/modules/README.md[Módulos] · {adr-index}[ADR].

@@ -1,0 +1,29 @@
+[preface]
+[[admin-about]]
+== Acerca de este manual
+
+Este manual explica cómo configurar y administrar una aplicación {product-name} {product-version}: el modelo de
+datos (objetos, campos y relaciones), las cuentas y los permisos, las pantallas configurables, los flujos de
+trabajo, las automatizaciones, las capas GIS y la auditoría.
+
+Distingue siempre dos niveles:
+
+Administración funcional::
+Lo que se hace desde la propia aplicación, con un navegador y una cuenta con permisos de administración. Es la mayor
+parte de este manual.
+Administración técnica::
+Lo que se hace sobre el servidor, la configuración o la base de datos: variables de entorno, copias de seguridad,
+restauraciones, purgas. Este manual lo resume y remite al _Manual técnico del sistema_, que lo detalla.
+
+Algunas funciones de la plataforma existen en la API REST pero no tienen pantalla en la interfaz web (por ejemplo,
+las unidades organizativas y las notificaciones). Se indican como tales en <<admin-api-only>>, con el procedimiento
+real por API.
+
+Las figuras se tomaron con la aplicación de ejemplo `full-sample` y los datos sintéticos del _Distrito Demo_
+(contribuyentes, predios y licencias de funcionamiento). Las convenciones de avisos y procedimientos son las del
+_Manual de usuario_: *Objetivo*, *Requisitos previos*, *Procedimiento*, *Resultado esperado*, *Verificación* y
+*Casos especiales*; NOTE, TIP, CAUTION y WARNING (operación destructiva).
+
+WARNING: Muchas operaciones de este manual modifican la estructura de la base de datos (añaden o eliminan columnas
+y tablas) en el acto. Pruebe los cambios de modelo en un entorno de pruebas y haga una copia de seguridad antes de
+eliminar objetos, campos o relaciones en producción (<<admin-technical>>).

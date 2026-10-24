@@ -1,0 +1,45 @@
+[[ref-permissions]]
+== Permission reference
+
+=== Actions
+
+[cols="1,1,3",options="header"]
+|===
+|Action |Scope |Allows
+|`READ` |Object or all |See records, their history, their documents and issue documents; read rule runs and the
+configuration of views, forms and pages.
+|`CREATE` |Object or all |Create records.
+|`UPDATE` |Object or all |Update records, link and unlink, apply transitions (if the role of the transition allows
+it).
+|`DELETE` |Object or all |Delete records.
+|_Declared action_ |Object only |Whatever the application's code checks (for example, `ANULAR_AJENO`).
+|`MANAGE_METADATA` |All |Objects, fields, relationships, declared actions, views, forms, pages, document types,
+workflows, rules, GIS layers, notification rules.
+|`MANAGE_ORGANIZATION` |All |Users, roles, permissions, service accounts, units, manual notifications, renaming the
+organization, reading the administration audit.
+|`MANAGE_TENANTS` |All |Create and delete organizations.
+|===
+
+=== Rules combined with the permissions
+
+* `ADMIN` skips the permission checks; it never applies to a service account.
+* A service account never exercises `MANAGE_ORGANIZATION` or `MANAGE_TENANTS`, even if a role grants them.
+* _Own records only_: if every role of the person has it, they only see and update the records they created.
+* Field permissions: restrict reading or writing specific fields; without rules, everything is visible.
+* Write rules of the object (_append-only_, _application only_, _requires a reason_): they apply to everyone,
+  `ADMIN` included.
+* Transitions with roles: besides `UPDATE`, they require one of the listed roles (`ADMIN` always can).
+* The application can add its own read restrictions (read scope) and value masks.
+
+=== Permissions of the example
+
+[cols="2,1,1,1,1,2",options="header"]
+|===
+|Role |contribuyente |predio |licencia |Transitions |Restricted fields
+|`REGISTRADOR` |R C U |R |R C U |enviar, subsanar |—
+|`REVISOR` |R |R |R U |observar, aprobar, rechazar |—
+|`CONSULTA` |R |R |R |— |`contribuyente.documento`, `contribuyente.telefono` (no read)
+|`ADMIN` 4+|Everything |—
+|===
+
+R = `READ`, C = `CREATE`, U = `UPDATE`.

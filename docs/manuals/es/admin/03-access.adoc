@@ -1,0 +1,149 @@
+[[admin-access]]
+== Usuarios, roles y permisos
+
+Requisito común: `MANAGE_ORGANIZATION` (o `ADMIN`). Una cuenta de servicio nunca puede usar estas pantallas.
+
+[[admin-users]]
+=== Usuarios
+
+menu:Administración[Usuarios] tiene arriba el formulario *Nuevo usuario* y debajo la lista de personas con su
+nombre, correo, roles, estado y fecha de alta (<<admin-fig-users>>). Su propia fila lleva la marca _Eres tú_.
+
+:admin-fig-users-alt: Formulario Nuevo usuario y la lista con cuatro personas y sus roles ADMIN, CONSULTA, \
+REGISTRADOR y REVISOR
+[[admin-fig-users]]
+.Usuarios del ejemplo
+image::screenshots/{lang}/admin/06-users.png["{admin-fig-users-alt}",pdfwidth=100%]
+
+.Objetivo
+Dar de alta a una persona.
+
+.Requisitos previos
+Su correo, su nombre, una contraseña inicial que cumpla la política de la organización (por defecto, al menos 8
+caracteres) y los roles que necesita.
+
+.Procedimiento
+. Complete *Correo*, *Nombre* y *Contraseña*.
+. Marque sus *Roles*.
+. Pulse *Crear*.
+
+.Resultado esperado
+La persona aparece en la lista como *Activo* y puede iniciar sesión.
+
+.Verificación
+Pida a la persona que entre; su nombre aparece al pie del menú.
+
+.Casos especiales
+* Un correo repetido en la organización se rechaza.
+* Una contraseña que no cumple la política se rechaza con el motivo (`Password too short` o
+  `Password does not meet the password policy`).
+* La contraseña inicial se comunica por un canal seguro; la persona no puede cambiarla por sí misma desde la
+  interfaz.
+
+Editar, desactivar o eliminar::
+El lápiz abre la edición: nombre, *Nueva contraseña* (déjela vacía para no cambiarla), roles y estado. Desactivar
+impide entrar y conserva la cuenta y su rastro. No puede desactivarse ni eliminarse a sí mismo.
+
+CAUTION: Con `wasichai.security.jwt.revocation=true`, desactivar a una persona, cambiar su contraseña o sus roles, o
+eliminarla invalida en el acto las credenciales que ya tenía. Sin esa opción, las credenciales emitidas siguen
+valiendo hasta caducar (8 horas por defecto). Para retirar el acceso de inmediato, pida al equipo técnico que active
+la revocación.
+
+WARNING: Eliminar a una persona no se puede deshacer. Prefiera desactivarla: su historial sigue legible.
+
+[[admin-roles]]
+=== Roles
+
+menu:Administración[Roles] crea roles y muestra cuántos permisos y campos restringidos tiene cada uno
+(<<admin-fig-roles>>).
+
+:admin-fig-roles-alt: Formulario Nuevo rol y la lista con Administrator, Consulta, Registrador de licencias y \
+Revisor técnico
+[[admin-fig-roles]]
+.Roles del ejemplo
+image::screenshots/{lang}/admin/07-roles.png["{admin-fig-roles-alt}",pdfwidth=100%]
+
+.Procedimiento
+. Escriba el *Nombre técnico* en mayúsculas (`INSPECTOR`) y la *Etiqueta*.
+. Marque *Solo sus registros* si el rol solo debe ver los registros que creó la propia persona.
+. Pulse *Crear*. Después, conceda sus permisos (<<admin-permissions>>) y asígnelo a las personas.
+
+.Casos especiales
+* `ADMIN` no se puede eliminar.
+* *Solo sus registros* se aplica cuando todos los roles de la persona lo tienen; si tiene además un rol sin esa
+  marca, ve todo lo que ese otro rol permite.
+* Los nombres de rol se usan en los flujos de trabajo (transiciones reservadas) y en las notificaciones.
+
+[[admin-permissions]]
+=== Permisos
+
+menu:Administración[Permisos] edita lo que puede hacer un rol (<<admin-fig-permissions>>).
+
+:admin-fig-permissions-alt: Matriz de permisos con READ marcado en los tres objetos y permisos de campo de \
+Contribuyente con DNI/RUC y Teléfono sin lectura
+[[admin-fig-permissions]]
+.Matriz de permisos y permisos de campo del rol Consulta
+image::screenshots/{lang}/admin/08-permissions.png["{admin-fig-permissions-alt}",pdfwidth=100%]
+
+.Objetivo
+Conceder o retirar acciones a un rol, objeto por objeto, y restringir campos.
+
+.Procedimiento
+. Elija el *Rol*.
+. En *Matriz de permisos*, marque por objeto `READ`, `CREATE`, `UPDATE` y `DELETE`, y las *Acciones propias* que
+  declare el objeto. La fila *Todos los objetos* concede la acción en cualquier objeto, presente o futuro; solo en
+  ella están `MANAGE_METADATA` y `MANAGE_ORGANIZATION`.
+. Pulse *Guardar permisos*.
+. Para restringir campos, en *Permisos de campo* elija un objeto y desmarque *Lectura* o *Escritura* de cada campo.
+  Pulse *Guardar permisos de campo*.
+
+.Resultado esperado
+La lista de roles refleja el nuevo número de permisos y de campos restringidos.
+
+.Verificación
+Inicie sesión con una cuenta de prueba con ese rol y compruebe qué ve y qué puede guardar. La auditoría registra el
+cambio como `admin:permission` (<<admin-audit>>).
+
+.Casos especiales
+* Los permisos de campo son una restricción, no una concesión: un objeto sin reglas de campo para un rol muestra
+  todos sus campos a ese rol.
+* Editar la matriz del rol `ADMIN` no cambia nada: `ADMIN` omite las comprobaciones.
+* Guardar sustituye el conjunto completo del rol.
+* Los cambios rigen desde la siguiente operación de cada persona; la interfaz puede necesitar recargarse para
+  reflejarlos.
+
+CAUTION: La interfaz no oculta las pantallas ni los botones según los permisos: los rechaza el servidor
+(_Manual de usuario_, capítulo _Qué cambia según su rol_). Explique a las personas con roles de solo lectura que
+verán botones que no pueden usar.
+
+[[admin-service-accounts]]
+=== Cuentas de servicio
+
+Una cuenta de servicio identifica a otro sistema (por ejemplo, el sistema de rentas) que llama a la API con un id de
+cliente y un secreto. Tiene roles como una persona, pero nunca administra la organización.
+
+:admin-fig-service-accounts-alt: Formulario Nueva cuenta de servicio y la cuenta integracion-rentas con su id de \
+cliente, rol CONSULTA y estado Activa
+[[admin-fig-service-accounts]]
+.Cuentas de servicio
+image::screenshots/{lang}/admin/09-service-accounts.png["{admin-fig-service-accounts-alt}",pdfwidth=100%]
+
+.Procedimiento
+. En menu:Administración[Cuentas de servicio], escriba el *Nombre* (minúsculas, números, `_` o `-`; no se podrá
+  cambiar) y marque los *Roles* (no se ofrece `ADMIN`).
+. Pulse *Crear*.
+. Copie el *Secreto* que se muestra y entréguelo al responsable del sistema por un canal seguro. Pulse *Ya lo
+  guardé*.
+
+.Resultado esperado
+La cuenta aparece *Activa*, con su *Id de cliente*. El sistema obtiene credenciales con
+`POST /api/auth/token` (`clientId`, `clientSecret`), válidas 15 minutos por defecto.
+
+CAUTION: El secreto solo se muestra una vez; el servidor guarda únicamente su huella. Si se pierde, rótelo.
+
+Acciones de la fila::
+Editar roles; *Desactivar* / *Activar* (desactivada no obtiene credenciales); *Rotar secreto* (el anterior deja de
+servir para pedir credenciales; las ya emitidas valen hasta caducar, salvo con revocación activada); eliminar.
+
+WARNING: Eliminar una cuenta de servicio hace que sus entradas de auditoría pierdan el nombre de la cuenta.
+Desactivarla lo conserva.

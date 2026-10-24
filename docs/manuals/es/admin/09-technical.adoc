@@ -1,0 +1,36 @@
+[[admin-technical]]
+== Administración técnica
+
+Estas tareas no se hacen desde la aplicación sino sobre el servidor, su configuración o la base de datos. Las hace
+el equipo técnico; el _Manual técnico del sistema_ da los procedimientos completos. Este capítulo resume qué existe
+para que el administrador funcional sepa qué pedir.
+
+[cols="2,3,2",options="header"]
+|===
+|Necesidad |Cómo se resuelve |Dónde
+|Bloquear la entrada tras varios intentos fallidos |`wasichai.security.login.enabled=true` (5 intentos por correo y
+dirección, 20 por correo, ventana de 15 minutos) |Configuración
+|Exigir contraseñas más robustas |`wasichai.security.password.*`: longitud mínima, mayúsculas, minúsculas, dígitos,
+símbolos, distinta del correo |Configuración
+|Que desactivar o cerrar sesión corte el acceso en el acto |`wasichai.security.jwt.revocation=true` |Configuración
+|Cambiar la duración de la sesión |`wasichai.security.jwt.ttl` (por defecto 8 h) |Configuración
+|Separar quién crea organizaciones |`wasichai.organizations.separate-provisioning=true` |Configuración
+|Copias de seguridad y restauración |`pg_dump` / `pg_restore` de la base de datos completa |Base de datos
+|Purgar auditoría antigua |Un rol de base de datos dedicado (`wasichai.audit.purge-role`) |Base de datos
+|Publicar capas en GeoServer |`wasichai.gis.geoserver.*` |Configuración
+|Enviar notificaciones por correo |`wasichai.notifications.email.*` y un servidor SMTP |Configuración
+|Revisar errores |Los registros (logs) del servidor; cada petición lleva un `X-Correlation-Id` |Servidor
+|Recuperar datos borrados por error |Restaurar una copia en una base aparte y copiar lo necesario |Base de datos
+|===
+
+CAUTION: La aplicación no tiene papelera. La única forma de recuperar un registro, un campo o un objeto eliminado es
+una copia de seguridad anterior. Confirme con el equipo técnico la frecuencia de las copias y que se han probado
+restauraciones.
+
+=== Mantenimiento periódico recomendado
+
+* Cada mes: revisar las cuentas activas y desactivar las de personas que ya no trabajan en la organización; revisar
+  las cuentas de servicio y rotar sus secretos según la política de la organización.
+* Cada trimestre: revisar los roles y sus permisos; revisar en *Ejecuciones* si hay reglas que fallan.
+* Antes de cada cambio de modelo en producción: probarlo en un entorno de pruebas y confirmar que hay una copia de
+  seguridad reciente.

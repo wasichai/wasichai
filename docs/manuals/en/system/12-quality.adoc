@@ -1,0 +1,40 @@
+[[sys-quality]]
+== Testing, building and publishing
+
+=== Server tests
+
+[cols="2,3",options="header"]
+|===
+|Command (from `wasichai/`) |What it runs
+|`./gradlew build` |ktlint, unit and architecture tests of every library and starter.
+|`./gradlew -p build-logic test` |Tests of the _convention plugins_ (Gradle TestKit).
+|`./gradlew integrationTest` |Every integration suite against a real database.
+|`./gradlew :wasichai-integration-tests:coreOnly` |One particular suite (there is one per module, plus `fullApp`
+and the parity ones).
+|===
+
+The integration tests use Testcontainers (`postgres:18` or `postgis/postgis:18-3.6`), or an external database with
+the variables `WASICHAI_TEST_DB_HOST`, `_PORT`, `_NAME` (must end in `_test`), `_USERNAME`, `_PASSWORD` and
+`WASICHAI_TEST_GIS_DB_PORT`. They never use port 5432. The details, including the suite lock, are in
+{repo-url}/docs/development/getting-started.md#integration-tests[getting-started.md].
+
+=== Interface and end-to-end tests
+
+* `wasichai-ui`: `yarn lint`, `yarn test` (Vitest in each package) and `yarn build`.
+* `full-sample`: `e2e/smoke.sh` goes through every module over the API, against the JAR and against the native
+  image in its CI.
+* The screenshots of these manuals (`docs:screenshots`) go through the main screens with Playwright under four
+  profiles and work as a smoke test of the interface.
+
+=== Continuous integration
+
+`.github/workflows/ci.yml` runs on every _pull request_: the server build, the integration tests, the formatting
+(`yarn format:check`), a test publication to local Maven and the build and validation of these manuals (`docs`
+job).
+
+=== Versions and publishing
+
+Commit messages follow Conventional Commits. `release-please` opens the version PR and, when it is merged, tags
+`vX.Y.Z`; `publish.yml` publishes the libraries to GitHub Packages
+(`https://maven.pkg.github.com/wasichai/wasichai`). The npm packages are published from `wasichai-ui` with their
+own version. See {repo-url}/docs/development/releasing.md[releasing.md].

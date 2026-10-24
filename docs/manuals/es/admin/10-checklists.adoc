@@ -1,0 +1,46 @@
+[[admin-checklists]]
+== Listas de comprobación para operaciones críticas
+
+[[admin-check-delete]]
+=== Antes de eliminar un objeto, un campo o una relación
+
+[%interactive]
+* [ ] ¿Basta con desactivar el objeto (casilla *Activo*) en lugar de eliminarlo?
+* [ ] ¿Hay una copia de seguridad reciente y se sabe restaurar?
+* [ ] ¿Se han exportado por API los datos que haya que conservar?
+* [ ] ¿Qué vistas, formularios, páginas, reglas, tipos de documento y permisos dependen de él? (Se eliminan con el
+  objeto.)
+* [ ] ¿Algún otro objeto lo referencia? (El servidor lo impedirá y nombrará la referencia.)
+* [ ] ¿Se ha avisado a las personas que trabajan con él?
+* [ ] ¿Se probó primero en un entorno de pruebas?
+
+[[admin-check-permissions]]
+=== Antes de cambiar permisos
+
+[%interactive]
+* [ ] ¿Qué personas tienen el rol? (menu:Administración[Usuarios]).
+* [ ] ¿El cambio retira acceso a alguien que lo necesita?
+* [ ] Si concede `MANAGE_METADATA` o `MANAGE_ORGANIZATION`, ¿es imprescindible?
+* [ ] Después: comprobar con una cuenta de prueba y revisar la entrada `admin:permission` en la auditoría.
+
+[[admin-check-offboarding]]
+=== Baja de una persona
+
+[%interactive]
+* [ ] Desactivarla (no eliminarla) en menu:Administración[Usuarios].
+* [ ] Si la revocación no está activada, recordar que sus credenciales valen hasta caducar (8 h por defecto).
+* [ ] Quitarla de sus unidades organizativas (API).
+* [ ] Revisar si conocía secretos de cuentas de servicio y rotarlos.
+
+[[admin-check-restore]]
+=== Antes de una restauración
+
+[%interactive]
+* [ ] ¿Qué copia se restaura y de qué fecha? ¿Qué cambios posteriores se perderán?
+* [ ] ¿Se restaura primero en una base aparte para comprobarla?
+* [ ] ¿Se ha detenido la aplicación o se ha avisado a las personas?
+* [ ] Después: comprobar el inicio de sesión, los objetos principales y la auditoría (_Manual técnico del sistema_,
+  _Copias de seguridad y restauración_).
+
+WARNING: Restaurar una base de datos completa sustituye todos los datos de todas las organizaciones que contenga por
+los de la copia. Lo que se hizo después de la copia se pierde.

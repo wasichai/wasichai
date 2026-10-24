@@ -1,0 +1,14 @@
+= Wasichai
+:description: Wasichai manuals / manuales de Wasichai.
+include::attributes.adoc[]
+:doctype: article
+:sectnums!:
+:toc!:
+:nofooter:
+:imagesdir: assets
+
+[.manuals-grid]
+* *link:es/index.html[Documentación en español]* +
+  Manual de usuario, manual del administrador y manual técnico del sistema.
+* *link:en/index.html[Documentation in English]* +
+  User manual, administrator manual and system manual.

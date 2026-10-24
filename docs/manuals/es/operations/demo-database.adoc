@@ -1,0 +1,155 @@
+[[sys-demo-db]]
+== Base de datos de demostración reproducible
+
+Las figuras de los manuales salen de una base de demostración que cualquiera puede reconstruir desde cero. Este
+capítulo explica qué contiene, cómo se genera, cómo se exporta y cómo se restaura, y qué se comprobó.
+
+:sys-fig-demo-db-alt: Diagrama: base vacía, arranque con migraciones, carga por la API, exportación a SQL, \
+restauración y verificación
+[[sys-fig-demo-db]]
+.Ciclo de vida de la base de demostración
+image::diagrams/es-demo-db-lifecycle.png["{sys-fig-demo-db-alt}",pdfwidth=100%,role=diagram]
+
+=== Contenido
+
+Datos sintéticos de un municipio ficticio, el _Distrito Demo_. Ningún nombre, documento, correo ni dirección
+corresponde a una persona o empresa real; los correos usan el dominio reservado `.example`.
+
+[cols="2,3",options="header"]
+|===
+|Elemento |Contenido
+|Organización |_Demo_ (`demo`), creada por el seed de desarrollo.
+|Objetos |`contribuyente` (30), `predio` (25, con polígono EPSG:4326), `licencia` (40, pide motivo).
+|Relaciones |`predio_titular`, `licencia_solicitante`, `licencia_predio` (muchos a uno).
+|Flujo |`licencia-tramite`: borrador, en revisión, observada, aprobada, rechazada. Licencias en todos los estados (8,
+10, 6, 11 y 5), movidas por transiciones reales.
+|Configuración |2 vistas de licencia y 1 de predio, 1 formulario, 1 página, 1 tipo de documento (`CLF`), 2 reglas.
+|Documentos |11 certificados, emitidos por la regla al aprobar.
+|Personas |`admin@wasichai.local` (`ADMIN`), `registrador@demo.example`, `revisor@demo.example`,
+`consulta@demo.example`.
+|Otros |Permisos de campo (rol `CONSULTA`), 1 cuenta de servicio, 2 unidades organizativas, 1 aviso manual y los avisos
+de la regla de revisión.
+|===
+
+Las credenciales de demostración son públicas y *solo para entornos locales o de prueba*: el administrador usa la
+contraseña del seed de desarrollo (`admin`); las demás personas, la que se indique en `WASICHAI_DEMO_PASSWORD` al
+cargar (las figuras usaron `Demo-2026!`). La base exportada contiene sus huellas BCrypt.
+
+=== Artefactos
+
+[cols="2,3",options="header"]
+|===
+|Ruta (en `docs/manuals/`) |Qué es
+|`database/fixtures/demo-dataset.json` |El conjunto de datos: metadatos, roles, personas, configuración y registros.
+Fuente canónica.
+|`scripts/seed-demo.mjs` |Lo carga *por la API REST* en una aplicación en marcha. Idempotente.
+|`scripts/export-demo-db.sh` |Exporta la base a SQL plano y escribe el manifiesto.
+|`database/backups/wasichai-demo.sql` |Copia lógica completa: esquemas `wasichai` y `app_data` (estructura,
+datos, secuencias, _triggers_, historial de Flyway) y las extensiones `pgcrypto` y `postgis`. Un `INSERT` por fila.
+|`database/manifests/demo-manifest.json` |Versiones (PostgreSQL, PostGIS, migraciones por módulo), fecha, huella
+SHA-256 del SQL, orden de restauración y número de filas por tabla.
+|`scripts/restore-demo-db.sh` |Restaura el SQL en una base de demostración y la verifica.
+|`database/verify.sql` |Comprobaciones de integridad.
+|===
+
+Los datos se cargan por la API, no con `INSERT` directos, porque las tablas de los objetos las crea la plataforma
+(`ObjectSchemaManager`) y porque así la carga pasa por las mismas validaciones, permisos, auditoría y reglas que el
+uso real. El SQL exportado sí es una copia completa: no depende de volver a ejecutar la carga.
+
+[[sys-demo-seed]]
+=== Generar la base desde cero
+
+.Requisitos previos
+* PostgreSQL 18 con PostGIS 3.6 y una base *vacía* cuyo nombre termine en `_demo`.
+* `full-sample` en marcha contra ella (<<sys-installation>>). Su primer arranque aplica las migraciones y el seed de
+  desarrollo.
+* Node 26.
+
+.Procedimiento
+[source,bash]
+----
+# desde wasichai/
+export WASICHAI_DEMO_PASSWORD='Demo-2026!'          # local solamente
+yarn docs:db:seed                                   # = node docs/manuals/scripts/seed-demo.mjs
+----
+
+.Resultado esperado
+Una línea por elemento (`created …`) y al final `done: 127 created, 0 already there`.
+
+.Casos especiales
+* El script se niega a cargar si la cuenta inicia sesión en una organización que no es `demo`.
+* Es idempotente: cada elemento se busca por su nombre o por su código antes de crearlo. Una segunda ejecución
+  termina con `done: 0 created, 120 already there` y no modifica nada.
+* No elimina ni sobrescribe nada que ya exista. Para volver a empezar, use una base nueva.
+* `BASE_URL` (por defecto `http://localhost:8090`) apunta a otra instancia.
+
+[[sys-demo-export]]
+=== Exportar
+
+[source,bash]
+----
+# desde wasichai/, con la aplicación detenida o sin actividad
+WASICHAI_DB_HOST=localhost WASICHAI_DB_PORT=5432 WASICHAI_DB_NAME=wasichai_demo yarn docs:db:export
+----
+
+Solo lee la base. Se niega si el nombre no termina en `_demo`. La exportación es determinista: dos exportaciones de
+los mismos datos producen el mismo archivo (sin fecha en la cabecera y con una clave `\restrict` fija), así que un
+cambio en el SQL versionado refleja un cambio real de datos.
+
+[[sys-demo-restore]]
+=== Restaurar
+
+[source,bash]
+----
+# desde wasichai/
+WASICHAI_DB_NAME=wasichai_demo_restore yarn docs:db:restore            # base nueva o vacía
+WASICHAI_DB_NAME=wasichai_demo_restore yarn docs:db:restore --replace  # la borra y la crea de nuevo
+----
+
+El script:
+
+. comprueba que el SQL coincide con la huella del manifiesto;
+. crea la base si no existe; se niega si ya contiene tablas de {product-name}, salvo con `--replace`;
+. carga el SQL con `psql -v ON_ERROR_STOP=1`;
+. ejecuta `verify.sql`;
+. compara el número de filas de cada tabla con el manifiesto.
+
+WARNING: `--replace` elimina la base indicada con todo su contenido. El script solo lo acepta para nombres que terminan
+en `_demo` o `_demo_restore`, pero compruebe a qué servidor apuntan las variables `WASICHAI_DB_*` antes de usarlo.
+
+El rol necesita `CREATEDB` y poder crear las extensiones `pgcrypto` y `postgis` (o que ya existan en la plantilla).
+Después, arranque la aplicación con `WASICHAI_DB_NAME=wasichai_demo_restore`.
+
+=== Qué no restaura
+
+* `WASICHAI_JWT_SECRET`: es configuración. Con otro secreto, las sesiones anteriores no valen (hay que volver a
+  iniciar sesión), sin más efecto.
+* El secreto de la cuenta de servicio de demostración: no se conservó al crearla. Rótelo para obtener uno.
+* Archivos del módulo `files`: la demostración no usa campos de archivo.
+* Capas de GeoServer.
+
+[[sys-demo-proof]]
+=== Prueba de reconstrucción realizada
+
+La reconstrucción se probó de principio a fin el {edition-date}, con PostgreSQL 18.6, PostGIS 3.6.4, OpenJDK 25.0.2
+y Node 26:
+
+[cols="1,3,3",options="header"]
+|===
+|Paso |Acción |Resultado observado
+|1 |Base vacía `wasichai_demo` |0 tablas.
+|2 |Arranque de `full-sample` |Migraciones aplicadas; `/api/health` → `UP`.
+|3 |`seed-demo.mjs` |`127 created, 0 already there`; 54 ejecuciones de reglas, todas hechas.
+|4 |`seed-demo.mjs` otra vez |`0 created, 120 already there`.
+|5 |`export-demo-db.sh` |SQL de 524 KB; dos exportaciones seguidas, idénticas.
+|6 |`restore-demo-db.sh` en `wasichai_demo_restore` |`verify.sql` OK; 47 tablas y 566 filas iguales al manifiesto.
+|7 |Arranque contra la base restaurada |Flyway: todas las migraciones validadas, ninguna pendiente.
+|8 |Capturas de los manuales |80 capturas (40 por idioma) tomadas contra la base restaurada.
+|9 |`e2e/smoke.sh` de `full-sample` |`smoke passed`.
+|10 |Pruebas negativas |`verify.sql` detecta una clave foránea huérfana y un _trigger_ eliminado; los scripts
+rechazan nombres de base que no son de demostración y una base no vacía sin `--replace`.
+|11 |Copia de estilo producción |`pg_dump -Fc` + `pg_restore` en otra base: `verify.sql` OK.
+|===
+
+Diferencias inevitables entre la base original y la restaurada: ninguna en los datos; la fecha de las entradas de
+auditoría y de los documentos es la del momento de la carga.

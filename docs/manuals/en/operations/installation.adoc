@@ -1,0 +1,105 @@
+[[sys-installation]]
+== Installation and startup
+
+This chapter starts the sample application `full-sample` (every module except the assistant) on a development
+computer. Your own application follows the same steps with its own repository; how to create it is explained in
+{repo-url}/docs/guides/build-your-app.md[Build your app].
+
+=== 1. Repositories
+
+The three repositories are cloned next to each other: the `full-sample` server builds against `../wasichai` (Gradle
+composite build) and its web app, against the packages of `../wasichai-ui`.
+
+[source,bash]
+----
+# from the working directory of your choice
+git clone https://github.com/wasichai/wasichai
+git clone https://github.com/wasichai/wasichai-ui
+git clone https://github.com/wasichai/full-sample
+----
+
+=== 2. Database
+
+You need PostgreSQL 18 with PostGIS 3.6 and an empty database. Any one will do; `full-sample` ships a
+`docker-compose.yml` that starts `postgis/postgis:18-3.6` on port 5433 with database, user and password
+`wasichai`:
+
+[source,bash]
+----
+# from full-sample/
+docker compose up -d
+----
+
+With your own server, create the database and a user allowed to create schemas and extensions (or create
+`pgcrypto` and `postgis` in that database beforehand).
+
+=== 3. Interface: building the packages
+
+[source,bash]
+----
+# from wasichai-ui/   (Node 26, Yarn 1)
+yarn install
+yarn build          # builds the packages in dependency order, into packages/*/dist
+----
+
+=== 4. Server
+
+[source,bash]
+----
+# from full-sample/   (JDK 25)
+export WASICHAI_DB_PORT=5433                     # and WASICHAI_DB_HOST/NAME/USERNAME/PASSWORD if not the defaults
+export WASICHAI_JWT_SECRET="$(openssl rand -base64 48)"   # at least 32 bytes; without it the application does not start
+export WASICHAI_GIS_GEOSERVER_ENABLED=false      # if there is no GeoServer
+./gradlew :server:bootRun                        # or: ./gradlew :server:bootJar && java -jar server/build/libs/server.jar
+----
+
+.Expected result
+On startup, Flyway applies the migrations of each module (`Successfully applied …` the first time, `Schema
+"wasichai" is up to date` the following ones) and `Started FullSampleAppKt in … seconds` appears.
+
+.Verification
+[source,bash]
+----
+curl -s http://localhost:8090/api/health
+# {"status":"UP","application":"wasichai"}
+----
+
+=== 5. Web app
+
+[source,bash]
+----
+# from full-sample/web/
+yarn install        # links @wasichai/* to ../../wasichai-ui/packages
+yarn dev            # http://localhost:5173 , with a proxy of /api to http://localhost:8090
+# or, as in production:  yarn build && yarn preview   (http://localhost:4173)
+----
+
+Open the address and sign in with `admin@wasichai.local` / `admin`. The development _seed_ creates that account
+(`wasichai.seed.dev: true`, which `full-sample` turns on in its `application.yml`).
+
+To also load the demo data of the _Distrito Demo_, follow <<sys-demo-db>>.
+
+=== Deploying to other environments
+
+The platform does not impose a way of deploying (ADR-033). For an environment that is not for development:
+
+* Build the JAR (`./gradlew :server:bootJar`) and the web app (`yarn build`, folder `web/dist`).
+* Serve `web/dist` as static files and forward `/api` to the server from the same domain (reverse proxy). If the
+  web app is served from another origin, add it to `wasichai.web.cors-allowed-origin-patterns` (by default only
+  `http://localhost:*`).
+* Supply `WASICHAI_JWT_SECRET` and the database credentials from the secret manager of the environment, never in
+  the repository.
+* *Turn off the development seed*: in your own application, do not define `wasichai.seed.dev`. `full-sample` leaves
+  it on on purpose, fixed in its `application.yml`; do not deploy it as it is.
+* Turn on `wasichai.security.login.enabled`, `wasichai.security.jwt.revocation` and `wasichai.security.password.*`
+  according to your policy (<<sys-security>>).
+* `full-sample` also builds a native image with GraalVM 25 (`./gradlew :server:nativeCompile`); in it the module
+  switches and `wasichai.seed.dev` are fixed at build time (ADR-068).
+
+=== Upgrading the application
+
+. Take a backup of the database (<<sys-backup>>).
+. Update the version of the starters (BOM `wasichai:wasichai-bom`) and of the `@wasichai/*` packages. Check
+  `CHANGELOG.md` and `docs/HISTORY.md` for API changes.
+. Deploy. The new Flyway migrations apply on their own at startup (`wasichai.database.migrate=true`).
+. Check the startup, `/api/health`, sign-in and a read of records.

@@ -1,0 +1,74 @@
+[[sys-backup]]
+== Copias de seguridad y restauración
+
+Todo el estado de una aplicación {product-name} está en su base de datos PostgreSQL (metadatos, registros,
+auditoría, configuración de módulos), salvo:
+
+* la configuración y los secretos del entorno (`WASICHAI_JWT_SECRET`, credenciales);
+* los archivos del módulo `files` cuando el almacén es local (`wasichai.files.local.path`) o S3;
+* el estado de GeoServer (las capas se pueden volver a publicar desde *Capas*).
+
+=== Copia de la base de datos
+
+Para producción, copie la base completa con las herramientas de PostgreSQL (un `pg_dump` del mismo número de versión
+mayor que el servidor, o superior):
+
+[source,bash]
+----
+# desde cualquier equipo con acceso a la base; las credenciales por PGPASSWORD o ~/.pgpass
+pg_dump --format=custom --no-owner --file=wasichai-$(date +%F).dump \
+  --host=db.example.org --port=5432 --username=wasichai wasichai
+----
+
+* `--format=custom` comprime y permite restaurar selectivamente con `pg_restore`.
+* Incluya *toda la base*, no solo los esquemas `wasichai` y `app_data`: las extensiones viven en `public`.
+* Guarde las copias fuera del servidor y cifradas; contienen datos personales y huellas de contraseñas.
+* Copie a la vez los archivos del almacén local, si se usa.
+
+NOTE: La plataforma no programa copias: es responsabilidad de la instalación (cron, servicio gestionado de la base,
+snapshots). Pruebe la restauración periódicamente; una copia sin restauración probada no es una copia fiable.
+
+=== Restaurar
+
+WARNING: Restaurar sobre la base en uso sustituye todos sus datos por los de la copia. Restaure primero en una base
+nueva, compruébela y después cambie la aplicación a ella.
+
+[source,bash]
+----
+createdb --host=db.example.org --username=wasichai wasichai_restaurada
+pg_restore --no-owner --dbname=wasichai_restaurada --host=db.example.org --username=wasichai wasichai-2026-10-20.dump
+psql -v ON_ERROR_STOP=1 -d wasichai_restaurada -f docs/manuals/database/verify.sql   # comprobaciones de integridad
+----
+
+`verify.sql` (incluido en este paquete) comprueba las extensiones, los _triggers_ de la auditoría, que cada objeto
+tenga su tabla, que no haya claves foráneas huérfanas, que las secuencias no estén atrasadas y que las geometrías
+tengan su SRID. Termina en error si algo falla.
+
+Después:
+
+. Apunte la aplicación a la base restaurada (`WASICHAI_DB_NAME`) y arránquela. Flyway debe informar que no hay
+  migraciones pendientes (o aplicar las de una versión más nueva).
+. Ejecute las pruebas de humo de <<sys-operation>>.
+. Avise a las personas: todo lo hecho después de la copia se perdió.
+
+[[sys-purge-audit]]
+=== Purga de la auditoría
+
+La auditoría es de solo anexado incluso para la aplicación. Para borrar entradas antiguas:
+
+. Cree en PostgreSQL un rol de inicio de sesión dedicado, concédale `DELETE` sobre `wasichai.audit_log` y
+  configure su nombre en `wasichai.audit.purge-role`. La migración repetible `R__audit_purge_role.sql` registra ese
+  nombre en la función `audit_log_purge_role()`, que consultan los _triggers_.
+. Inicie sesión *con ese rol* (el _trigger_ comprueba `session_user`; `SET ROLE` no sirve) y borre dentro de una
+  transacción que active la purga:
++
+[source,sql]
+----
+BEGIN;
+SET LOCAL wasichai.audit.purge = 'on';
+DELETE FROM wasichai.audit_log WHERE occurred_at < now() - interval '5 years';
+COMMIT;
+----
+
+CAUTION: Purgar es irreversible y puede tener implicaciones legales. Haga antes una copia y conserve la autorización
+escrita.

@@ -1,0 +1,27 @@
+[[sys-limitations]]
+== Known limitations
+
+Actual behavior of the documented version worth knowing. They are not errors in the manuals.
+
+Web interface ({ui-version})::
+* There are no screens for organizational units, notifications (nor an inbox), organizations or file upload; they
+  are administered through the API.
+* There is no list export and no free per-column filters (only views with equality filters).
+* Reference columns show the internal identifier of the related record.
+* The menu and the buttons are not hidden according to permissions; the server rejects what is not allowed.
+* Editing does not send `If-Match`: if two people save the same record, the last one wins.
+* Some server messages are always in English, whatever the interface language (wrong credentials, missing
+  permission, reason for a denied transition, duplicate value).
+* The detail of the _Notify_ action in *Runs* appears as `automations.actionTypes.NOTIFY`.
+* Creating a record uses the generated form, not the saved form of the object.
+
+Server ({product-version})::
+* Sign-in attempts are counted in the memory of each node unless the application supplies another store.
+* Without revocation on, signing out does not invalidate the credential on the server.
+
+Screenshot environment::
+* No access to OpenStreetMap: maps appear without a base map.
+* No GeoServer: the publishing of layers could not be shown or checked.
+* `full-sample` does not include the AI assistant (it is not compatible with the native image, ADR-068), and no
+  email was configured: the assistant and email delivery have no screenshots and were not checked.
+* Only tested with Chromium.

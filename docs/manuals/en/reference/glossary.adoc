@@ -1,0 +1,39 @@
+[[user-glossary]]
+== Glossary
+
+[glossary]
+ADMIN:: Role that administers the organization. It skips every permission check, except the write rules of the
+objects (_append-only_, _application only_). It cannot be deleted.
+Append-only:: Write rule of an object: its records are created and never updated or deleted.
+Application only:: Write rule of an object: the generic API does not write it; only the application's own code does.
+Audit:: Append-only log of every change to records and to the administration, with user, time, reason and previous
+and new values.
+Automation rule:: Trigger, conditions and actions that the platform runs in the background when a record changes.
+Detail page:: Screen of a record, made of tabs, sections and components.
+Document:: Numbered piece of writing that is issued from a record with a template and stays frozen.
+EPSG:4326:: Code of the WGS 84 geographic coordinate system (latitude and longitude), in which the API always
+delivers geometries.
+Field:: A piece of data of an object, with a type (text, number, date, options, reference, geometry…).
+Field permission:: Read or write restriction on a specific field for a role.
+Form:: Arrangement of the fields of an object into titled sections.
+GeoServer:: External map server that publishes WMS/WFS layers from the tables of the database.
+JWT:: _JSON Web Token_, the signed credential the server delivers on sign-in.
+Object:: Kind of information defined by the administrator; it is the equivalent of a table.
+Organization:: Isolated unit of data, users and configuration (_tenant_). None sees the data of another.
+Organizational unit:: Node of the organization chart (department, sub-department, area) that people belong to. It
+is used to route notifications; it grants no permissions.
+Reason:: Explanation of a change that is stored in the audit log. Required on the objects that ask for it.
+Record:: Specific item of an object; it is the equivalent of a row.
+Relationship:: Link between two objects: one-to-one, one-to-many, many-to-one or many-to-many.
+REST API:: HTTP programming interface (_Application Programming Interface_) used by the web interface and by
+external systems. Every operation of the interface goes through it.
+Role:: Set of permissions assigned to users and service accounts.
+Service account:: Identity of an external system that calls the API with a client id and a secret, instead of an
+email and a password.
+State:: Situation of a record within its workflow. It can be initial, intermediate or final.
+System field:: Field the platform maintains on every record: `id`, `organization_id`, `created_at`, `updated_at`,
+`created_by`, `updated_by` and, with a workflow, `workflow_state`.
+Tenant:: See _Organization_.
+Transition:: Step from one state to another in a workflow, which can be reserved to certain roles.
+View:: Saved configuration of a list: columns, equality filters, order and page size.
+Workflow:: Set of states and transitions a record of an object goes through.

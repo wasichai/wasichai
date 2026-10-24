@@ -1,0 +1,60 @@
+[[user-introduction]]
+== Introducción
+
+=== Qué es una aplicación {product-name}
+
+{product-name} es una plataforma para construir aplicaciones de gestión dirigidas por metadatos: en lugar de
+programar cada pantalla, un administrador describe los tipos de información que maneja la organización (por ejemplo,
+_Contribuyente_, _Predio_ o _Licencia de funcionamiento_), y la plataforma crea con esa descripción las tablas, la
+API y las pantallas. Todas las aplicaciones {product-name} comparten la misma forma de trabajar, que es la que
+describe este manual.
+
+Cada organización (también llamada _tenant_ o inquilino) tiene sus propios datos, usuarios y configuración, y nunca
+ve los de otra.
+
+=== Conceptos que conviene conocer
+
+Objeto::
+Un tipo de información. Por ejemplo, _Licencia de funcionamiento_. Equivale a una tabla.
+Registro::
+Un elemento concreto de un objeto: la licencia `LF-2026-0001`. Equivale a una fila.
+Campo::
+Un dato de un registro: _Expediente_, _Giro_, _Fecha de solicitud_. Cada campo tiene un tipo (texto, número, fecha,
+lista de opciones, referencia a otro registro, geometría…).
+Relación::
+Un vínculo entre objetos. Una licencia tiene un _Solicitante_ (un contribuyente) y se ubica en un _Predio_.
+Vista::
+Una forma guardada de listar los registros de un objeto: qué columnas, con qué filtro y en qué orden.
+Página de detalle::
+La pantalla de un registro, organizada en pestañas y secciones por el administrador.
+Flujo de trabajo (workflow)::
+Los estados por los que pasa un registro (_Borrador_, _En revisión_, _Aprobada_…) y las transiciones que lo mueven
+de uno a otro.
+Documento::
+Un escrito numerado (por ejemplo, un certificado) que se emite desde un registro y queda congelado tal como se
+emitió.
+Rol::
+Un conjunto de permisos. Lo que usted puede ver y hacer depende de los roles que le asignó el administrador.
+
+<<user-glossary>> recoge estos y otros términos.
+
+=== El caso de ejemplo
+
+El Distrito Demo trabaja con tres objetos:
+
+[cols="1,3",options="header"]
+|===
+|Objeto |Qué guarda
+|Contribuyente |Personas naturales y jurídicas: código, nombre, tipo, documento, correo, teléfono y dirección fiscal.
+|Predio |Unidades catastrales: código, dirección, área, uso, valor de autovalúo, titular y el polígono del lote.
+|Licencia de funcionamiento |Solicitudes de licencia: expediente, establecimiento, giro, área del local, fechas,
+observaciones y resultado. Cada una tiene un solicitante y un predio, y avanza por un flujo de trámite.
+|===
+
+El flujo de trámite de una licencia se muestra en la <<user-fig-demo-workflow>>.
+
+:user-fig-demo-workflow-alt: Diagrama de estados: Borrador pasa a En revisión; de En revisión a Observada, Aprobada \
+o Rechazada; de Observada vuelve a En revisión
+[[user-fig-demo-workflow]]
+.Estados y transiciones del trámite de licencia del ejemplo
+image::diagrams/es-demo-workflow.png["{user-fig-demo-workflow-alt}",pdfwidth=70%,role=diagram]

@@ -1,0 +1,117 @@
+[[admin-app-builder]]
+== Pantallas configurables (App Builder)
+
+La sección *App Builder* del menú configura cómo se ven los datos, sin programar. Todas las pantallas empiezan
+igual: se elige el *Objeto* en un selector y aparece su configuración. Requisito común: `MANAGE_METADATA` sobre el
+objeto. Leer la configuración solo necesita `READ`.
+
+[[admin-views]]
+=== Vistas
+
+Una vista es una forma guardada de listar un objeto. menu:App Builder[Vistas] (<<admin-fig-views>>).
+
+:admin-fig-views-alt: Constructor de vistas: nombre técnico, etiqueta, registros por página, casilla Vista por \
+defecto, lista de columnas con flechas para ordenar, filtros y orden
+[[admin-fig-views]]
+.Constructor de vistas con la vista «Bandeja de licencias»
+image::screenshots/{lang}/admin/11-views-builder.png["{admin-fig-views-alt}",pdfwidth=100%]
+
+.Procedimiento
+. Elija el *Objeto* y, en *Vista*, una existente o la opción para crear una nueva.
+. Complete *Nombre técnico* (minúsculas), *Etiqueta* y *Registros por página* (1 a 200).
+. Marque *Vista por defecto* si la lista debe abrirse con ella (desmarca la anterior por defecto).
+. En *Columnas*, añada campos con *Añadir columna* y ordénelos con las flechas.
+. En *Filtros*, añada condiciones de igualdad (_campo = valor_).
+. En *Orden*, elija el *Campo* y la *Dirección*.
+. Pulse *Guardar*.
+
+.Verificación
+Abra la lista del objeto: el selector de vista ofrece la nueva vista (_Manual de usuario_, _Usar una vista
+guardada_).
+
+*Restablecer* elimina la vista guardada; sin vistas, el objeto usa una vista generada con sus primeros ocho campos
+visibles.
+
+[[admin-forms]]
+=== Formularios
+
+Un formulario organiza los campos editables de un objeto en secciones con título. menu:App Builder[Formularios]
+(<<admin-fig-forms>>).
+
+:admin-fig-forms-alt: Constructor de formularios con las secciones Identificación, Local y Evaluación y los campos \
+de cada una
+[[admin-fig-forms]]
+.Constructor de formularios con el formulario «Solicitud de licencia»
+image::screenshots/{lang}/admin/12-forms-builder.png["{admin-fig-forms-alt}",pdfwidth=100%]
+
+.Procedimiento
+. Elija el *Objeto* y el *Formulario* (o cree uno).
+. Pulse *Añadir sección*, escriba su *Título de la sección* y añada campos con *Añadir campo*. Ordene secciones y
+  campos con las flechas.
+. Pulse *Guardar*.
+
+.Casos especiales
+* Un campo solo puede estar en una sección, y solo campos editables.
+* Un formulario se muestra en una página de detalle a través de un componente *Formulario* (<<admin-pages>>). El
+  alta de un registro nuevo usa el formulario generado (todos los campos editables), no el guardado.
+
+[[admin-pages]]
+=== Páginas de detalle
+
+menu:App Builder[Páginas] compone la página de detalle de un objeto arrastrando componentes (<<admin-fig-pages>>).
+
+:admin-fig-pages-alt: Constructor de páginas: plantilla Principal y barra lateral derecha, paleta de componentes, \
+lienzo con pestañas y propiedades
+[[admin-fig-pages]]
+.Constructor de páginas con la página de la licencia
+image::screenshots/{lang}/admin/13-pages-builder.png["{admin-fig-pages-alt}",pdfwidth=100%]
+
+La pantalla tiene tres columnas:
+
+Componentes::
+La paleta. *Contenedores*: *Pestañas*, *Pestaña* y *Sección*. *Contenido*: *Formulario*, *Formulario dinámico*,
+*Lista relacionada*, *Historial*, *Texto*, *Mapa* (con GIS), *Workflow* (estado y transiciones) y *Acción* (un botón
+que aplica una transición o navega).
+Lienzo::
+Las regiones de la *Plantilla* (por ejemplo, _PRINCIPAL_ y _DERECHA_). Arrastre componentes a ellas.
+Propiedades::
+Los datos del componente seleccionado: título, campos o formulario que muestra, relación de una lista, texto de una
+nota, transición de una acción, clave de una pestaña…
+
+.Procedimiento
+. Elija el *Objeto*. Si no tiene página guardada, se muestra la generada.
+. Pulse *Cambiar* para elegir una plantilla (nueve disponibles, de una a varias regiones).
+. Arrastre componentes de la paleta al lienzo y configúrelos en *Propiedades*.
+. Pulse *Guardar*.
+
+.Casos especiales
+* El primer *Formulario* de la página es el que guarda; los demás se muestran de solo lectura.
+* La página admite hasta 200 componentes y 12 niveles de anidamiento.
+* *Restablecer* elimina la página guardada y vuelve a la generada.
+
+[[admin-documents]]
+=== Tipos de documento
+
+menu:App Builder[Documentos] redacta las plantillas que un registro puede emitir (<<admin-fig-documents>>).
+
+:admin-fig-documents-alt: Editor del tipo Certificado de licencia: nombre, etiqueta, sigla CLF y el texto de la \
+plantilla con marcadores de campo
+[[admin-fig-documents]]
+.Plantilla del certificado de licencia
+image::screenshots/{lang}/admin/14-document-types.png["{admin-fig-documents-alt}",pdfwidth=100%]
+
+.Procedimiento
+. Elija el *Objeto*. En *Tipos*, pulse *+* para crear uno o elija uno existente.
+. Complete *Nombre* (minúsculas), *Etiqueta* y *Sigla* (mayúsculas y dígitos; es el prefijo del número, como `CLF`
+  en `CLF-2026-001`).
+. Redacte la plantilla. La barra ofrece *Negrita*, *Cursiva*, *Título* y *Lista*, y tres inserciones:
+  *Campo* (un campo del registro), *Valor* (fecha, fecha y hora, usuario, id del registro, nombre, sigla, serie o
+  número del documento) y *Tabla* (los registros de una relación).
+. Pulse *Guardar*.
+
+.Casos especiales
+* La sigla no se puede repetir entre tipos de la organización: cada tipo numera por su cuenta, por año.
+* Un tipo que ya emitió documentos no se puede eliminar.
+* Editar una plantilla no cambia los documentos ya emitidos, que guardan la plantilla y los valores de su emisión.
+* Para emitir automáticamente al llegar a un estado, use una regla con la acción _Emitir un documento_
+  (<<admin-rules>>).

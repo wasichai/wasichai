@@ -1,0 +1,57 @@
+[[sys-troubleshooting]]
+== Solución de problemas
+
+[cols="2,3,3",options="header"]
+|===
+|Síntoma |Causa probable |Qué hacer
+
+|La aplicación no arranca: `wasichai.security.jwt.secret` vacío o corto
+|Falta `WASICHAI_JWT_SECRET` o tiene menos de 32 bytes.
+|Defina un secreto de al menos 32 bytes (`openssl rand -base64 48`).
+
+|No arranca: error de conexión a la base
+|Host, puerto, base o credenciales incorrectos; base inaccesible desde el servidor.
+|Compruebe `WASICHAI_DB_*` y conéctese con `psql` desde el mismo equipo.
+
+|No arranca: `permission denied to create extension` o `extension "postgis" is not available`
+|El usuario no puede crear extensiones, o PostGIS no está instalado en el servidor PostgreSQL.
+|Cree las extensiones como administrador de la base, o instale PostGIS 3.6.
+
+|`pg_dump: error: aborting because of server version mismatch`
+|El cliente `pg_dump` es más antiguo que el servidor.
+|Use `pg_dump` 18 o superior.
+
+|La web carga pero toda llamada da error de red
+|La web no llega a `/api` (proxy inverso o `API_URL` de Vite), o CORS bloquea otro origen.
+|Revise el proxy; añada el origen a `wasichai.web.cors-allowed-origin-patterns`.
+
+|Todo responde `401` poco después de entrar
+|Reloj del servidor desfasado, secreto distinto entre instancias, o revocación activada tras cerrar sesión.
+|Sincronice la hora (NTP); use el mismo secreto en todas las instancias.
+
+|Un cambio de modelo no se ve en otra instancia
+|Caché de definiciones (`wasichai.metadata.cache.ttl`, 5 s).
+|Espere unos segundos.
+
+|Las reglas no actúan
+|`wasichai.automation.poll-interval` a `0s`, regla deshabilitada o condición que no se cumple.
+|Revise menu:Automatización[Ejecuciones]: una ejecución omitida indica la razón.
+
+|*Publicar* una capa falla
+|GeoServer deshabilitado, inaccesible o con credenciales incorrectas.
+|Revise `wasichai.gis.geoserver.*`; la pantalla *Capas* indica si está configurado.
+
+|El mapa no muestra fondo
+|El navegador no llega al proveedor de teselas (OpenStreetMap por defecto).
+|Permita el acceso o configure otro mapa base en la web: `gisModule({ basemap })`.
+
+|Inicio de sesión rechazado con `429`
+|Límite de intentos activado y superado.
+|Espere el tiempo de `Retry-After` (ventana de 15 min por defecto).
+
+|Error al eliminar un campo u objeto (`409`)
+|Lo usa una relación, un índice, una unicidad, una regla, otro objeto, o es _solo anexado_.
+|El mensaje nombra lo que lo impide; quítelo primero.
+|===
+
+Para cualquier error 5xx, busque en los registros del servidor el `X-Correlation-Id` que devolvió la respuesta.

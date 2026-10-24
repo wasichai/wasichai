@@ -1,0 +1,116 @@
+[[admin-api-only]]
+== Funciones sin pantalla: administración por API
+
+Estas funciones existen en el servidor pero la interfaz web {ui-version} no tiene pantalla para ellas. Se administran
+con la API REST, por ejemplo con `curl` desde una terminal. La referencia completa está en
+{rest-doc}[docs/api/rest.md].
+
+=== Preparar la terminal
+
+Los ejemplos usan `curl` y `jq`, y suponen la dirección del servidor en `BASE_URL`:
+
+[source,bash]
+----
+BASE_URL=https://wasichai.example.org          # sin barra final
+read -rs PASSWORD                              # la contraseña no queda en el historial de la terminal
+TOKEN=$(curl -sS -X POST "$BASE_URL/api/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"admin@ejemplo.org\",\"password\":\"$PASSWORD\"}" | jq -r .token)
+auth=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json')
+----
+
+La credencial dura 8 horas por defecto. Cada respuesta de error es un objeto JSON con `status`, `detail` y, si
+procede, `errors[]` con el campo afectado.
+
+CAUTION: No pegue la credencial (`TOKEN`) en tickets, chats ni documentos: da los permisos de su cuenta a quien la
+tenga.
+
+[[admin-org-units]]
+=== Unidades organizativas
+
+Un árbol de unidades (gerencia › subgerencia › área) y quién pertenece a cuál. Una unidad no concede permisos: sirve
+para dirigir notificaciones (`unit:CÓDIGO`). Requiere `MANAGE_ORGANIZATION`.
+
+.Crear unidades y asignar personas
+[source,bash]
+----
+curl -sS "${auth[@]}" -X POST "$BASE_URL/api/org-units" \
+  -d '{"code":"GDE","label":"Gerencia de Desarrollo Económico"}'
+curl -sS "${auth[@]}" -X POST "$BASE_URL/api/org-units" \
+  -d '{"code":"SGLC","label":"Subgerencia de Licencias Comerciales","parentCode":"GDE"}'
+# el id de la persona sale de GET /api/users
+curl -sS "${auth[@]}" -X PUT "$BASE_URL/api/users/<id-de-usuario>/org-units" -d '{"units":["SGLC"]}'
+----
+
+.Consultar
+[source,bash]
+----
+curl -sS "${auth[@]}" "$BASE_URL/api/org-units" | jq        # lista plana, con parentCode y memberCount
+curl -sS "${auth[@]}" "$BASE_URL/api/org-units/SGLC" | jq   # la unidad y sus miembros
+----
+
+.Casos especiales
+* El código se escribe en mayúsculas (`^[A-Z][A-Z0-9_]{1,48}$`) y no cambia; la etiqueta sí
+  (`PUT /api/org-units/{código}` con `label` o `parentCode`).
+* `PUT …/org-units` de una persona reemplaza todas sus unidades.
+* Solo se elimina una unidad hoja y vacía (`DELETE /api/org-units/{código}`); si no, `409`.
+* Hasta 10 niveles de profundidad.
+
+[[admin-notifications]]
+=== Notificaciones
+
+Avisos para todos, para una persona, un rol o una unidad, dentro de una ventana de tiempo. Requiere
+`MANAGE_ORGANIZATION`. Las reglas de automatización también crean notificaciones (acción _Notificar_).
+
+NOTE: La interfaz web {ui-version} no muestra una bandeja de notificaciones. Las notificaciones se leen por la API
+(`GET /api/auth/me/notifications`, y en tiempo real por `GET /api/auth/me/notifications/stream`), o en las pantallas
+propias que una aplicación construya, o por correo si el equipo técnico activó ese canal.
+
+.Publicar un aviso
+[source,bash]
+----
+curl -sS "${auth[@]}" -X POST "$BASE_URL/api/notifications" -d '{
+  "kind": "INFO",
+  "title": "Horario de atención de la Subgerencia de Licencias",
+  "body": "Atención al público de lunes a viernes, de 8:30 a 16:30.",
+  "audience": [{"type": "UNIT", "value": "SGLC"}, {"type": "ROLE", "value": "REVISOR"}],
+  "expiresAt": "2026-12-31T23:59:59Z"
+}' | jq '{id, title, readCount}'
+----
+
+* `kind`: `INFO`, `WARNING` o `ACTION` (con `dueAt`, la fecha en que vence).
+* `audience`: `ALL`, `USER` (id), `EMAIL`, `ROLE` o `UNIT`.
+* `publishAt` (por defecto, ahora) y `expiresAt` delimitan cuándo se ve.
+* `GET /api/notifications?status=open` lista los vigentes; `PUT` reemplaza un aviso; `DELETE` lo elimina. Los avisos
+  que creó una regla o la aplicación (`source` distinto de `manual`) no se pueden cambiar por aquí (`409`).
+
+[[admin-tenants]]
+=== Organizaciones (inquilinos)
+
+[source,bash]
+----
+curl -sS "${auth[@]}" "$BASE_URL/api/organizations/current" | jq                       # la propia
+curl -sS "${auth[@]}" -X PUT "$BASE_URL/api/organizations/current" -d '{"name":"Distrito Demo"}'   # renombrar
+----
+
+*Crear una organización* con su primer administrador requiere `MANAGE_TENANTS`:
+
+[source,bash]
+----
+curl -sS "${auth[@]}" -X POST "$BASE_URL/api/organizations" -d '{
+  "name": "Municipalidad Ejemplo", "slug": "muni-ejemplo",
+  "adminEmail": "admin@muni-ejemplo.example", "adminPassword": "<contraseña inicial segura>"
+}'
+----
+
+La nueva organización recibe un rol `ADMIN` con todos los permisos salvo `MANAGE_TENANTS`, y la cuenta de su
+administrador. No existe un listado de todas las organizaciones: ningún inquilino puede enumerar a los demás.
+
+WARNING: `DELETE /api/organizations/current` elimina la organización con la que se ha iniciado sesión y todas sus
+tablas y datos. No se puede deshacer. Solo con una copia de seguridad verificada y por decisión expresa.
+
+[[admin-sign-out-all]]
+=== Cerrar todas las sesiones de una cuenta
+
+`POST /api/auth/logout` con la credencial de una persona invalida todas sus credenciales si la revocación está
+activada (`wasichai.security.jwt.revocation=true`). Para cortar el acceso de otra persona, desactívela o cámbiele la
+contraseña desde menu:Administración[Usuarios]; con revocación activada, el efecto es inmediato.

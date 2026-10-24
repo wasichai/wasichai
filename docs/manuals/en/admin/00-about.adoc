@@ -1,0 +1,28 @@
+[preface]
+[[admin-about]]
+== About this manual
+
+This manual explains how to configure and administer a {product-name} {product-version} application: the data model
+(objects, fields and relationships), accounts and permissions, configurable screens, workflows, automations, GIS
+layers and the audit log.
+
+It always tells two levels apart:
+
+Functional administration::
+What is done from the application itself, with a browser and an account with administration permissions. It is
+most of this manual.
+Technical administration::
+What is done on the server, the configuration or the database: environment variables, backups, restores, purges.
+This manual summarizes it and refers to the _System manual_, which details it.
+
+Some platform features exist in the REST API but have no screen in the web interface (for example, organizational
+units and notifications). They are marked as such in <<admin-api-only>>, with the actual procedure through the API.
+
+The figures were taken with the sample application `full-sample` and the synthetic data of the _Distrito Demo_
+(taxpayers, plots and business licences). The conventions for notices and procedures are those of the _User
+manual_: *Objective*, *Prerequisites*, *Procedure*, *Expected result*, *Verification* and *Special cases*; NOTE,
+TIP, CAUTION and WARNING (destructive operation).
+
+WARNING: Many operations in this manual change the structure of the database (they add or remove columns and
+tables) on the spot. Try model changes in a test environment and take a backup before deleting objects, fields or
+relationships in production (<<admin-technical>>).

@@ -1,0 +1,45 @@
+[[ref-permissions]]
+== Referencia de permisos
+
+=== Acciones
+
+[cols="1,1,3",options="header"]
+|===
+|Acción |Alcance |Permite
+|`READ` |Objeto o todos |Ver registros, su historial, sus documentos y emitir documentos; leer ejecuciones de reglas
+y la configuración de vistas, formularios y páginas.
+|`CREATE` |Objeto o todos |Crear registros.
+|`UPDATE` |Objeto o todos |Modificar registros, vincular y desvincular, aplicar transiciones (si el rol de la
+transición lo permite).
+|`DELETE` |Objeto o todos |Eliminar registros.
+|_Acción propia_ |Solo objeto |Lo que el código de la aplicación compruebe (por ejemplo, `ANULAR_AJENO`).
+|`MANAGE_METADATA` |Todos |Objetos, campos, relaciones, acciones propias, vistas, formularios, páginas, tipos de
+documento, flujos, reglas, capas GIS, reglas de notificación.
+|`MANAGE_ORGANIZATION` |Todos |Usuarios, roles, permisos, cuentas de servicio, unidades, notificaciones manuales,
+renombrar la organización, leer la auditoría de administración.
+|`MANAGE_TENANTS` |Todos |Crear y eliminar organizaciones.
+|===
+
+=== Reglas que se combinan con los permisos
+
+* `ADMIN` omite las comprobaciones de permisos; nunca se aplica a una cuenta de servicio.
+* Una cuenta de servicio nunca ejerce `MANAGE_ORGANIZATION` ni `MANAGE_TENANTS`, aunque un rol se los conceda.
+* _Solo sus registros_: si todos los roles de la persona lo tienen, solo ve y modifica los registros que creó.
+* Permisos de campo: restringen lectura o escritura de campos concretos; sin reglas, todo es visible.
+* Reglas de escritura del objeto (_solo anexado_, _solo por la aplicación_, _pide motivo_): se aplican a todos,
+  `ADMIN` incluido.
+* Transiciones con roles: además de `UPDATE`, exigen uno de los roles indicados (`ADMIN` siempre puede).
+* La aplicación puede añadir sus propias restricciones de lectura (ámbito de lectura) y máscaras de valores.
+
+=== Permisos del ejemplo
+
+[cols="2,1,1,1,1,2",options="header"]
+|===
+|Rol |contribuyente |predio |licencia |Transiciones |Campos restringidos
+|`REGISTRADOR` |R C U |R |R C U |enviar, subsanar |—
+|`REVISOR` |R |R |R U |observar, aprobar, rechazar |—
+|`CONSULTA` |R |R |R |— |`contribuyente.documento`, `contribuyente.telefono` (sin lectura)
+|`ADMIN` 4+|Todo |—
+|===
+
+R = `READ`, C = `CREATE`, U = `UPDATE`.

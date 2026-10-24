@@ -1,0 +1,63 @@
+[[sys-security]]
+== Security
+
+=== Authentication
+
+* *People*: `POST /api/auth/login` with email and password returns an HS256 JWT signed with
+  `wasichai.security.jwt.secret`, with `sub`, `jti`, `iss`, `iat`, `exp`, `org`, `email` and `roles`. It lasts
+  `wasichai.security.jwt.ttl` (8 h). There is no _refresh token_: when it expires, you sign in again.
+* *Service accounts*: `POST /api/auth/token` with `clientId` and `clientSecret` returns a 15-minute JWT with the
+  `service_account` _claim_. The server stores only the fingerprint of the secret.
+* Passwords are stored with BCrypt.
+* Public routes: `/api/auth/login`, `/api/auth/token`, `/api/health`, `/actuator/health/**` and `OPTIONS`.
+  Everything else requires `Authorization: Bearer`.
+
+=== Revocation, limits and password policy
+
+* With `revocation=true`, each user has a `tokens_valid_after` instant: sign-out, disabling, a password or role
+  change and deletion move it, and earlier tokens get `401` (on other nodes, within `revocation-cache` at most).
+* With `login.enabled=true`, failed attempts are counted per (email, IP) and per email; over the limit the
+  response is `429` with `Retry-After`. The count is kept in the memory of each node unless the application
+  supplies its own `LoginAttemptStore`: with several nodes, the effective limit is multiplied by the number of
+  nodes.
+* The password policy applies when creating users, when changing a password and when creating an organization.
+
+=== Authorization
+
+* The organization always comes from the token; never from a parameter.
+* Each service checks the action (`READ`, `CREATE`, `UPDATE`, `DELETE`, declared actions, `MANAGE_*`) on the
+  object; the interface only hides what `GET /api/auth/me/permissions` tells it, without granting anything
+  (ADR-020).
+* Field permissions, _own records only_, read scopes (`RecordReadScope`) and read masks (`RecordReadMask`) supplied
+  by the application apply to lists, records, history and audit.
+* `ADMIN` skips the permission checks, not the write rules, and never applies to service accounts.
+* The routes of a module that is not installed answer `404`.
+
+=== Trust boundaries
+
+* The browser is untrusted: everything is validated on the server.
+* Record values are always bound as SQL parameters; object and field names are validated and quoted
+  (`SqlIdentifier`).
+* Automation webhooks reject private addresses unless `allow-private-webhooks=true`.
+* The application decides what reaches the AI model of the assistant (ADR-056); without an API key, the assistant
+  is disabled.
+
+=== Audit
+
+See <<sys-data-model>> and the audit chapter of the _Administrator manual_. Each request carries an
+`X-Correlation-Id` (its own or a generated one) that is stored in the audit entries and in the rule runs, and
+appears in the server logs as the MDC key `correlationId`.
+
+=== Secrets
+
+[cols="2,3",options="header"]
+|===
+|Secret |Where it lives
+|`WASICHAI_JWT_SECRET` |Runtime environment. Changing it invalidates every session.
+|Database credentials |Runtime environment.
+|Service account secrets |Only the client system knows them; the server stores their fingerprint.
+|GeoServer, S3, SMTP, Anthropic credentials |Runtime environment.
+|===
+
+The database holds BCrypt fingerprints of passwords and secrets, never their value. The demo database of this
+package holds the fingerprints of demo passwords, public by design.
