@@ -13,6 +13,6 @@ class WorkflowRecordTransitions(
         id: UUID
     ): List<AgentTransition> =
         workflows.transitionsOf(objectName, id).map {
-            AgentTransition(it.name, it.label, it.to, it.toLabel, it.allowed, it.reason)
+            AgentTransition(it.name, it.label, it.to, it.toLabel, it.allowed, it.reason, it.labels, it.toLabels)
         }
 }

@@ -105,3 +105,4 @@ supersedes it and says so in its status line.
 - [ADR-068: The platform stages, attaches and opens files within its own
   run](0068-the-platform-stages-attaches-and-opens-files-within-its-own-run.md)
 - [ADR-069: An optional Ant Design theme pair](0069-an-optional-ant-design-theme-pair.md)
+- [ADR-070: Per-language workflow labels, resolved by the client](0070-per-language-workflow-labels-resolved-by-the-client.md)

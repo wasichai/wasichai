@@ -488,6 +488,99 @@ class WorkflowApiTest : FullAppIntegrationTest() {
             .isEmpty
     }
 
+    @Test
+    fun `keeps a label per language and hands it to the transitions`() {
+        val bilingual =
+            mapOf(
+                "states" to
+                    listOf(
+                        mapOf("name" to "draft", "label" to "Borrador", "type" to "INITIAL"),
+                        mapOf(
+                            "name" to "approved",
+                            "label" to "Aprobado",
+                            "type" to "FINAL",
+                            // a blank text drops its language; the tag is kept as given
+                            "labels" to mapOf("es" to " Aprobado ", "en" to "Approved", "pt-BR" to " ")
+                        )
+                    ),
+                "transitions" to
+                    listOf(
+                        mapOf(
+                            "name" to "approve",
+                            "label" to "Aprobar",
+                            "from" to "draft",
+                            "to" to "approved",
+                            "labels" to mapOf("en" to "Approve")
+                        )
+                    )
+            )
+        putWorkflow(admin, uniqueName("wf"), bilingual)
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.definition.states[0].labels")
+            .isEmpty
+            .jsonPath("$.definition.states[1].labels.es")
+            .isEqualTo("Aprobado")
+            .jsonPath("$.definition.states[1].labels.en")
+            .isEqualTo("Approved")
+            .jsonPath("$.definition.states[1].labels['pt-BR']")
+            .doesNotExist()
+            .jsonPath("$.definition.transitions[0].labels.en")
+            .isEqualTo("Approve")
+        val id = idOf(createRecord(admin, "R-L"))
+
+        client
+            .get()
+            .uri("/api/objects/$objectName/records/$id/transitions")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[0].label")
+            .isEqualTo("Aprobar")
+            .jsonPath("$[0].labels.en")
+            .isEqualTo("Approve")
+            .jsonPath("$[0].toLabel")
+            .isEqualTo("Aprobado")
+            .jsonPath("$[0].toLabels.en")
+            .isEqualTo("Approved")
+    }
+
+    @Test
+    fun `a workflow saved without labels per language answers empty ones`() {
+        putWorkflow(admin, uniqueName("wf"), approvalDefinition()).expectStatus().isOk
+        val id = idOf(createRecord(admin, "R-N"))
+
+        client
+            .get()
+            .uri("/api/objects/$objectName/records/$id/transitions")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[0].labels")
+            .isEmpty
+            .jsonPath("$[0].toLabels")
+            .isEmpty
+    }
+
+    @Test
+    fun `rejects a label language that is not a language tag`() {
+        putWorkflow(
+            admin,
+            uniqueName("wf"),
+            mapOf(
+                "states" to
+                    listOf(mapOf("name" to "draft", "label" to "Borrador", "type" to "INITIAL", "labels" to mapOf("Español" to "Borrador"))),
+                "transitions" to emptyList<Any>()
+            )
+        ).expectStatus()
+            .isBadRequest
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private fun approvalDefinition(

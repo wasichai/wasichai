@@ -27,7 +27,7 @@ import java.util.UUID
 class WorkflowRecordTransitionsTest {
     private val available =
         listOf(
-            AvailableTransition("finish", "Finish", "done", "Done", true),
+            AvailableTransition("finish", "Finish", "done", "Done", true, labels = mapOf("es" to "Terminar"), toLabels = mapOf("es" to "Hecho")),
             AvailableTransition("reject", "Reject", "rejected", "Rejected", false, "requires role 'reviewer'")
         )
 
