@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/wasichai/wasichai/compare/v1.3.0...v1.4.0) (2026-10-24)
+
+
+### Features
+
+* **workflow:** per-language labels for states and transitions ([#126](https://github.com/wasichai/wasichai/issues/126)) ([db1f3e6](https://github.com/wasichai/wasichai/commit/db1f3e6b941d497fec0a0e5bf311c0e45dfda157))
+
 ## [1.3.0](https://github.com/wasichai/wasichai/compare/v1.2.0...v1.3.0) (2026-10-15)
 
 
