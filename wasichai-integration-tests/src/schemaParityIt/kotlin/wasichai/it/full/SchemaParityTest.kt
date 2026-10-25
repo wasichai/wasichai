@@ -444,7 +444,37 @@ class SchemaParityTest : FullAppIntegrationTest() {
             listOf(
                 "column stored_files.platform_run #12 uuid",
                 "constraint stored_files.stored_files_one_uploader CHECK (((created_by IS NULL) OR (platform_run IS NULL)))"
-            ).associateWith { "ADR-031 D47, ADR-068: files staged by a platform run" }
+            ).associateWith { "ADR-031 D47, ADR-068: files staged by a platform run" } +
+            // wasichai-gis map views (ADR-031 D51, ADR-072): one table, nothing on the original's
+            listOf(
+                "column map_views.created_at #8 timestamp with time zone NOT NULL DEFAULT now()",
+                "column map_views.geometry_name #6 text NOT NULL",
+                "column map_views.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column map_views.label #5 text NOT NULL",
+                "column map_views.name #4 text NOT NULL",
+                "column map_views.object_id #2 uuid NOT NULL",
+                "column map_views.organization_id #3 uuid NOT NULL",
+                "column map_views.style #7 jsonb",
+                "column map_views.updated_at #9 timestamp with time zone NOT NULL DEFAULT now()",
+                "constraint map_views.map_views_created_at_not_null NOT NULL created_at",
+                "constraint map_views.map_views_geometry_name_not_null NOT NULL geometry_name",
+                "constraint map_views.map_views_id_not_null NOT NULL id",
+                "constraint map_views.map_views_label_not_null NOT NULL label",
+                "constraint map_views.map_views_name_not_null NOT NULL name",
+                "constraint map_views.map_views_name_unique_per_object UNIQUE (object_id, name)",
+                "constraint map_views.map_views_object_id_fkey FOREIGN KEY (object_id) REFERENCES META.custom_objects(id) ON DELETE CASCADE",
+                "constraint map_views.map_views_object_id_not_null NOT NULL object_id",
+                "constraint map_views.map_views_organization_id_fkey FOREIGN KEY (organization_id)" +
+                    " REFERENCES META.organizations(id) ON DELETE CASCADE",
+                "constraint map_views.map_views_organization_id_not_null NOT NULL organization_id",
+                "constraint map_views.map_views_pkey PRIMARY KEY (id)",
+                "constraint map_views.map_views_updated_at_not_null NOT NULL updated_at",
+                "index map_views.map_views_name_unique_per_object CREATE UNIQUE INDEX map_views_name_unique_per_object" +
+                    " ON META.map_views USING btree (object_id, name)",
+                "index map_views.map_views_organization CREATE INDEX map_views_organization ON META.map_views USING btree (organization_id)",
+                "index map_views.map_views_pkey CREATE UNIQUE INDEX map_views_pkey ON META.map_views USING btree (id)",
+                "table map_views"
+            ).associateWith { "ADR-031 D51: map views" }
 
     @Test
     fun `the fixture is the original's whole schema`() {

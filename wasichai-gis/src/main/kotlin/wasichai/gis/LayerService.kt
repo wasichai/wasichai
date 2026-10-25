@@ -31,6 +31,11 @@ data class GeoServerServicesResponse(
     val wmts: String
 )
 
+// what a publish may carry. no body, no style: geoserver's own.
+data class PublishLayerRequest(
+    val style: AttributeStyle? = null
+)
+
 private const val DISABLED = "GeoServer integration is disabled (wasichai.gis.geoserver.enabled=false)"
 
 // publishing is configuration, not data movement: the table is already there with its geometry column.
@@ -39,7 +44,8 @@ class LayerService(
     private val metadata: MetadataService,
     private val client: GeoServerClient,
     private val properties: GeoServerProperties,
-    private val currentUser: CurrentUser
+    private val currentUser: CurrentUser,
+    private val styles: StyleClassService
 ) {
     suspend fun status(): List<LayerStatusResponse> {
         // listDefinitions already demands READ and filters by tenant
@@ -56,10 +62,14 @@ class LayerService(
 
     suspend fun publish(
         objectName: String,
-        geometryName: String?
+        geometryName: String?,
+        style: AttributeStyle? = null
     ): LayerStatusResponse {
         val (definition, field) = requireGeometry(objectName, geometryName, Actions.MANAGE_METADATA)
         val obj = definition.obj
+        // a bad style is the caller's 400 whether geoserver is on or not
+        val user = currentUser.require()
+        style?.let { styles.validate(user, definition, it) }
         if (!properties.enabled) throw GeoServerException(DISABLED)
         client.ensureWorkspace()
         client.ensureDataStore()
@@ -80,6 +90,16 @@ class LayerService(
                 attributeColumns = definition.fields.filter { it.type != GEOMETRY }.map { it.columnName }
             )
         }
+        // every publish, new layer or not: republishing is how a style changes or goes away.
+        // the style is named after the layer, and a style still in use cannot be deleted, so default first.
+        if (style != null) {
+            val classes = styles.classes(user, definition, style)
+            client.upsertStyle(name, GeoServerStyles.sld(name, field.geometryType, classes))
+            client.setDefaultStyle(name, name, local = true)
+        } else {
+            client.setDefaultStyle(name, GeoServerStyles.generic(field.geometryType), local = false)
+            client.deleteStyle(name)
+        }
         return obj.toStatus(field, true)
     }
 
@@ -90,6 +110,7 @@ class LayerService(
         val (definition, field) = requireGeometry(objectName, geometryName, Actions.MANAGE_METADATA)
         if (!properties.enabled) throw GeoServerException(DISABLED)
         client.deleteFeatureType(layerName(definition.obj, field))
+        client.deleteStyle(layerName(definition.obj, field))
         // layers published before a layer was a pair were named after the table alone
         if (client.featureTypeExists(definition.obj.physicalTable)) client.deleteFeatureType(definition.obj.physicalTable)
     }

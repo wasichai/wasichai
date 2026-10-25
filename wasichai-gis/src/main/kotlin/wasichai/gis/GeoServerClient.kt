@@ -2,6 +2,7 @@ package wasichai.gis
 
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
@@ -99,6 +100,46 @@ class GeoServerClient(
         }
     }
 
+    // the sld is put as is: geoserver parses it, so a bad one fails here and not on the first GetMap
+    suspend fun upsertStyle(
+        name: String,
+        sld: String
+    ) {
+        if (exists(GeoServerUrls.style(base, workspace, name), "style '$name'")) {
+            send(HttpMethod.PUT, GeoServerUrls.style(base, workspace, name), GeoServerStyles.SLD_CONTENT_TYPE, sld, "update style '$name'")
+        } else {
+            send(HttpMethod.POST, "${GeoServerUrls.styles(base, workspace)}?name=$name", GeoServerStyles.SLD_CONTENT_TYPE, sld, "create style '$name'")
+        }
+    }
+
+    // local: a style of our workspace; otherwise one of geoserver's global built-ins
+    suspend fun setDefaultStyle(
+        layerName: String,
+        style: String,
+        local: Boolean
+    ) {
+        send(
+            HttpMethod.PUT,
+            GeoServerUrls.layer(base, workspace, layerName),
+            MediaType.APPLICATION_JSON_VALUE,
+            GeoServerPayloads.defaultStyle(workspace, style, local),
+            "set the style of layer '$layerName'"
+        )
+    }
+
+    // purge drops the sld file too. already gone is fine.
+    suspend fun deleteStyle(name: String) {
+        val what = "delete style '$name'"
+        call(what) {
+            client.delete().uri("${GeoServerUrls.style(base, workspace, name)}?purge=true").awaitExchange { response ->
+                when {
+                    response.statusCode().is2xxSuccessful || response.statusCode().value() == 404 -> drain(response)
+                    else -> throw failure(what, response.statusCode(), drain(response))
+                }
+            }
+        }
+    }
+
     // one listing beats one HEAD per object. missing datastore means nothing is published yet.
     suspend fun publishedLayerNames(): Set<String> {
         if (!dataStoreExists()) return emptySet()
@@ -159,6 +200,27 @@ class GeoServerClient(
                         }
                         else -> throw failure(what, response.statusCode(), body)
                     }
+                }
+        }
+    }
+
+    // a body that is not the json post sends: an sld, or a put
+    private suspend fun send(
+        method: HttpMethod,
+        url: String,
+        contentType: String,
+        body: Any,
+        what: String
+    ) {
+        call(what) {
+            client
+                .method(method)
+                .uri(url)
+                .contentType(MediaType.parseMediaType(contentType))
+                .bodyValue(body)
+                .awaitExchange { response ->
+                    val text = drain(response)
+                    if (!response.statusCode().is2xxSuccessful) throw failure(what, response.statusCode(), text)
                 }
         }
     }

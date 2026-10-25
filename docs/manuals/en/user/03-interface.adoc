@@ -29,7 +29,7 @@ The menu groups the screens by topic. Which ones appear depends on the modules i
 |Data |Objects, Records, Relationships |*Objects* lists the kinds of information and leads to their records. *Records*
 is always shown disabled: records are reached from an object. *Relationships* is an administration screen.
 |GIS |Maps, Layers, Map views |*Maps* shows the geometries of an object. *Layers* is for administration.
-*Map views* is reserved and is shown disabled.
+*Map views* lists the saved maps, each with its object, geometry and style.
 |App Builder |Pages, Forms, Documents, Views |Configuration tools for the administrator.
 |Automation |Workflows, Rules, Runs |Configuration of workflows and rules; *Runs* shows what the rules did.
 |Administration |Users, Roles, Service accounts, Permissions, Audit |Management of accounts and permissions, and the

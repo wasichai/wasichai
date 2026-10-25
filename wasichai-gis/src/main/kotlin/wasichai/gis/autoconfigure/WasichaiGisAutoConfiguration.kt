@@ -5,10 +5,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordQueryParser
 import wasichai.core.data.RecordService
+import wasichai.core.identity.AccessPolicy
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
@@ -22,8 +24,12 @@ import wasichai.gis.GeometryFieldType
 import wasichai.gis.LayerCleanup
 import wasichai.gis.LayerController
 import wasichai.gis.LayerService
+import wasichai.gis.MapViewController
+import wasichai.gis.MapViewRepository
+import wasichai.gis.MapViewService
+import wasichai.gis.StyleClassService
 
-// GIS as a plug-in: a field type, a query parameter, an object-removal listener and its own routes.
+// GIS as a plug-in: a field type, a query parameter, an object-removal listener and its own routes (layers, map views).
 // core finds the first three through ObjectProviders, so no ordering against core is needed.
 @AutoConfiguration(after = [WasichaiDataAutoConfiguration::class])
 @ConditionalOnProperty(prefix = "wasichai.gis", name = ["enabled"], havingValue = "true", matchIfMissing = true)
@@ -57,16 +63,51 @@ class WasichaiGisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun styleClassService(
+        db: DatabaseClient,
+        schemas: WasichaiSchemas,
+        metadata: MetadataService,
+        access: AccessPolicy,
+        currentUser: CurrentUser
+    ): StyleClassService = StyleClassService(db, schemas, metadata, access, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
     fun layerService(
         metadata: MetadataService,
         client: GeoServerClient,
         properties: GeoServerProperties,
-        currentUser: CurrentUser
-    ): LayerService = LayerService(metadata, client, properties, currentUser)
+        currentUser: CurrentUser,
+        styles: StyleClassService
+    ): LayerService = LayerService(metadata, client, properties, currentUser, styles)
 
     @Bean
     @ConditionalOnMissingBean
-    fun layerController(layers: LayerService): LayerController = LayerController(layers)
+    fun layerController(
+        layers: LayerService,
+        styles: StyleClassService
+    ): LayerController = LayerController(layers, styles)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun mapViewRepository(
+        db: DatabaseClient,
+        objectMapper: JsonMapper,
+        schemas: WasichaiSchemas
+    ): MapViewRepository = MapViewRepository(db, objectMapper, schemas)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun mapViewService(
+        views: MapViewRepository,
+        metadata: MetadataService,
+        styles: StyleClassService,
+        currentUser: CurrentUser
+    ): MapViewService = MapViewService(views, metadata, styles, currentUser)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun mapViewController(views: MapViewService): MapViewController = MapViewController(views)
 
     @Bean
     @ConditionalOnMissingBean

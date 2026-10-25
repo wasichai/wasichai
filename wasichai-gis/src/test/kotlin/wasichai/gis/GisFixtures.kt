@@ -33,6 +33,12 @@ object GisFixtures {
 
     fun text(name: String): CustomField = field(name, FieldType.TEXT, mapOf(GEOMETRY_TYPE_COLUMN to null, SRID_COLUMN to null, DIMENSION_COLUMN to null))
 
+    fun typed(
+        name: String,
+        type: FieldType,
+        enumOptions: List<String>? = null
+    ): CustomField = field(name, type, emptyMap()).copy(enumOptions = enumOptions)
+
     fun definition(vararg fields: CustomField) = ObjectDefinition(obj, fields.toList())
 
     private fun field(

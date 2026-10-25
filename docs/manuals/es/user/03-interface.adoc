@@ -30,7 +30,7 @@ El menú agrupa las pantallas por tema. Cuáles aparecen depende de los módulos
 aparece siempre desactivado: a los registros se llega desde un objeto. *Relaciones* es una pantalla de
 administración.
 |GIS |Mapas, Capas, Vistas de mapa |*Mapas* muestra las geometrías de un objeto. *Capas* es de administración.
-*Vistas de mapa* está reservado y aparece desactivado.
+*Vistas de mapa* lista los mapas guardados, cada uno con su objeto, geometría y estilo.
 |App Builder |Páginas, Formularios, Documentos, Vistas |Herramientas de configuración para el administrador.
 |Automatización |Workflows, Reglas, Ejecuciones |Configuración de flujos y reglas; *Ejecuciones* muestra lo que
 hicieron las reglas.

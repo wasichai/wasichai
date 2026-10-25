@@ -101,7 +101,14 @@ object ModuleRoutes {
                     "DELETE /api/gis/layers/{object}/{geometry}",
                     "GET /api/gis/services",
                     "GET /api/gis/objects/{object}/features",
-                    "GET /api/gis/objects/{object}/features/{id}"
+                    "GET /api/gis/objects/{object}/features/{id}",
+                    "GET /api/gis/map-views",
+                    "GET /api/gis/objects/{object}/map-views",
+                    "POST /api/gis/objects/{object}/map-views",
+                    "GET /api/gis/objects/{object}/map-views/{name}",
+                    "PUT /api/gis/objects/{object}/map-views/{name}",
+                    "DELETE /api/gis/objects/{object}/map-views/{name}",
+                    "POST /api/gis/objects/{object}/style-classes"
                 ),
             "agent" to
                 listOf(

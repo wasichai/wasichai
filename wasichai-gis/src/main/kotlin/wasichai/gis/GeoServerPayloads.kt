@@ -95,6 +95,19 @@ object GeoServerPayloads {
         return "SELECT $columns FROM ${SqlIdentifier.quote(schema)}.\"$table\""
     }
 
+    // workspace-local style: two tenants' layers never share one
+    fun defaultStyle(
+        workspace: String,
+        style: String,
+        local: Boolean
+    ): Map<String, Any> =
+        mapOf(
+            "layer" to
+                mapOf(
+                    "defaultStyle" to if (local) mapOf("name" to style, "workspace" to workspace) else mapOf("name" to style)
+                )
+        )
+
     private fun entry(
         key: String,
         value: String
@@ -153,6 +166,24 @@ object GeoServerUrls {
         datastore: String,
         layerName: String
     ): String = "${featureTypes(base, workspace, datastore)}/$layerName"
+
+    fun styles(
+        base: String,
+        workspace: String
+    ): String = "$base/rest/workspaces/$workspace/styles"
+
+    fun style(
+        base: String,
+        workspace: String,
+        name: String
+    ): String = "${styles(base, workspace)}/$name"
+
+    // a layer is addressed as workspace:name, not under the datastore like its feature type
+    fun layer(
+        base: String,
+        workspace: String,
+        layerName: String
+    ): String = "$base/rest/layers/$workspace:$layerName"
 
     fun wms(
         base: String,

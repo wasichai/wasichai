@@ -31,4 +31,15 @@ class GisMigrationSqlTest {
             .doesNotContain("IF EXISTS")
             .doesNotContainIgnoringCase("sapgis")
     }
+
+    @Test
+    fun `map views are per object and per tenant, gone with either`() {
+        val v2 = javaClass.getResource("/db/wasichai/gis/V2__map_views.sql")!!.readText()
+        assertThat(v2)
+            .contains("CREATE TABLE \${metadataSchema}.map_views (")
+            .contains("REFERENCES \${metadataSchema}.custom_objects (id) ON DELETE CASCADE")
+            .contains("REFERENCES \${metadataSchema}.organizations (id) ON DELETE CASCADE")
+            .contains("style           jsonb,")
+            .contains("UNIQUE (object_id, name)")
+    }
 }

@@ -107,3 +107,5 @@ supersedes it and says so in its status line.
 - [ADR-069: An optional Ant Design theme pair](0069-an-optional-ant-design-theme-pair.md)
 - [ADR-070: Per-language workflow labels, resolved by the client](0070-per-language-workflow-labels-resolved-by-the-client.md)
 - [ADR-071: Manuals in AsciiDoc beside the Markdown reference](0071-manuals-in-asciidoc-beside-the-markdown-reference.md)
+- [ADR-072: Attribute styles computed on the server, kept in map views and published as
+  SLD](0072-attribute-styles-and-map-views.md)

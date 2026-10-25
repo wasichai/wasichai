@@ -28,7 +28,10 @@ class LayerCleanup(
                     client
                         .publishedLayerNames()
                         .filter { it == obj.physicalTable || it.startsWith("${obj.physicalTable}__") }
-                        .forEach { client.deleteFeatureType(it) }
+                        .forEach {
+                            client.deleteFeatureType(it)
+                            client.deleteStyle(it)
+                        }
                 }.onFailure { log.warn("could not unpublish the layers of {}: {}", obj.physicalTable, it.message) }
             }
         if (done == null) log.warn("geoserver did not answer in time; layers of {} may still be published", obj.physicalTable)
