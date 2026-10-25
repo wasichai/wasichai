@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/wasichai/wasichai/compare/v1.4.0...v1.5.0) (2026-10-25)
+
+
+### Features
+
+* **gis:** attribute styles, map views and SLD on layer publish ([#135](https://github.com/wasichai/wasichai/issues/135)) ([c3870db](https://github.com/wasichai/wasichai/commit/c3870dbf63c92e66bcf1b35d59761dc8fed2b726)), closes [#134](https://github.com/wasichai/wasichai/issues/134)
+
 ## [1.4.0](https://github.com/wasichai/wasichai/compare/v1.3.0...v1.4.0) (2026-10-24)
 
 
