@@ -33,3 +33,17 @@ alejar; la escala aparece abajo a la izquierda.
 NOTE: El fondo cartográfico lo sirve un proveedor externo; por defecto, OpenStreetMap. Las capturas de este manual se
 tomaron en un entorno sin acceso a ese proveedor, y por eso las geometrías aparecen sobre un fondo liso. En una
 instalación con acceso a Internet se ve el mapa base debajo de las geometrías.
+
+[[user-map-style]]
+=== Colorear por un campo y guardar una vista de mapa
+
+.Procedimiento
+. En menu:GIS[Mapas], elija un campo en *Colorear por*. Un campo con pocos valores (una lista, sí/no, un texto
+  corto) se colorea por categoría; un número se divide en rangos con más o menos la misma cantidad de entidades
+  (cuantiles), y *Clases* fija cuántos.
+. Lea los colores en la *Leyenda* bajo el mapa. Las entidades con un valor fuera de toda clase se ven en gris.
+. Para conservar el mapa, haga clic en *Guardar como vista de mapa*, dele un nombre y una etiqueta, y guarde. Queda
+  en menu:GIS[Vistas de mapa], desde donde se vuelve a abrir con el mismo objeto, geometría y coloreado.
+
+Un administrador puede además publicar el mapa en GeoServer con su coloreado: *Publicar WMS con este estilo*. La
+capa WMS conserva las clases de ese momento; vuelva a publicar cuando cambien los datos.

@@ -159,7 +159,7 @@ class AllModulesWiringTest {
                 "PUT /api/pages/{name}"
             )
 
-        // routes the original never had: notifications (ADR-031 D32, D46), files (D47). org units are core's, not here
+        // routes the original never had: notifications (ADR-031 D32, D46), files (D47), map views (D51). org units are core's, not here
         val ADDED_MODULE_ROUTES =
             listOf(
                 "DELETE /api/notifications/{id}",
@@ -186,7 +186,15 @@ class AllModulesWiringTest {
                 // files (ADR-031 D47)
                 "POST /api/objects/{object}/files/{field}",
                 "GET /api/objects/{object}/records/{id}/files/{field}",
-                "POST /api/objects/{object}/records/{id}/files/{field}"
+                "POST /api/objects/{object}/records/{id}/files/{field}",
+                // map views and style classes (ADR-031 D51)
+                "GET /api/gis/map-views",
+                "GET /api/gis/objects/{object}/map-views",
+                "POST /api/gis/objects/{object}/map-views",
+                "GET /api/gis/objects/{object}/map-views/{name}",
+                "PUT /api/gis/objects/{object}/map-views/{name}",
+                "DELETE /api/gis/objects/{object}/map-views/{name}",
+                "POST /api/gis/objects/{object}/style-classes"
             )
     }
 }

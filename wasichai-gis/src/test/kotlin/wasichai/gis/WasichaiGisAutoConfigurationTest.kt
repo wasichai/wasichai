@@ -28,6 +28,8 @@ class WasichaiGisAutoConfigurationTest {
             assertThat(context.getBeansOfType(ObjectRemovalListener::class.java).values).hasAtLeastOneElementOfType(LayerCleanup::class.java)
             assertThat(context).hasSingleBean(FeatureController::class.java)
             assertThat(context).hasSingleBean(LayerController::class.java)
+            assertThat(context).hasSingleBean(StyleClassService::class.java)
+            assertThat(context).hasSingleBean(MapViewController::class.java)
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name }).containsExactlyInAnyOrder("core", "gis")
         }
     }
@@ -74,6 +76,7 @@ class WasichaiGisAutoConfigurationTest {
             assertThat(context.getBean(FieldTypeRegistry::class.java).isInstalled(GEOMETRY)).isFalse()
             assertThat(context.getBean(RecordQueryParser::class.java).parse(mapOf("bbox" to "1,2,3,4")).filters).containsOnlyKeys("bbox")
             assertThat(context).doesNotHaveBean(FeatureController::class.java)
+            assertThat(context).doesNotHaveBean(MapViewController::class.java)
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name }).containsExactly("core")
         }
     }

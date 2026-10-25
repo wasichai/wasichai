@@ -449,6 +449,19 @@ These are the only intended differences. Anything else that behaves differently 
   ([ADR-067](0067-the-rest-of-the-model-a-request-reads-is-cached.md)). Tested by `MetadataChangesTest` and
   `ModelLookupCacheApiTest`.
 
+**Because a map is coloured by what it shows**
+
+- **D51. Attribute styles, map views and a styled publish.** The original painted every geometry in one colour and
+  published layers with GeoServer's default style. With wasichai-gis, `POST /api/gis/objects/{object}/style-classes`
+  answers the classes of a style (`{by, type: categories|quantiles, classes?, palette?}`) on the tenant's rows; a
+  publish may carry `{style}`, which sets an SLD named after the layer as its default style (a publish without one
+  sets GeoServer's built-in style back); and `/api/gis/map-views` with `/api/gis/objects/{object}/map-views/**` keep
+  named map views (`READ` to read, `MANAGE_METADATA` to write; `400` on a geometry the object lacks or a style that
+  does not fit its field, `409` on a taken name). A publish without a body behaves as before. Without the module the
+  routes are `404` (D1) ([ADR-072](0072-attribute-styles-and-map-views.md)). The `map_views` table is a known
+  schema-parity deviation. Tested by `GisStyleApiTest`, `AttributeStyleTest`, `GeoServerStylesTest`,
+  `GeoServerUrlsTest`, `GisMigrationSqlTest` and `SchemaParityTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

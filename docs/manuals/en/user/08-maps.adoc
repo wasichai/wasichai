@@ -33,3 +33,17 @@ the scale appears at the bottom left.
 NOTE: The base map is served by an external provider; by default, OpenStreetMap. The screenshots in this manual
 were taken in an environment without access to that provider, and that is why the geometries appear on a plain
 background. In an installation with Internet access the base map is seen under the geometries.
+
+[[user-map-style]]
+=== Colouring by a field and saving a map view
+
+.Procedure
+. On menu:GIS[Maps], pick a field in *Colour by*. A field with a few values (a list, yes/no, a short text) is
+  coloured by category; a number is split into ranges of about the same number of features (quantiles), and *Classes*
+  sets how many.
+. Read the colours in the *Legend* under the map. Features with a value outside every class are grey.
+. To keep the map, click *Save as map view*, give it a name and a label, and save. It is listed in
+  menu:GIS[Map views], from where it opens again with the same object, geometry and colouring.
+
+An administrator can also publish the map to GeoServer with its colouring: *Publish WMS with this style*. The WMS
+layer keeps the classes of that moment; publish again after the data changes.

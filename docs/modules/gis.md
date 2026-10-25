@@ -32,7 +32,8 @@ See [../guides/build-your-app.md](../guides/build-your-app.md).
 
 The `GEOMETRY` field type (registered under the record payload section `geometries`, not `attributes`), the
 `bbox` and `geometry` record query parameters, feature endpoints that serve an object's records as GeoJSON, GeoServer
-layer publishing, and the `MAP` page component (`@Order(100)`, only when wasichai-pages is present).
+layer publishing (optionally with an SLD coloured by one attribute), saved map views, and the `MAP` page component
+(`@Order(100)`, only when wasichai-pages is present).
 
 REST routes:
 
@@ -46,9 +47,22 @@ REST routes:
 | GET | `/api/gis/services` |
 | GET | `/api/gis/objects/{object}/features` |
 | GET | `/api/gis/objects/{object}/features/{id}` |
+| POST | `/api/gis/objects/{object}/style-classes` |
+| GET | `/api/gis/map-views` |
+| GET, POST | `/api/gis/objects/{object}/map-views` |
+| GET, PUT, DELETE | `/api/gis/objects/{object}/map-views/{name}` |
 
 A `/layers/{object}` call without a `{geometry}` segment means the object's first geometry field, so links saved
 before an object could carry more than one geometry still work.
+
+**Attribute styles** ([ADR-072](../adr/0072-attribute-styles-and-map-views.md)). A style is
+`{ by, type: "categories" | "quantiles", classes?, palette? }`: colour by one field, either one colour per value
+(an `ENUM` by its options, a `BOOLEAN`, a `TEXT` by its distinct values, at most 50) or in `classes` (2–9, default 5)
+quantile ranges of an `INTEGER` or `DECIMAL`. The server computes the classes from the tenant's rows
+(`style-classes`), so the map, its legend and the published SLD agree. A publish may carry `{ "style": … }`: the
+layer's default style becomes an SLD named after the layer, and a publish without one goes back to GeoServer's
+built-in style and drops it. A **map view** keeps one object, one of its geometries and an optional style under a
+name; it is read with `READ` on the object and written with `MANAGE_METADATA`, like a list view.
 
 The feature endpoints read through `RecordService`, so they hold what the record list holds: the caller's permissions,
 `own_records_only` and the app's read scope; a record out of scope is a `404`
@@ -59,9 +73,10 @@ Frontend routes and slots:
 
 | Slot | Contribution |
 |---|---|
-| route `gis:map` | `/gis/map` (`?object=&geometry=`): pick an object, draw and browse its features |
+| route `gis:map` | `/gis/map` (`?object=&geometry=&by=&type=&classes=&view=`): browse, colour by a field, save, publish |
 | route `gis:layers` | `/gis/layers`: GeoServer publishing status, publish/unpublish, WMS/WFS links |
-| nav | group "GIS" (order 20): Maps, Layers, Map views (placeholder, disabled) |
+| route `gis:mapViews` | `/gis/map-views`: the saved map views, each opening `/gis/map?object=&view=` |
+| nav | group "GIS" (order 20): Maps, Layers, Map views |
 | `fieldRenderers.GEOMETRY` | input, settings (`geometryType`, `srid`) for a geometry field, section `geometries` |
 | `pageComponents.MAP` | draws the record's shapes, optionally one targeted geometry field |
 | `recordListActions` | "Map" button on spatial objects' record lists |
@@ -104,7 +119,8 @@ object itself is deleted), and pages' `wasichai.pages.PageComponentProvider` (`M
 only when wasichai-pages is on the classpath).
 
 **Overridable beans:** `geometryFieldType`, `bboxQuery`, `geoServerClient`, `layerCleanup`, `layerService`,
-`layerController`, `featureController`, `mapPageComponent` — all `@ConditionalOnMissingBean`, so an app can
+`layerController`, `featureController`, `styleClassService`, `mapViewRepository`, `mapViewService`,
+`mapViewController`, `mapPageComponent` — all `@ConditionalOnMissingBean`, so an app can
 replace any of them.
 
 ## Database
@@ -114,14 +130,18 @@ IF NOT EXISTS postgis WITH SCHEMA public`, three new columns on core's `custom_f
 `dimension`), and `custom_fields_type_valid` dropped and redefined with `GEOMETRY` appended to core's twelve types
 ([ADR-026 addendum](../adr/0026-per-module-migrations.md#addendum-2026-09-25-p7-a-check-has-one-extending-owner)).
 wasichai-gis also adds its own CHECKs on those three columns (a `GEOMETRY` field must carry all three; the shape and
-dimension are each one of a fixed set).
+dimension are each one of a fixed set). `V2__map_views.sql`: the `map_views` table (object, organization, name,
+label, geometry name, `style` jsonb), unique per object, gone with the object or the organization.
 
 ## Frontend package
 
 `@wasichai/gis`: `gisModule(options)`, with `options.basePath` (default `'gis'`) and `options.workerUrl` (MapLibre's
 worker script URL). Main exports from `index.ts`: `gisModule`, `gisMessages`, `MapView`, `GeometryField`,
-`useFeatures`, `featureIdOf`, `geometryFields`, `wmsTileUrl`, and the `Feature`/`FeatureCollection`/
-`GeoJsonGeometry`/`GeometryMeta`/`GeometryType` types.
+`useFeatures`, `useStyleClasses`, `useAttributeStyle`, `MapLegend`, `colorExpression`, `legendItems`, `featureIdOf`,
+`geometryFields`, `wmsTileUrl`, and the `Feature`/`FeatureCollection`/`GeoJsonGeometry`/`GeometryMeta`/
+`GeometryType`/`AttributeStyle`/`StyleClasses`/`FeatureStyle` types. `MapView` takes `featureStyle` (a colour or a
+MapLibre expression for fill, line and circle, and a `lineOffset`); `useAttributeStyle` turns an attribute style into
+one and into the legend's items.
 
 `GeometryField` is the geometry editor a form places where the field's author put it; the registered field
 renderer (`GeometryInput`) wraps it, reading the field's declared `geometryType` and `srid`. `MapView` is
@@ -158,3 +178,6 @@ instead of failing to load the page.
 - A published layer is served by GeoServer from the table, with GeoServer's own credentials: no wasichai record rule
   reaches it, neither `own_records_only` nor an app's read scope (ADR-048). Do not publish an object whose reads are
   scoped, or secure the layer in GeoServer.
+- A style or map view naming a field that was later removed or retyped answers `400` when its classes are asked for;
+  the stored view stays until it is saved again or deleted. A published SLD keeps the classes of its publish:
+  republish after the data changes.

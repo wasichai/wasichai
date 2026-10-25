@@ -20,6 +20,14 @@ class GeoServerUrlsTest {
     }
 
     @Test
+    fun `styles live in the workspace, layers are workspace qualified`() {
+        assertThat(GeoServerUrls.styles(BASE, "wasichai")).isEqualTo("$BASE/rest/workspaces/wasichai/styles")
+        assertThat(GeoServerUrls.style(BASE, "wasichai", "predio__00000000__geom"))
+            .isEqualTo("$BASE/rest/workspaces/wasichai/styles/predio__00000000__geom")
+        assertThat(GeoServerUrls.layer(BASE, "wasichai", "predio__00000000__geom")).isEqualTo("$BASE/rest/layers/wasichai:predio__00000000__geom")
+    }
+
+    @Test
     fun `service urls hang off the workspace, except wmts which is global`() {
         assertThat(GeoServerUrls.wms(BASE, "wasichai")).isEqualTo("$BASE/wasichai/wms")
         assertThat(GeoServerUrls.wfs(BASE, "wasichai")).isEqualTo("$BASE/wasichai/wfs")

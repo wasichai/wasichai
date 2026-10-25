@@ -27,7 +27,7 @@ installed (its starter is on the classpath and `wasichai.<module>.enabled` is no
 | automation | `/api/automation-runs`, `/api/objects/{object}/automations/**` | [automation.md](../modules/automation.md) |
 | documents | `/api/documents/{id}`, `/api/objects/{object}/{document-types,records/{id}/documents}/**` | [documents.md](../modules/documents.md) |
 | notifications | `/api/{,auth/me/}notifications/**`, `/api/{,objects/{object}/}notification-rules/**` | [notifications.md](../modules/notifications.md) |
-| gis | `/api/gis/layers/**`, `/api/gis/services`, `/api/gis/objects/{object}/features/**` | [gis.md](../modules/gis.md) |
+| gis | `/api/gis/{layers,map-views}/**`, `/api/gis/services`, `/api/gis/objects/{object}/{features,map-views,style-classes}/**` | [gis.md](../modules/gis.md) |
 | agent | `/api/agent/status`, `/api/agent/ask` | [agent.md](../modules/agent.md) |
 | files | `/api/objects/{object}/files/{field}`, `/api/objects/{object}/records/{id}/files/{field}` | [files.md](../modules/files.md) |
 
@@ -1028,7 +1028,7 @@ Module: wasichai-gis.
 
 ```http
 GET    /api/gis/layers                          every geometry of every object, and whether GeoServer publishes it
-POST   /api/gis/layers/{object}/{geometry}      publish (idempotent)
+POST   /api/gis/layers/{object}/{geometry}      publish (idempotent); optional body { "style": AttributeStyle }
 DELETE /api/gis/layers/{object}/{geometry}      unpublish
 GET    /api/gis/services                        GeoServer base URLs and whether it is configured
 ```
@@ -1048,6 +1048,49 @@ Nothing on a record or metadata request path calls GeoServer: when it is down or
 Layers published before ADR-019 are named after the table alone. One is reported as the object's
 **first** geometry being published, so it shows on the layers screen instead of sitting there
 invisible, and both publishing and unpublishing retire it — republishing is how you normalise.
+
+**A publish may carry a style** ([ADR-072](../adr/0072-attribute-styles-and-map-views.md)):
+
+```json
+{ "style": { "by": "arancel", "type": "quantiles", "classes": 5, "palette": ["#ffffcc", "#800026"] } }
+```
+
+`type` is `categories` (an `ENUM`, `BOOLEAN` or `TEXT` field) or `quantiles` (an `INTEGER` or `DECIMAL`);
+`classes` is 2–9 (default 5, quantiles only); `palette` is optional `#rrggbb` colours, cycled. A style that does not
+fit its field is a `400` naming `style.by`, `style.classes` or `style.palette`, checked before GeoServer is asked.
+The layer's default style becomes a workspace style named after the layer, an SLD with one rule per class and grey
+for the rest. Publishing without a style sets GeoServer's built-in `polygon`/`line`/`point` back and drops it;
+unpublishing drops it too.
+
+## GIS styles and map views
+
+Module: wasichai-gis.
+
+```http
+POST   /api/gis/objects/{object}/style-classes        AttributeStyle → the classes it resolves to on the tenant's rows
+GET    /api/gis/map-views                             every map view of every object the caller may read
+GET    /api/gis/objects/{object}/map-views            the object's map views
+POST   /api/gis/objects/{object}/map-views            create (201; 409 on a taken name)
+GET    /api/gis/objects/{object}/map-views/{name}
+PUT    /api/gis/objects/{object}/map-views/{name}
+DELETE /api/gis/objects/{object}/map-views/{name}     204
+```
+
+`style-classes` needs `READ` on the object and the field readable by the caller; it answers
+
+```json
+{ "by": "uso", "type": "categories", "classes": [{ "label": "vivienda", "color": "#8dd3c7", "value": "vivienda" }] }
+```
+
+a category with its `value`, a quantile with `min` and `max` (`[min, max)`, the last one closed). An `ENUM` is classed
+by its options in their order, a `BOOLEAN` by `true` and `false`, a `TEXT` by its distinct values (more than 50 is a
+`400`); quantiles come from `percentile_cont`, equal edges collapsed, and an object with no values has no classes.
+
+A map view is `{ id, name, label, objectName, geometryName, style }`. Create takes `{ name, label?, geometryName?,
+style? }` (no geometry: the first; no label: the object's plural label); `PUT` takes `{ label?, geometryName?,
+style? }`, where a missing `style` clears it. Names match `^[a-z][a-z0-9_-]{0,48}$`. Reading needs `READ` on the
+object, writing `MANAGE_METADATA`; a geometry the object lacks is a `400` on `geometryName`, a bad style a `400` on
+`style.*`.
 
 ## Records (dynamic)
 

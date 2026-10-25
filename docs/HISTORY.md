@@ -2,6 +2,23 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-25 — Attribute styles, map views and styled GeoServer layers
+
+wasichai-gis colours a map by one attribute: categories (an `ENUM`, `BOOLEAN` or `TEXT`) or quantiles (an `INTEGER`
+or `DECIMAL`), with the classes computed on the server from the tenant's rows
+([wasichai#134](https://github.com/wasichai/wasichai/issues/134),
+[wasichai-ui#86](https://github.com/wasichai/wasichai-ui/issues/86);
+[ADR-072](adr/0072-attribute-styles-and-map-views.md), ADR-031 D51). A layer publish may carry `{style}` and is then
+published with an SLD named after the layer; map views keep an object, one of its geometries and a style under a
+name, in the new `map_views` table (`V2__map_views.sql`). REST change: additive — `POST
+/api/gis/objects/{object}/style-classes`, `GET /api/gis/map-views`, CRUD on `/api/gis/objects/{object}/map-views`,
+and an optional body on the publish routes; a publish without one behaves as before. In wasichai-ui, `@wasichai/gis`
+`MapView` takes `featureStyle`, `useAttributeStyle` and `MapLegend` colour any map, the map page gains "Colour by",
+classes, a legend, "Save as map view" and "Publish WMS with this style", and "Map views" is a page instead of a
+placeholder. New tests: `AttributeStyleTest`, `GeoServerStylesTest` (unit) and `GisStyleApiTest` (integration), plus
+the routes and table in `AllModulesWiringTest` and `SchemaParityTest`; in wasichai-ui `style.test.ts`,
+`MapLegend.test.tsx`, `MapPage.test.tsx`, `MapViewsPage.test.tsx` and new cases in `MapView.test.tsx`.
+
 ## 2026-10-23 — Workflow labels per language
 
 A workflow state and a transition may carry `labels`, a text per language tag beside `label`, which stays the fallback
