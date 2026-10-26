@@ -117,7 +117,7 @@ class LayerService(
 
     suspend fun services(): GeoServerServicesResponse {
         currentUser.requireWithPermission(Actions.READ)
-        val base = properties.baseUrl
+        val base = properties.publicBaseUrl
         return GeoServerServicesResponse(
             enabled = properties.enabled,
             url = base,
@@ -176,8 +176,8 @@ class LayerService(
             geometryType = field.geometryType?.name.orEmpty(),
             srid = field.srid ?: 0,
             published = published,
-            wms = GeoServerUrls.wmsLayer(properties.baseUrl, properties.workspace, name),
-            wfs = GeoServerUrls.wfsLayer(properties.baseUrl, properties.workspace, name)
+            wms = GeoServerUrls.wmsLayer(properties.publicBaseUrl, properties.workspace, name),
+            wfs = GeoServerUrls.wfsLayer(properties.publicBaseUrl, properties.workspace, name)
         )
     }
 }

@@ -462,6 +462,16 @@ These are the only intended differences. Anything else that behaves differently 
   schema-parity deviation. Tested by `GisStyleApiTest`, `AttributeStyleTest`, `GeoServerStylesTest`,
   `GeoServerUrlsTest`, `GisMigrationSqlTest` and `SchemaParityTest`.
 
+**Because a browser does not always reach GeoServer the way the backend does**
+
+- **D52. A public GeoServer url.** The original handed clients WMS/WFS urls built on the url the backend calls
+  GeoServer's REST API with, an internal host behind a proxy or on a container network. Now
+  `wasichai.gis.geoserver.public-url`, when set, is the base of the `url`, `wms`, `wfs` and `wmts` of
+  `/api/gis/services` and the `wms` and `wfs` of `/api/gis/layers`; it may be relative (`/geoserver`) so tiles go
+  through the app's origin and its authentication. Unset, every url is as before; REST calls always keep
+  `wasichai.gis.geoserver.url` ([wasichai#137](https://github.com/wasichai/wasichai/issues/137)). Tested by
+  `GeoServerUrlsTest` and `WasichaiGisAutoConfigurationTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
