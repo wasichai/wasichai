@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/wasichai/wasichai/compare/v1.5.0...v1.6.0) (2026-10-26)
+
+
+### Features
+
+* **gis:** public GeoServer url for the WMS/WFS urls the API hands to clients ([#138](https://github.com/wasichai/wasichai/issues/138)) ([38385f1](https://github.com/wasichai/wasichai/commit/38385f12e35f895951a872a25f01c8516fb24fd0)), closes [#137](https://github.com/wasichai/wasichai/issues/137)
+
 ## [1.5.0](https://github.com/wasichai/wasichai/compare/v1.4.0...v1.5.0) (2026-10-25)
 
 
