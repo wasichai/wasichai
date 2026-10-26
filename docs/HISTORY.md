@@ -2,6 +2,18 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-26 — A public GeoServer url for the urls clients get
+
+`wasichai.gis.geoserver.public-url` (`WASICHAI_GIS_GEOSERVER_PUBLIC_URL`), optional, is the base of the WMS/WFS/WMTS
+urls `/api/gis/services` and `/api/gis/layers` answer with, so a browser asks a GeoServer it can reach — a relative
+`/geoserver` sends tiles through the app's origin and its authentication
+([wasichai#137](https://github.com/wasichai/wasichai/issues/137),
+[wasichai-ui#89](https://github.com/wasichai/wasichai-ui/issues/89); ADR-031 D52). REST calls to GeoServer keep
+`wasichai.gis.geoserver.url`. REST change: none when unset; set, only those urls change. In wasichai-ui,
+`gisModule({ wmsAuth: true })` sends the session's token with the tiles of the app's origin, `MapView` takes
+`transformRequest`, and `/gis/map?view=` applies the view's style and palette. New tests: cases in
+`GeoServerUrlsTest` and `WasichaiGisAutoConfigurationTest`.
+
 ## 2026-10-25 — Attribute styles, map views and styled GeoServer layers
 
 wasichai-gis colours a map by one attribute: categories (an `ENUM`, `BOOLEAN` or `TEXT`) or quantiles (an `INTEGER`

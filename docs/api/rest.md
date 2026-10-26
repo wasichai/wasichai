@@ -1042,6 +1042,9 @@ and neither do two geometries of the same one. The feature type is a JDBC virtua
 `id`, the plain columns and that one geometry, so GeoServer publishes the column we mean rather than
 choosing between them, and the object's other geometries stay out of the layer's attributes.
 
+The WMS/WFS/WMTS urls both GETs answer with are built on `wasichai.gis.geoserver.public-url` when it is set (it may be
+relative, `/geoserver`), else on `wasichai.gis.geoserver.url` (ADR-031 D52).
+
 Nothing on a record or metadata request path calls GeoServer: when it is down or disabled,
 `GET /api/gis/layers` still lists the layers as unpublished and only the publishing endpoints fail.
 

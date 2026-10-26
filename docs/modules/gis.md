@@ -91,6 +91,7 @@ Frontend routes and slots:
 | `wasichai.gis.enabled` | `true` | `false` removes the `GEOMETRY` type, `bbox`/`geometry` query parameters, gis routes and the postgis migration |
 | `wasichai.gis.geoserver.enabled` | `true` | `false` refuses layer publish/unpublish with a message; features and the `GEOMETRY` type still work |
 | `wasichai.gis.geoserver.url` | `http://localhost:8081/geoserver` | base URL of the GeoServer REST API |
+| `wasichai.gis.geoserver.public-url` | none | base of the WMS/WFS/WMTS URLs `/api/gis/services` and `/api/gis/layers` hand to clients, when a browser reaches GeoServer another way (a proxy); may be relative (`/geoserver`). Unset: `url` |
 | `wasichai.gis.geoserver.username` | `admin` | GeoServer REST credentials |
 | `wasichai.gis.geoserver.password` | `geoserver` | GeoServer REST credentials |
 | `wasichai.gis.geoserver.workspace` | `wasichai` | GeoServer workspace layers publish into |

@@ -22,8 +22,14 @@ data class GeoServerProperties(
     val password: String = "geoserver",
     val workspace: String = "wasichai",
     val enabled: Boolean = true,
-    val datastore: GeoServerDataStoreProperties = GeoServerDataStoreProperties()
+    val datastore: GeoServerDataStoreProperties = GeoServerDataStoreProperties(),
+    // how a browser reaches geoserver, when not as wasichai does (an internal host, a proxy). may be relative
+    // (/geoserver) so tiles go through the app's origin. null: the same as url
+    val publicUrl: String? = null
 ) {
     // a trailing slash would double up in every rest path
     val baseUrl: String get() = url.trimEnd('/')
+
+    // base of the wms/wfs/wmts urls the api hands to clients. rest calls keep baseUrl
+    val publicBaseUrl: String get() = publicUrl?.takeIf { it.isNotBlank() }?.trimEnd('/') ?: baseUrl
 }

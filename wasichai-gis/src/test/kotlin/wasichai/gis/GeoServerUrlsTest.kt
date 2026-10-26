@@ -48,4 +48,20 @@ class GeoServerUrlsTest {
         assertThat(properties.baseUrl).isEqualTo("http://geoserver:8080/geoserver")
         assertThat(GeoServerUrls.workspaces(properties.baseUrl)).isEqualTo("http://geoserver:8080/geoserver/rest/workspaces")
     }
+
+    @Test
+    fun `clients get the public url when one is set, rest calls keep the internal one`() {
+        val properties = GeoServerProperties(url = "http://geoserver:8080/geoserver", publicUrl = "/geoserver/")
+        assertThat(properties.baseUrl).isEqualTo("http://geoserver:8080/geoserver")
+        assertThat(properties.publicBaseUrl).isEqualTo("/geoserver")
+        assertThat(GeoServerUrls.wmsLayer(properties.publicBaseUrl, "wasichai", "predio__00000000"))
+            .startsWith("/geoserver/wasichai/wms?")
+    }
+
+    @Test
+    fun `without a public url, or with a blank one, clients get the internal url`() {
+        assertThat(GeoServerProperties(url = "http://geoserver:8080/geoserver/").publicBaseUrl).isEqualTo("http://geoserver:8080/geoserver")
+        assertThat(GeoServerProperties(url = "http://geoserver:8080/geoserver", publicUrl = " ").publicBaseUrl)
+            .isEqualTo("http://geoserver:8080/geoserver")
+    }
 }

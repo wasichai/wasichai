@@ -46,6 +46,15 @@ class WasichaiGisAutoConfigurationTest {
         }
     }
 
+    @Test
+    fun `the public geoserver url binds under wasichai gis geoserver public-url`() {
+        runner.withPropertyValues("wasichai.gis.geoserver.public-url=https://app.example.org/geoserver").run { context ->
+            val properties = context.getBean(GeoServerProperties::class.java)
+            assertThat(properties.publicBaseUrl).isEqualTo("https://app.example.org/geoserver")
+            assertThat(properties.baseUrl).isEqualTo("http://localhost:8081/geoserver")
+        }
+    }
+
     // an app that only sets wasichai.database.data-schema still gets a working layer: no separate
     // geoserver override is required
     @Test
