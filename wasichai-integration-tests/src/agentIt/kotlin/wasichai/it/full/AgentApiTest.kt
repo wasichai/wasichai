@@ -21,7 +21,7 @@ class AgentApiTest : FullAppIntegrationTest() {
             .jsonPath("$.enabled")
             .isEqualTo(false)
             .jsonPath("$.model")
-            .isEqualTo("claude-haiku-4-5")
+            .isEqualTo("claude-haiku-5-5")
     }
 
     @Test

@@ -428,7 +428,7 @@ class AgentExtensionsTest {
             }.getBeanProvider(AgentPlatform::class.java)
 
     companion object {
-        const val MODEL = "claude-haiku-4-5"
+        const val MODEL = "claude-haiku-5-5"
         const val INPUT = 100
         const val OUTPUT = 20
     }

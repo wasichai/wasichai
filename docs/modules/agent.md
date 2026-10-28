@@ -50,7 +50,7 @@ Frontend routes and slots:
 |---|---|---|
 | `wasichai.agent.enabled` | `true` | `false` removes the agent beans, routes and menu entry |
 | `wasichai.agent.api-key` | *(empty)* | the model provider's API key |
-| `wasichai.agent.model` | `claude-haiku-4-5` | the model name passed to Embabel |
+| `wasichai.agent.model` | `claude-haiku-5-5` | the model name passed to Embabel |
 | `wasichai.agent.max-tokens` | `16000` | clamped to 1024–64000 before it reaches the model |
 | `wasichai.agent.max-iterations` | `8` | clamped to 1–16; how many actions one run may take before the platform stops it |
 
@@ -157,5 +157,6 @@ another Embabel provider starter instead.
 - No write tools: the assistant can read the tenant's data but cannot create records, edit them or move a workflow
   state. The confirmation step that would make a write safe does not exist yet
   ([ADR-014](../adr/0014-agents-through-the-api.md)).
-- The model catalogue is Embabel 1.5.2's: it does not know `claude-opus-5`, so the default model is
-  `claude-haiku-4-5` ([ADR-015](../adr/0015-embabel-as-the-agent-runtime.md)).
+- The model must be in Embabel 1.5.4's Anthropic catalogue. The default is `claude-haiku-5-5`; `claude-sonnet-5-5`,
+  `claude-opus-5-5` and `claude-fable-5-1` are one `WASICHAI_AGENT_MODEL` away
+  ([ADR-073](../adr/0073-claude-haiku-5-5-as-the-default-model.md)).

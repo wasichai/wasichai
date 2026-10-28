@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class AgentProperties(
     val enabled: Boolean = true,
     val apiKey: String = "",
-    // embabel 1.5.2 does not know claude-opus-5; its newest anthropic model is claude-opus-4-8
-    val model: String = "claude-haiku-4-5",
+    // must be in embabel's catalogue. 1.5.4 knows the 5.5 family; haiku is the cheapest (ADR-073)
+    val model: String = "claude-haiku-5-5",
     val maxTokens: Long = 16_000,
     val maxIterations: Int = 8
 ) {

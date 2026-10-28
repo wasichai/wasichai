@@ -2,6 +2,15 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-10-28 — Embabel 1.5.4 and Claude Haiku 5.5 by default
+
+Embabel goes from `1.5.3` to `1.5.4`, whose Anthropic catalogue adds `claude-haiku-5-5`
+([embabel-agent#2173](https://github.com/embabel/embabel-agent/pull/2173)), and `wasichai.agent.model` defaults to it
+instead of `claude-haiku-4-5` ([ADR-073](adr/0073-claude-haiku-5-5-as-the-default-model.md)). REST change: none in
+shape; `model` in `GET /api/agent/status` and in `usage` reads `claude-haiku-5-5` unless the app sets
+`WASICHAI_AGENT_MODEL`. Tests updated: `EmbabelGateTest`, `AgentExtensionsTest`, `AgentApiTest`, `AgentEmbabelTest`,
+`AgentOnlyApiTest`.
+
 ## 2026-10-26 — A public GeoServer url for the urls clients get
 
 `wasichai.gis.geoserver.public-url` (`WASICHAI_GIS_GEOSERVER_PUBLIC_URL`), optional, is the base of the WMS/WFS/WMTS

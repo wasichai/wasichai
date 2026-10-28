@@ -1938,7 +1938,7 @@ object or rule is `404`.
 Module: wasichai-agent.
 
 ```http
-GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-4-5" }
+GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-5-5" }
 POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated, usage? }
 ```
 
@@ -1950,7 +1950,7 @@ POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated,
     { "tool": "query_records", "input": { "object": "predio", "uso": "COMERCIAL" }, "summary": "3 records" }
   ],
   "truncated": false,
-  "usage": { "model": "claude-haiku-4-5", "inputTokens": 5120, "outputTokens": 214 }
+  "usage": { "model": "claude-haiku-5-5", "inputTokens": 5120, "outputTokens": 214 }
 }
 ```
 
