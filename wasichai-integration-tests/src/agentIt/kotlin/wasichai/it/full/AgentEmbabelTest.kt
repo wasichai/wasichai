@@ -216,7 +216,7 @@ class AgentEmbabelTest : FullAppIntegrationTest() {
     fun `the assistant reports itself enabled when a key is configured`() {
         val status = asCaller(admin) { agent.status() }
         assertThat(status.enabled).isTrue()
-        assertThat(status.model).isEqualTo("claude-haiku-4-5")
+        assertThat(status.model).isEqualTo("claude-haiku-5-5")
     }
 
     // no extension declared and no token count from the model: the answer reads as it always did

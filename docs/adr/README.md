@@ -109,3 +109,4 @@ supersedes it and says so in its status line.
 - [ADR-071: Manuals in AsciiDoc beside the Markdown reference](0071-manuals-in-asciidoc-beside-the-markdown-reference.md)
 - [ADR-072: Attribute styles computed on the server, kept in map views and published as
   SLD](0072-attribute-styles-and-map-views.md)
+- [ADR-073: Claude Haiku 5.5 as the assistant's default model](0073-claude-haiku-5-5-as-the-default-model.md)

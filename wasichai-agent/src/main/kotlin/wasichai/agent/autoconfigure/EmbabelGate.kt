@@ -41,7 +41,7 @@ class EmbabelGate : EnvironmentPostProcessor {
             mapOf(
                 "wasichai.agent.api-key" to "\${ANTHROPIC_API_KEY:}",
                 // without it embabel looks for gpt-4.1-mini and the context fails to start
-                "embabel.models.default-llm" to "\${wasichai.agent.model:claude-haiku-4-5}"
+                "embabel.models.default-llm" to "\${wasichai.agent.model:claude-haiku-5-5}"
             )
 
         // every embabel autoconfiguration. excluding only the model one moves the failure, it does

@@ -57,7 +57,7 @@ class EmbabelGateTest {
     @Test
     fun `the key and the model get defaults the app can override`() {
         assertThat(gated("ANTHROPIC_API_KEY" to "k").getProperty("wasichai.agent.api-key")).isEqualTo("k")
-        assertThat(gated().getProperty("embabel.models.default-llm")).isEqualTo("claude-haiku-4-5")
+        assertThat(gated().getProperty("embabel.models.default-llm")).isEqualTo("claude-haiku-5-5")
         assertThat(gated("wasichai.agent.model" to "claude-opus-4-8").getProperty("embabel.models.default-llm")).isEqualTo("claude-opus-4-8")
         assertThat(gated("embabel.models.default-llm" to "mine").getProperty("embabel.models.default-llm")).isEqualTo("mine")
     }
