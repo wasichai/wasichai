@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/wasichai/wasichai/compare/v1.6.0...v1.7.0) (2026-10-28)
+
+
+### Features
+
+* **agent:** Embabel 1.5.4 and claude-haiku-5-5 as the default model ([#140](https://github.com/wasichai/wasichai/issues/140)) ([4cb78a5](https://github.com/wasichai/wasichai/commit/4cb78a5bd4fc8a081f9f67c69c69baa085fc86af))
+
 ## [1.6.0](https://github.com/wasichai/wasichai/compare/v1.5.0...v1.6.0) (2026-10-26)
 
 
