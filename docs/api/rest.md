@@ -1391,7 +1391,11 @@ POST /api/objects/{object}/files/{field}                 multipart/form-data, pa
   `If-Match` (`412`), write guards. A refused upload leaves nothing stored.
 - **Download** (`GET`): `READ` on the record and the field, as for reading it (`403`/`404`). `IMAGE` is served
   `Content-Disposition: inline`, everything else `attachment`; always `X-Content-Type-Options: nosniff`, the stored
-  content type and length. A field the caller cannot read, or that holds no file, is `404`.
+  content type and length, and `Repr-Digest: sha-256=:<base64>:` (RFC 9530), the sha256 taken at upload. A field the
+  caller cannot read, or that holds no file, is `404`. The bytes are checked against that digest as they stream
+  ([ADR-074](../adr/0074-a-download-is-checked-against-the-stored-sha256.md)): when the store's bytes are not the
+  upload's, the answer is a `500`, or, once bytes went out, a body cut short of its `Content-Length`; never the whole
+  file. Off with `wasichai.files.verify-on-download=false`.
 - **Staged upload** (`POST /api/objects/{object}/files/{field}`, `CREATE`): `201` with the descriptor. Its `id`, sent
   as the field's value in `POST /api/objects/{object}/records`, attaches it: the way to give a new record (or a record
   of an `appendOnly` object) its file. Unattached, the cleanup removes it.

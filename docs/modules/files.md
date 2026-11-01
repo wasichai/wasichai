@@ -18,7 +18,7 @@ No frontend package yet (planned). Runs on plain PostgreSQL.
 
 - The field types `FILE` and `IMAGE`. The column is a `uuid` (indexed) naming a row of the module's table
   `stored_files` (`id`, `organization_id`, `object_id`, `field_name`, `object_key`, `file_name`, `content_type`,
-  `size_bytes`, `sha256`, `created_by`, `created_at`). The record JSON, the audit trail and record listeners see
+  `size_bytes`, `sha256`, `created_by`, `created_at`, `platform_run`, `damaged_at`). The record JSON, the audit trail and record listeners see
   `{ "id", "name", "contentType", "size", "sha256" }`; the bytes live in a `FileStore`, never in the database.
 - Field settings, next to `type` when the field is created (fixed afterwards, like the type): `maxBytes` (1 to
   `wasichai.files.max-bytes`, which is also the default) and `contentTypes`, an allow-list of media types or
@@ -69,6 +69,26 @@ removed at once; what a crash leaves, the cleanup removes.
 An `appendOnly` object never takes an update, so its records get their file at creation: stage the upload, then send
 its `id` as the field's value in the create.
 
+## How a download goes
+
+`GET …/records/{id}/files/{field}` reads the record as the caller sees it, then streams the bytes with the stored
+content type and length and `Repr-Digest: sha-256=:<base64>:` (RFC 9530), the sha256 taken at upload. While they
+stream, the bytes are checked against that size and digest
+([ADR-074](../adr/0074-a-download-is-checked-against-the-stored-sha256.md)); the last buffer waits for the check.
+When the store's bytes are not the upload's:
+
+- the client never gets the file whole: a `500` when nothing was sent yet (a small file), a body short of its
+  `Content-Length` otherwise;
+- an `ERROR` log line names the key, both sizes and both digests;
+- `stored_files.damaged_at` is stamped, the first time;
+- an audit row on the admin trail: `admin:stored-file`, the file's id, `UPDATE` from `{damaged, size, sha256}` as
+  stored to what was read, source `files:integrity`, reason `integrity check failed serving <object>/<record>/<field>`.
+  `MANAGE_ORGANIZATION` reads it with `GET /api/audit?objectName=admin:stored-file`.
+
+The mark does not block: the next download is checked again, and the original bytes put back are served again.
+`wasichai.files.verify-on-download=false` skips the check (`Repr-Digest` stays). The check is in `FileService`, so it
+covers an app's own `FileStore` too, and the platform's `open` streams checked bytes as well.
+
 ## From a background job
 
 Inside `RecordService.asPlatform`, a job stages, attaches and opens files with `FileService`, with no user
@@ -115,6 +135,7 @@ the module's (`@ConditionalOnMissingBean`).
 | `wasichai.files.s3.prefix` | none | keys go under it |
 | `wasichai.files.cleanup.interval` | `1h` | `0s`: never |
 | `wasichai.files.cleanup.delay` | `24h` | at least `2s`; an upload attaches within half of it |
+| `wasichai.files.verify-on-download` | `true` | check each download against the stored sha256; `false`: stream unchecked |
 
 ## Schema
 
@@ -122,7 +143,8 @@ Migration `V1__files.sql` (history table `flyway_history_files`, ADR-026; order 
 `stored_files` (no foreign key on `organization_id` or `object_id`, so a deleted tenant's or object's rows stay for the
 cleanup), `custom_fields.file_max_bytes` and `file_content_types`, and the function `stored_file_descriptor(uuid,
 uuid)` the record select calls. The Flyway callback `afterMigrate__file_types.sql` appends `FILE` and `IMAGE` to
-core's `custom_fields_type_valid` list, whatever it holds, on every start.
+core's `custom_fields_type_valid` list, whatever it holds, on every start. `V2__platform_run.sql` adds
+`stored_files.platform_run` (ADR-068), `V3__damaged.sql` adds `stored_files.damaged_at` (ADR-074).
 
 ## Known limitations
 

@@ -14,7 +14,10 @@ data class WasichaiFilesProperties(
     val store: Store = Store.LOCAL,
     val local: Local = Local(),
     val s3: S3 = S3(),
-    val cleanup: Cleanup = Cleanup()
+    val cleanup: Cleanup = Cleanup(),
+    // each download is checked against the sha256 taken at upload; a mismatch cuts it and marks the file (ADR-074).
+    // costs one sha256 pass per download, no extra read
+    val verifyOnDownload: Boolean = true
 ) {
     enum class Store { LOCAL, S3 }
 

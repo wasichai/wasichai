@@ -16,8 +16,10 @@ import org.springframework.web.reactive.function.BodyInserters
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import wasichai.test.WasichaiIntegrationTest
+import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.HexFormat
 import java.util.UUID
 
@@ -81,6 +83,9 @@ class FilesApiTest : WasichaiIntegrationTest() {
         assertThat(download.responseHeaders.contentDisposition.type).isEqualTo("attachment")
         assertThat(download.responseHeaders.contentDisposition.filename).isEqualTo("acta.pdf")
         assertThat(download.responseHeaders.getFirst("X-Content-Type-Options")).isEqualTo("nosniff")
+        // RFC 9530: the stored sha256, base64 between colons (issue 144)
+        val digest = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(FileFixtures.PDF))
+        assertThat(download.responseHeaders.getFirst("Repr-Digest")).isEqualTo("sha-256=:$digest:")
 
         // the column holds the id; the key is <organization>/<id>, never the client's name
         val fileId = descriptor.get("id").asString()
@@ -92,6 +97,51 @@ class FilesApiTest : WasichaiIntegrationTest() {
                 "SELECT data_type FROM information_schema.columns WHERE table_schema = 'app_data' AND column_name = 'acta' AND table_name = '${table(name)}'"
             )
         ).isEqualTo("uuid")
+    }
+
+    // issue 144: bytes changed in the store after the upload are never served as if they were the file
+    @Test
+    fun `a file altered in the store fails its download, is marked damaged and lands on the admin trail`() {
+        val name = createObject()
+        val id = createRecord(admin, name, mapOf("codigo" to "D-1"))
+        val fileId = attach(admin, name, id, "acta", FileFixtures.PDF)
+        val key = scalar("SELECT object_key FROM wasichai.stored_files WHERE id = '$fileId'")
+
+        // same length, one byte changed: only the digest can tell
+        val altered = FileFixtures.PDF.copyOf().also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() }
+        Files.write(storeRoot.resolve(key), altered)
+
+        val refused = download(admin, name, id, "acta")
+        assertThat(refused.status.value()).isEqualTo(500)
+        assertThat(refused.responseBody).isNotEqualTo(altered)
+        assertThat(scalar("SELECT (damaged_at IS NOT NULL)::text FROM wasichai.stored_files WHERE id = '$fileId'")).isEqualTo("true")
+
+        // a second try is refused again and audited again; the mark keeps its first stamp
+        val stamp = scalar("SELECT damaged_at::text FROM wasichai.stored_files WHERE id = '$fileId'")
+        assertThat(download(admin, name, id, "acta").status.value()).isEqualTo(500)
+        assertThat(scalar("SELECT damaged_at::text FROM wasichai.stored_files WHERE id = '$fileId'")).isEqualTo(stamp)
+        val audited = "FROM wasichai.audit_log WHERE object_name = 'admin:stored-file' AND record_id = '$fileId'"
+        assertThat(scalar("SELECT count(*)::text $audited")).isEqualTo("2")
+        assertThat(scalar("SELECT DISTINCT operation || ' ' || source $audited")).isEqualTo("UPDATE files:integrity")
+        assertThat(scalar("SELECT DISTINCT after_state->>'sha256' $audited")).isEqualTo(sha256(altered))
+        assertThat(scalar("SELECT DISTINCT before_state->>'sha256' $audited")).isEqualTo(sha256(FileFixtures.PDF))
+        assertThat(scalar("SELECT DISTINCT reason $audited")).isEqualTo("integrity check failed serving $name/$id/acta")
+
+        // the admin trail shows it to its reader
+        client
+            .get()
+            .uri("/api/audit?objectName=admin:stored-file&operation=UPDATE")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$[0].recordId")
+            .isEqualTo(fileId)
+
+        // the original bytes back in the store: served again
+        Files.write(storeRoot.resolve(key), FileFixtures.PDF)
+        assertThat(download(admin, name, id, "acta").responseBody).isEqualTo(FileFixtures.PDF)
     }
 
     @Test

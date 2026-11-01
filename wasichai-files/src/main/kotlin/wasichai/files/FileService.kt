@@ -8,6 +8,8 @@ import org.springframework.core.io.buffer.DataBuffer
 import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.core.io.buffer.DataBufferUtils
 import reactor.core.publisher.Flux
+import wasichai.core.audit.AuditOperation
+import wasichai.core.audit.AuditService
 import wasichai.core.common.Actions
 import wasichai.core.common.NotFoundException
 import wasichai.core.common.ValidationException
@@ -15,11 +17,13 @@ import wasichai.core.data.PlatformRun
 import wasichai.core.data.RecordRequest
 import wasichai.core.data.RecordResponse
 import wasichai.core.data.RecordService
+import wasichai.core.identity.AdminEntity
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomField
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectDefinition
+import wasichai.core.platform.ChangeOrigin
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.HexFormat
@@ -60,7 +64,11 @@ class FileService(
     private val store: FileStore,
     private val handlers: Map<String, FileFieldType>,
     // the app's FileDescriptorReadPolicy beans (ADR-065). defaulted: code that builds this service itself keeps compiling
-    private val policies: FileDescriptorReadPolicies = FileDescriptorReadPolicies.NONE
+    private val policies: FileDescriptorReadPolicies = FileDescriptorReadPolicies.NONE,
+    // where a failed integrity check is written (ADR-074). null: only the log and the damaged mark
+    private val audit: AuditService? = null,
+    // wasichai.files.verify-on-download: false streams the bytes unchecked
+    private val verifyOnDownload: Boolean = true
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -119,14 +127,16 @@ class FileService(
 
     /**
      * The file [fieldName] of the record holds, if the caller may read that field of that record. Inside `asPlatform`,
-     * any file of the block's organization (ADR-068).
+     * any file of the block's organization (ADR-068). The bytes are checked against the stored sha256 as they stream,
+     * unless verify-on-download is off (ADR-074).
      */
     suspend fun open(
         objectName: String,
         recordId: UUID,
         fieldName: String
     ): FileDownload {
-        val organizationId = uploader().organizationId
+        val caller = uploader()
+        val organizationId = caller.organizationId
         // READ, field access, owner and read scope: the record as its caller sees it, or a 403/404
         val record = records.get(objectName, recordId)
         val definition = metadata.loadDefinition(organizationId, objectName)
@@ -138,8 +148,52 @@ class FileService(
         val file = files.find(organizationId, id) ?: throw NotFoundException("Record $recordId has no file in '${field.name}'")
         // the name the caller reads, as the read policies left it (ADR-065): none read, none sent
         val name = (value as? Map<*, *>)?.get("name") as? String
-        return FileDownload(file, field.type, store.open(file.objectKey), safeName(name))
+        val content = store.open(file.objectKey)
+        if (!verifyOnDownload) return FileDownload(file, field.type, content, safeName(name))
+        val check =
+            DigestCheck(file.sizeBytes, file.sha256, file.id) { size, sha256 ->
+                damaged(file, caller.user?.userId, "${definition.obj.name}/$recordId/${field.name}", size, sha256)
+            }
+        return FileDownload(file, field.type, check.verify(content), safeName(name))
     }
+
+    // the bytes in the store are not the ones uploaded: logged, marked on the row, and on the admin trail (ADR-074).
+    // NonCancellable: the client hanging up does not stop the record of it
+    private suspend fun damaged(
+        file: StoredFile,
+        userId: UUID?,
+        servedAs: String,
+        actualSize: Long,
+        actualSha256: String?
+    ): Unit =
+        withContext(NonCancellable) {
+            log.error(
+                "Stored file {} ({}) failed its integrity check serving {}: {} bytes, sha256 {}; expected {} bytes, sha256 {}",
+                file.id,
+                file.objectKey,
+                servedAs,
+                actualSize,
+                actualSha256 ?: "not taken, longer than stored",
+                file.sizeBytes,
+                file.sha256
+            )
+            files.markDamaged(file.organizationId, file.id)
+            audit?.let {
+                ChangeOrigin.within(INTEGRITY_SOURCE) {
+                    it.record(
+                        organizationId = file.organizationId,
+                        userId = userId,
+                        objectName = STORED_FILE_ENTITY,
+                        recordId = file.id,
+                        operation = AuditOperation.UPDATE,
+                        before = mapOf("damaged" to (file.damagedAt != null), "size" to file.sizeBytes, "sha256" to file.sha256),
+                        after = mapOf("damaged" to true, "size" to actualSize, "sha256" to actualSha256),
+                        reason = "integrity check failed serving $servedAs"
+                    )
+                }
+            }
+            Unit
+        }
 
     // the upload, checked against the field and stored: the row first, so a crash between the two leaves
     // a row the cleanup finds, never bytes nobody knows of
@@ -249,6 +303,12 @@ class FileService(
 
     companion object {
         private const val MAX_NAME = 255
+
+        // the admin trail's name for a stored file (ADR-074): only MANAGE_ORGANIZATION reads it, as every admin:* entry
+        const val STORED_FILE_ENTITY = AdminEntity.PREFIX + "stored-file"
+
+        // the source of the integrity check's audit row
+        const val INTEGRITY_SOURCE = "files:integrity"
 
         // the client's name, for Content-Disposition only: no path, no control character, bounded
         internal fun safeName(raw: String?): String {

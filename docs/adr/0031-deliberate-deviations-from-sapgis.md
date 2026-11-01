@@ -472,6 +472,16 @@ These are the only intended differences. Anything else that behaves differently 
   `wasichai.gis.geoserver.url` ([wasichai#137](https://github.com/wasichai/wasichai/issues/137)). Tested by
   `GeoServerUrlsTest` and `WasichaiGisAutoConfigurationTest`.
 
+**Because a store can change what was uploaded**
+
+- **D53. A download is checked against the stored sha256.** The original served whatever bytes the store held. Now
+  each download of a `FILE` or `IMAGE` carries `Repr-Digest: sha-256=:…:` (RFC 9530), and its bytes are checked
+  against the size and sha256 taken at upload as they stream: a mismatch is a `500`, or a response cut short of its
+  `Content-Length` when bytes were already sent, and the file is stamped `damaged_at` and written to the admin trail as
+  `admin:stored-file`. `wasichai.files.verify-on-download=false` streams unchecked as before
+  ([ADR-074](0074-a-download-is-checked-against-the-stored-sha256.md),
+  [wasichai#144](https://github.com/wasichai/wasichai/issues/144)). Tested by `DigestCheckTest` and `FilesApiTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

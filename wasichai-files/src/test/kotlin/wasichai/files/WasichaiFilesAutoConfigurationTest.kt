@@ -10,6 +10,7 @@ import wasichai.core.data.RecordWriteGuard
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.platform.ModuleMigration
 import wasichai.files.autoconfigure.WasichaiFilesAutoConfiguration
+import wasichai.files.autoconfigure.WasichaiFilesProperties
 import wasichai.files.autoconfigure.WasichaiFilesS3AutoConfiguration
 import wasichai.test.WasichaiContextRunner
 
@@ -33,6 +34,18 @@ class WasichaiFilesAutoConfigurationTest {
             val migration = context.getBeansOfType(ModuleMigration::class.java).values.single { it.name == "files" }
             assertThat(migration.location).isEqualTo("classpath:db/wasichai/files")
             assertThat(migration.order).isGreaterThan(ModuleMigration.MODULE_ORDER)
+        }
+    }
+
+    // ADR-074: on unless the app says otherwise
+    @Test
+    fun `downloads are checked by default, and wasichai files verify-on-download turns it off`() {
+        runner.run { context ->
+            assertThat(context.getBean(WasichaiFilesProperties::class.java).verifyOnDownload).isTrue()
+        }
+        runner.withPropertyValues("wasichai.files.verify-on-download=false").run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(WasichaiFilesProperties::class.java).verifyOnDownload).isFalse()
         }
     }
 

@@ -30,13 +30,15 @@ data class StoredFile(
     val createdBy: UUID?,
     val createdAt: Instant?,
     // the asPlatform block that staged it, when the platform did (ADR-068); never with createdBy
-    val platformRun: UUID? = null
+    val platformRun: UUID? = null,
+    // when a download first found its bytes changed in the store (ADR-074); null while none did
+    val damagedAt: Instant? = null
 ) {
     fun descriptor(): FileDescriptor = FileDescriptor(id, fileName, contentType, sizeBytes, sha256)
 }
 
 private const val COLUMNS =
-    "id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by, created_at, platform_run"
+    "id, organization_id, object_id, field_name, object_key, file_name, content_type, size_bytes, sha256, created_by, created_at, platform_run, damaged_at"
 
 // every query names its organization, except the cleanup's, which walks them one by one (ADR-0061)
 @Repository
@@ -148,6 +150,21 @@ class StoredFileRepository(
             .toSet()
     }
 
+    // the first failed check stamps it; later ones leave the stamp (ADR-074)
+    suspend fun markDamaged(
+        organizationId: UUID,
+        id: UUID
+    ): Boolean =
+        db
+            .sql(
+                "UPDATE ${schemas.metadata}.stored_files SET damaged_at = now() " +
+                    "WHERE id = :id AND organization_id = :organizationId AND damaged_at IS NULL"
+            ).bind("id", id)
+            .bind("organizationId", organizationId)
+            .fetch()
+            .rowsUpdated()
+            .awaitSingle() > 0
+
     suspend fun delete(
         organizationId: UUID,
         id: UUID
@@ -248,6 +265,7 @@ class StoredFileRepository(
             sha256 = Rows.string(row, "sha256"),
             createdBy = Rows.uuidOrNull(row, "created_by"),
             createdAt = Rows.instantOrNull(row, "created_at"),
-            platformRun = Rows.uuidOrNull(row, "platform_run")
+            platformRun = Rows.uuidOrNull(row, "platform_run"),
+            damagedAt = Rows.instantOrNull(row, "damaged_at")
         )
 }
