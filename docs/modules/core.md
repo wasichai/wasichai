@@ -280,6 +280,10 @@ authorization model.
   both sides, the `RELATION` target check, history and `/api/audit`, the lookups before an update, delete, link or
   transition, and so GIS features and the agent's tools. Out of scope reads as missing (`404`, or the `RELATION`
   `400`). Never asked for `ADMIN`, the platform or automations.
+  A scope that depends on other objects takes the `RecordSubqueries` bean: `select(caller, object, select, where)`
+  renders a subquery over another object from its metadata, with that caller's organization, `READ`,
+  `own_records_only` and the object's own scopes applied
+  ([ADR-075](../adr/0075-a-read-scope-subquery-over-another-object.md)).
 - `RecordReadMask` — an app's or a module's rewrite of the values a caller reads of one record, decided on the record
   as stored (so on a field the caller cannot read), such as the files module's hidden file names
   ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)). `RecordReadMasks` runs every

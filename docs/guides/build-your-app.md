@@ -537,6 +537,40 @@ class ProjectScope(
   lookups (the assignments above) are yours to cache per request.
 - GeoServer layers read the table themselves: do not publish a scoped object as a layer.
 
+### A scope that goes through other objects
+
+When the records a caller reads depend on other objects (a lesson is read when its unit belongs to a version the
+caller reads), take `RecordSubqueries` and let core write the subquery
+([ADR-075](../adr/0075-a-read-scope-subquery-over-another-object.md)). The whole scope stays one statement, with no
+array of ids to bind and no table name of yours:
+
+```kotlin
+@Component
+class LessonScope(
+    private val subqueries: RecordSubqueries
+) : RecordReadScope {
+    override suspend fun criterion(
+        caller: AuthenticatedUser,
+        definition: ObjectDefinition
+    ): RecordCriterion? {
+        if (definition.obj.name != "leccion") return null
+        val versions = subqueries.select(caller, "version_curso", where = mapOf("estado" to "PUBLICADO"))
+        val units = subqueries.select(caller, "unidad", where = mapOf("version_curso" to versions))
+        // "unidad" IN (SELECT id FROM <unidad's table> WHERE ... "version_curso" IN (SELECT id FROM ...))
+        return units.criterion("unidad")
+    }
+}
+```
+
+- `select(caller, object, select = "id", where = ...)` reads the other object as that caller reads it: their
+  organization, `READ` on it (without it, no row), `own_records_only`, and that object's own read scopes. It does not
+  apply field rules or read masks; only which values match reaches your criterion.
+- A `where` value is bound through its field type, `null` is `IS NULL`, another subquery is `IN`. `select` and the keys
+  of `where` are `id` or field names.
+- `units.criterion("unidad")` is `"unidad" IN (...)`. For another shape, `ObjectDefinition.column(name)` gives the
+  quoted column of a field and `units.sql(bind)` the subquery, inside your own `RecordCriterion`.
+- Scopes that reach an object again through subqueries throw `IllegalStateException` at the read: break the cycle.
+
 ### Hide part of a value: file names on classified records
 
 A read scope hides whole records and a field permission a whole field, per role. When a reader may see a record and

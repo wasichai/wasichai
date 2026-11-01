@@ -28,6 +28,7 @@ import wasichai.core.data.RecordReadScope
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordSubqueries
 import wasichai.core.data.RecordWriteGuard
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
@@ -124,6 +125,19 @@ class WasichaiDataAutoConfiguration {
         scopes: ObjectProvider<RecordReadScope>,
         store: RecordStore
     ): RecordReadScopes = RecordReadScopes(scopes.orderedStream().toList(), store)
+
+    // what an app's RecordReadScope narrows by another object with (ADR-075). RecordReadScopes is looked up lazily:
+    // it takes every scope, and a scope takes this
+    @Bean
+    @ConditionalOnMissingBean
+    fun recordSubqueries(
+        metadata: MetadataService,
+        schemas: WasichaiSchemas,
+        currentUser: CurrentUser,
+        access: AccessPolicy,
+        types: FieldTypeRegistry,
+        readScopes: ObjectProvider<RecordReadScopes>
+    ): RecordSubqueries = RecordSubqueries(metadata, schemas, currentUser, access, types) { readScopes.getObject() }
 
     // no @ConditionalOnMissingBean: an app adds a RecordReadMask, it never swaps out another's (ADR-065)
     @Bean

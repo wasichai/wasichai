@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-01 — A read scope narrows by another object through a subquery
+
+`RecordSubqueries.select(caller, object, select, where)` lets a `RecordReadScope` narrow by another object in the same
+statement ([wasichai#147](https://github.com/wasichai/wasichai/issues/147);
+[ADR-075](adr/0075-a-read-scope-subquery-over-another-object.md)). Core resolves the other object's table and columns
+from metadata and applies what reading it as the same caller applies: organization, `READ` (none: no row),
+`own_records_only` and its own read scopes; every value bound. `RecordSubquery.criterion(field)` gives the common
+`<field> IN (...)`, and `ObjectDefinition.column(name)` a field's quoted column. A cycle of scopes through subqueries
+throws `IllegalStateException`. REST change: none. New tests: `RecordSubqueriesTest`, `RecordSubqueryApiTest` and a
+case in `WasichaiAutoConfigurationTest`.
+
 ## 2026-11-01 — wasichai-files checks the sha256 of every download
 
 A download of a `FILE` or `IMAGE` is checked against the size and sha256 taken at upload while it streams
