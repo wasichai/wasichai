@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/wasichai/wasichai/compare/v1.7.0...v1.8.0) (2026-11-01)
+
+
+### Features
+
+* **files:** check the sha256 of every download ([#145](https://github.com/wasichai/wasichai/issues/145)) ([72b2646](https://github.com/wasichai/wasichai/commit/72b2646cf52655671e04a31a530f444f260c8ec7)), closes [#144](https://github.com/wasichai/wasichai/issues/144)
+
 ## [1.7.0](https://github.com/wasichai/wasichai/compare/v1.6.0...v1.7.0) (2026-10-28)
 
 
