@@ -2,6 +2,18 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-01 — wasichai-files checks the sha256 of every download
+
+A download of a `FILE` or `IMAGE` is checked against the size and sha256 taken at upload while it streams
+([wasichai#144](https://github.com/wasichai/wasichai/issues/144);
+[ADR-074](adr/0074-a-download-is-checked-against-the-stored-sha256.md), ADR-031 D53). The last buffer waits for the
+check, so a file changed in the store is never served whole: a `500` when nothing was sent yet, a body short of its
+`Content-Length` otherwise. The mismatch is logged, stamped on the new `stored_files.damaged_at` (`V3__damaged.sql`)
+and written to the admin trail as `admin:stored-file`, source `files:integrity`. `wasichai.files.verify-on-download`
+(default `true`) turns the check off. REST change: additive — the download carries `Repr-Digest: sha-256=:…:`
+(RFC 9530); a damaged file, `200` before, now fails. New tests: `DigestCheckTest`, a case in `FilesApiTest`,
+`FilesMigrationSqlTest` and `WasichaiFilesAutoConfigurationTest`.
+
 ## 2026-10-28 — Embabel 1.5.4 and Claude Haiku 5.5 by default
 
 Embabel goes from `1.5.3` to `1.5.4`, whose Anthropic catalogue adds `claude-haiku-5-5`

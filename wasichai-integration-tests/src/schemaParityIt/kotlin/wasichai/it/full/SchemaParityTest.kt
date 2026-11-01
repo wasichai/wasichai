@@ -445,6 +445,10 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "column stored_files.platform_run #12 uuid",
                 "constraint stored_files.stored_files_one_uploader CHECK (((created_by IS NULL) OR (platform_run IS NULL)))"
             ).associateWith { "ADR-031 D47, ADR-068: files staged by a platform run" } +
+            // a download that found the store's bytes changed stamps the file (ADR-074)
+            listOf(
+                "column stored_files.damaged_at #13 timestamp with time zone"
+            ).associateWith { "ADR-031 D53, ADR-074: a file found damaged on download" } +
             // wasichai-gis map views (ADR-031 D51, ADR-072): one table, nothing on the original's
             listOf(
                 "column map_views.created_at #8 timestamp with time zone NOT NULL DEFAULT now()",

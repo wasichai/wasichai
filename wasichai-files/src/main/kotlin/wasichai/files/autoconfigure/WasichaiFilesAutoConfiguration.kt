@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
+import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordService
 import wasichai.core.identity.CurrentUser
@@ -96,8 +97,21 @@ class WasichaiFilesAutoConfiguration {
         files: StoredFileRepository,
         store: FileStore,
         types: List<FileFieldType>,
-        policies: FileDescriptorReadPolicies
-    ): FileService = FileService(records, metadata, currentUser, files, store, types.associateBy { it.type.name }, policies)
+        policies: FileDescriptorReadPolicies,
+        audit: AuditService,
+        properties: WasichaiFilesProperties
+    ): FileService =
+        FileService(
+            records,
+            metadata,
+            currentUser,
+            files,
+            store,
+            types.associateBy { it.type.name },
+            policies,
+            audit,
+            properties.verifyOnDownload
+        )
 
     // the app's FileDescriptorReadPolicy beans, as a RecordReadMask core asks everywhere a record leaves it (ADR-065).
     // no @ConditionalOnMissingBean: an app adds a policy, it never swaps out another's

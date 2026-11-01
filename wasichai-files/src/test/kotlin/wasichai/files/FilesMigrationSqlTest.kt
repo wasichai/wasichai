@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 class FilesMigrationSqlTest {
     private val v1 = javaClass.getResource("/db/wasichai/files/V1__files.sql")!!.readText()
     private val v2 = javaClass.getResource("/db/wasichai/files/V2__platform_run.sql")!!.readText()
+    private val v3 = javaClass.getResource("/db/wasichai/files/V3__damaged.sql")!!.readText()
     private val types = javaClass.getResource("/db/wasichai/files/afterMigrate__file_types.sql")!!.readText()
 
     @Test
@@ -24,6 +25,12 @@ class FilesMigrationSqlTest {
             .contains("ADD COLUMN platform_run uuid,")
             .contains("CHECK (created_by IS NULL OR platform_run IS NULL)")
             .doesNotContain("REFERENCES")
+    }
+
+    // ADR-074: a nullable stamp, added to rows that exist, so no default and no check
+    @Test
+    fun `a stored file can be marked damaged`() {
+        assertThat(v3).contains("ADD COLUMN damaged_at timestamptz;").doesNotContain("NOT NULL")
     }
 
     @Test

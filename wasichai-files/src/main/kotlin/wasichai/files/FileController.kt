@@ -56,7 +56,8 @@ class FileController(
         @RequestPart("file") file: FilePart
     ): Map<String, Any?> = files.stageAsRead(objectName, field, file.toUpload())
 
-    // the bytes. an IMAGE is shown inline; anything else is a download the browser never renders
+    // the bytes. an IMAGE is shown inline; anything else is a download the browser never renders.
+    // checked against the stored sha256 as they go: a damaged file ends short, never whole (ADR-074)
     @GetMapping("/records/{id}/files/{field}")
     suspend fun download(
         @PathVariable("object") objectName: String,
@@ -76,6 +77,8 @@ class FileController(
             .contentLength(file.sizeBytes)
             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
             .header(NOSNIFF_HEADER, "nosniff")
+            // the stored digest, for a client to check the bytes itself (RFC 9530, ADR-074)
+            .header(DigestCheck.REPR_DIGEST, DigestCheck.reprDigest(file.sha256))
             .body(download.content)
     }
 
