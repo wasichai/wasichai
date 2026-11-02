@@ -13,6 +13,17 @@ from metadata and applies what reading it as the same caller applies: organizati
 throws `IllegalStateException`. REST change: none. New tests: `RecordSubqueriesTest`, `RecordSubqueryApiTest` and a
 case in `WasichaiAutoConfigurationTest`.
 
+## 2026-11-01 — Theme labels per language and shell menu hooks in wasichai-ui
+
+In `@wasichai/core`, a `ThemeDefinition.label` is an i18n key or the text per language
+(`{ es: 'Quipu oscuro', en: 'Quipu dark' }`), so an app theme no longer borrows a module's i18n
+([wasichai-ui#115](https://github.com/wasichai/wasichai-ui/issues/115)); `themeLabel()` picks the current language, its
+base, `config.languages[0]`, then any text. Of the two options in the issue this is the smaller one: a
+`WasichaiConfig.i18n` waits for a second user. `AppShell`'s menu links carry `data-slot="nav-item"`, the group headings
+`nav-group` and the theme `<select>` `theme-select`, so a theme sheet can shape them (ADR-035;
+[wasichai-ui#116](https://github.com/wasichai/wasichai-ui/issues/116)). `light` and `dark` do not change. REST change:
+none. New tests: cases in `themes.test.ts` and `AppShell.test.tsx`.
+
 ## 2026-11-01 — wasichai-files checks the sha256 of every download
 
 A download of a `FILE` or `IMAGE` is checked against the size and sha256 taken at upload while it streams
