@@ -38,6 +38,7 @@ import wasichai.core.data.RecordCriterion
 import wasichai.core.data.RecordReadScope
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
+import wasichai.core.data.RecordSubqueries
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
@@ -220,6 +221,28 @@ class WasichaiAutoConfigurationTest {
                 assertThat(criteria.map { it.condition(definition) { "?" } }).containsExactly("first", "second")
                 assertThat(asked).containsExactly("first", "second")
             }
+    }
+
+    // issue 147 (ADR-075): a scope takes RecordSubqueries, which reaches RecordReadScopes lazily: no bean cycle
+    @Test
+    fun `a read scope may take the subqueries bean`() {
+        runner
+            .withBean(SubqueryScope::class.java)
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                assertThat(context).hasSingleBean(RecordSubqueries::class.java)
+                assertThat(context.getBean(RecordReadScopes::class.java)).isNotNull
+            }
+    }
+
+    // a scope as an app writes one, taking the subqueries bean by its constructor
+    class SubqueryScope(
+        val subqueries: RecordSubqueries
+    ) : RecordReadScope {
+        override suspend fun criterion(
+            caller: AuthenticatedUser,
+            definition: ObjectDefinition
+        ): RecordCriterion? = null
     }
 
     @Test
