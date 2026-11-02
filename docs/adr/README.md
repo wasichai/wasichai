@@ -113,3 +113,4 @@ supersedes it and says so in its status line.
 - [ADR-074: A download is checked against the stored sha256](0074-a-download-is-checked-against-the-stored-sha256.md)
 - [ADR-075: A read scope narrows by another object through a subquery core
   renders](0075-a-read-scope-subquery-over-another-object.md)
+- [ADR-076: The app picks the shell menu and the start page](0076-the-app-picks-the-shell-menu-and-the-start-page.md)

@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-02 — The app picks the shell menu and the start page
+
+Two optional `WasichaiConfig` functions in `@wasichai/core`, for an app that mounts all its screens as modules of one
+`WasichaiApp` ([ADR-076](adr/0076-the-app-picks-the-shell-menu-and-the-start-page.md)). `shellNav(groups, { pathname,
+permissions })` picks the sidebar groups `AppShell` offers, before each entry's `visible`
+([wasichai-ui#119](https://github.com/wasichai/wasichai-ui/issues/119)). `homeRoute(permissions)` picks the route
+key `/`, «Inicio» and `links.home()` lead to: `core:home` now mounts `HomePage`, which redirects there without
+mounting the dashboard, shows the loading text while the permissions load and keeps the dashboard when they fail
+([wasichai-ui#120](https://github.com/wasichai/wasichai-ui/issues/120)). Without them nothing changes. REST change:
+none. New tests: `home.test.tsx` and cases in `AppShell.test.tsx`.
+
 ## 2026-11-01 — A read scope narrows by another object through a subquery
 
 `RecordSubqueries.select(caller, object, select, where)` lets a `RecordReadScope` narrow by another object in the same
