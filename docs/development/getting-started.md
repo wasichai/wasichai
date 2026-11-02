@@ -108,7 +108,9 @@ nc -z localhost 5442 && echo postgis db reachable
 | `WASICHAI_TEST_GIS_DB_PORT` | Tunnelled port of the PostGIS database, for suites that need PostGIS. Name, user and password are shared. |
 
 Once `WASICHAI_TEST_DB_HOST` is set, the other four `WASICHAI_TEST_DB_*` variables are required — there is
-no silent default for a wipe target. Add `--rerun` when replaying a suite, because Gradle's build cache
+no silent default for a wipe target. The external database needs room for a whole suite: every Spring
+context the suite caches keeps its own pool open, so set `max_connections` to 400, as the Testcontainers
+database has. At the default 100 the last contexts fail in Flyway with a connection error. Add `--rerun` when replaying a suite, because Gradle's build cache
 could otherwise hand back a stale green result instead of hitting the external database again:
 
 ```bash

@@ -43,6 +43,9 @@ object WasichaiTestDatabase {
 
     // core runs on plain postgres. a module that needs postgis sets the image for its test task:
     // tasks.integrationTest { systemProperty("wasichai.test.db.image", "postgis/postgis:18-3.6") }
+    // room for the cached contexts of one suite, see the container below
+    const val MAX_CONNECTIONS = 400
+
     val image: String = System.getProperty("wasichai.test.db.image") ?: System.getenv("WASICHAI_TEST_DB_IMAGE") ?: DEFAULT_IMAGE
 
     // validated once, at class init: a partial external config is a config error, caught immediately
@@ -57,6 +60,9 @@ object WasichaiTestDatabase {
                 .withDatabaseName("wasichai")
                 .withUsername("wasichai")
                 .withPassword("wasichai")
+                // every cached spring context keeps its own pool open (5 idle, up to 20): a suite of ~20
+                // contexts outgrows the default 100 and the last context fails in flyway
+                .withCommand("postgres", "-c", "max_connections=$MAX_CONNECTIONS")
                 .also { it.start() }
         }
     }
