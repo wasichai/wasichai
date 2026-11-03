@@ -14,8 +14,9 @@ naming the map, a blank text drops its language, and an option key that is no op
 it. On update a map left out is kept and a map sent replaces it, so applying a model twice changes nothing.
 `V19__translations.sql` adds one `translations` jsonb per table, `{}` for what was stored before. A response writes a
 map only when it holds something; a related side adds `labels` and `objectLabels`. Field permissions apply unchanged.
-A difference from the original, ADR-031 D54; the column is a known schema-parity deviation. REST change: additive. New tests: `LocalizedTextsTest`, `MetadataTranslationsApiTest` and cases in `MetadataJsonTest`
-and `RelationshipSideTest`.
+A difference from the original, ADR-031 D54; the column is a known schema-parity deviation. REST change: additive.
+New tests: `LocalizedTextsTest`, `MetadataTranslationsApiTest` and cases in `MetadataJsonTest` and
+`RelationshipSideTest`.
 
 ## 2026-11-03 — Shell, dialogs and admin screens in wasichai-ui, after the wasichai-learning redesign
 
