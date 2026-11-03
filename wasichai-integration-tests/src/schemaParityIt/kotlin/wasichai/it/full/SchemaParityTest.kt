@@ -58,13 +58,22 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
-            // core's V18 adds time_zone too, so on a fresh database the gis columns sit two places later, and
-            // the files columns one place later than they would
+            // core's V18 adds time_zone and V19 translations too, so on a fresh database the gis columns sit three
+            // places later, and the files columns one place later than before V19
             "column custom_fields.time_zone #20 text" to "ADR-031 D48: a DATETIME field's time zone",
-            "column custom_fields.geometry_type #21 text" to "ADR-031 D22, D48: shifted by indexed and time_zone",
-            "column custom_fields.srid #22 integer" to "ADR-031 D22, D48: shifted by indexed and time_zone",
-            "column custom_fields.dimension #23 integer" to "ADR-031 D22, D48: shifted by indexed and time_zone"
+            "column custom_fields.geometry_type #22 text" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations",
+            "column custom_fields.srid #23 integer" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations",
+            "column custom_fields.dimension #24 integer" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations"
         ) +
+            // per-language texts of the model (ADR-031 D54, ADR-078): one jsonb per metadata table
+            listOf(
+                "column custom_objects.translations #16 jsonb NOT NULL DEFAULT '{}'::jsonb",
+                "constraint custom_objects.custom_objects_translations_not_null NOT NULL translations",
+                "column custom_fields.translations #21 jsonb NOT NULL DEFAULT '{}'::jsonb",
+                "constraint custom_fields.custom_fields_translations_not_null NOT NULL translations",
+                "column relationships.translations #12 jsonb NOT NULL DEFAULT '{}'::jsonb",
+                "constraint relationships.relationships_translations_not_null NOT NULL translations"
+            ).associateWith { "ADR-031 D54: per-language texts of objects, fields and relationships" } +
             // app-declared actions (ADR-031 D26): a new table, and permissions learns to point at it
             listOf(
                 "constraint permissions.permissions_action_valid CHECK ((action = ANY ($BUILT_IN_ACTIONS)))",
@@ -403,8 +412,9 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "$FIELD_TYPES])))",
                 "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
                     "$FIELD_TYPES, 'FILE'::text, 'IMAGE'::text])))",
-                "column custom_fields.file_max_bytes #24 bigint",
-                "column custom_fields.file_content_types #25 text",
+                // one place later for translations (D54)
+                "column custom_fields.file_max_bytes #25 bigint",
+                "column custom_fields.file_content_types #26 text",
                 "constraint custom_fields.custom_fields_file_max_bytes_valid CHECK (((file_max_bytes IS NULL) OR (file_max_bytes > 0)))",
                 "column stored_files.id #1 uuid NOT NULL",
                 "column stored_files.organization_id #2 uuid NOT NULL",

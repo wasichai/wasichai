@@ -49,5 +49,6 @@ object's plural ones.
   nothing is stored.
 - The admin trail (ADR-049) tells of a change to a map like any other property; an entry of a model without maps reads
   as before.
+- A difference from the original app, listed as ADR-031 D54; the new column is a known schema-parity deviation.
 - The texts are model, like the labels beside them: an app keeps them in its repository and applies them through the
   same endpoints.
