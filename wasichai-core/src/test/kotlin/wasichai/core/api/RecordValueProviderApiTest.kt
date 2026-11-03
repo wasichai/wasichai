@@ -104,8 +104,10 @@ class RecordValueProviderApiTest : WasichaiIntegrationTest() {
             .expectBody()
             .jsonPath("$.length()")
             .isEqualTo(1)
-            .jsonPath("$[0].after.propietario_id")
-            .isEqualTo(memberId)
+            .jsonPath("$[0].operation")
+            .isEqualTo("CREATE")
+        // the api lists no changes for a create, so the snapshot is read from the row
+        assertThat(ownerInAudit(name)).isEqualTo(memberId)
     }
 
     @Test
@@ -340,6 +342,16 @@ class RecordValueProviderApiTest : WasichaiIntegrationTest() {
                 .map { row, _ -> row.get("operation", String::class.java)!! }
                 .all()
                 .collectList()
+                .awaitSingle()
+        }
+
+    private fun ownerInAudit(name: String): String =
+        runBlocking {
+            db
+                .sql("SELECT after_state ->> 'propietario_id' AS owner FROM ${schemas.metadata}.audit_log WHERE object_name = :name")
+                .bind("name", name)
+                .map { row, _ -> row.get("owner", String::class.java)!! }
+                .one()
                 .awaitSingle()
         }
 
