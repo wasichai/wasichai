@@ -2,6 +2,18 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-03 — wasichai-ui shows the model in the user's language
+
+`@wasichai/core` picks the per-language texts of ADR-078 as it does workflow labels: the active language, its primary
+subtag, then the single text ([wasichai-ui#140](https://github.com/wasichai/wasichai-ui/issues/140)). The record list,
+detail and form, related lists, the dashboard and the history follow it, and so do `DynamicForm` and `DataTable` for
+any definition: an `ENUM` option shows its text and keeps its value, the client validation messages are translated
+(`validation.*`), and a language change redraws without a reload. The object editor edits one text per language of
+`config.languages` for the object, its fields and their options. The helpers (`localizedText`, `fieldLabel`,
+`enumOptionLabel`, `useLocalizedDefinition`…) are exported. A server without the maps renders as before. REST
+change: none. New tests: `localizedMetadata.test.tsx` and cases in `ObjectEditorPage.test.tsx` and
+`RelatedList.test.tsx`.
+
 ## 2026-11-03 — Objects, fields, enum options and relationships carry their texts per language
 
 An object (`labels`, `pluralLabels`, `descriptions`), a field (`labels`, `descriptions`), an `ENUM` field's options
