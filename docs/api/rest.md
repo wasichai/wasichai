@@ -1191,6 +1191,10 @@ A create fills every attribute the body leaves out with the field's `defaultValu
 that is sent wins, `null` included: `null` stores `NULL` on purpose, and is a `400` on a `required` field. The same
 holds for every create: `POST`, an app's `RecordService.create`, `asPlatform` and an automation's `CREATE_RECORD`.
 
+An app may also fix a value on every create with a `RecordValueProvider` bean
+([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)). Its value beats the one sent and the default, also on a
+field the caller may not write, `CREATE` is enough, and the `POST`'s answer carries it if the caller may read the field.
+
 ```json
 { "attributes": { "codigo": "E-1" } }
 ```

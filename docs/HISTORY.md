@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-03 — The server fixes a value on a create
+
+A `RecordValueProvider` bean returns values for a record being created, from the object, what the caller sent and who
+calls ([wasichai#153](https://github.com/wasichai/wasichai/issues/153);
+[ADR-077](adr/0077-the-server-fixes-a-value-on-a-create.md)). It runs before the guards and the field validation, on one
+row and one audit entry, with `CREATE` alone, and the `POST` answers with the value. A key returned beats what the caller
+sent and the default, and lands on a field nobody may write. A key that is no attribute of the object, or one two beans
+return, fails the write. `createAll` asks once per record; `asPlatform` and an automation's `CREATE_RECORD` ask with a null
+caller. Without a bean nothing changes. REST change: none. New tests: `RecordServiceValueProviderTest`,
+`AutomationRunnerValueProviderTest`, `RecordValueProviderApiTest` and a case in `AutomationWriteRulesTest`.
+
 ## 2026-11-02 — The test database takes the connections of a whole suite
 
 `WasichaiTestDatabase` starts its Testcontainers Postgres with `max_connections=400`. Every Spring context a suite

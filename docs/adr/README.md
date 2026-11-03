@@ -114,3 +114,4 @@ supersedes it and says so in its status line.
 - [ADR-075: A read scope narrows by another object through a subquery core
   renders](0075-a-read-scope-subquery-over-another-object.md)
 - [ADR-076: The app picks the shell menu and the start page](0076-the-app-picks-the-shell-menu-and-the-start-page.md)
+- [ADR-077: The server fixes a value on a create, through a `RecordValueProvider`](0077-the-server-fixes-a-value-on-a-create.md)

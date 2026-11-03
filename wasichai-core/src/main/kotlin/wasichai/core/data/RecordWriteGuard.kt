@@ -10,7 +10,8 @@ import java.util.UUID
 /**
  * A record write about to happen (ADR-040). Guards judge this, before the store does anything.
  *
- * - CREATED: no [recordId] yet, [attributes] is what the caller sends.
+ * - CREATED: no [recordId] yet, [attributes] is what the record will hold: what the caller sends, what a
+ *   [RecordValueProvider] fixes over it (ADR-077) and the defaults of what is left out.
  * - UPDATED: [before] is the stored row, [attributes] what the caller sends. A link or unlink is an
  *   UPDATE of both records: [attributes] is then `rel:<relationship>` and the other id, or null.
  * - DELETED: [before] is the stored row, [attributes] null.

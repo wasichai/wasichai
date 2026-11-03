@@ -273,6 +273,12 @@ authorization model.
   person or a service account passes them as `beforeWrite(definition, change, reader)`, so a target must be one that
   caller can read. A write with a `userId` that sets a `RELATION` value without its `reader` throws
   `IllegalStateException`; the platform and automations (`userId` null) check the organization only.
+- `RecordValueProvider` — values the server fixes on a record being created, from the object, what the caller sent and
+  who calls ([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)). `RecordValueProviders` asks every bean
+  before the guards and the field validation, on every create: the record API, `RecordService.create` and `createAll`
+  (once per record), `asPlatform` and an automation's `CREATE_RECORD` (`caller` null for those two). A key returned beats
+  what was sent and the default, also on a field nobody may write; `null` is a value. A key that is no attribute of the
+  object, or one two beans return, fails the write with `IllegalStateException`. Never asked on an update.
 - `RecordReadScope` — an app's rule for which records of an object a person or a service account reads, such as
   "only the projects they are assigned to" ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)). It
   returns a `RecordCriterion`, or null for no restriction; `RecordReadScopes` ANDs every bean's, in `@Order` and in
@@ -306,7 +312,8 @@ declaring its own bean of the same type, grouped by the auto-configuration that 
 `RecordWriteGuards`: `appendOnly` holds for everyone, so an app adds a `RecordWriteGuard` instead
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)); and `RecordReadScopes`: an app adds a
 `RecordReadScope`, it never removes another one ([ADR-048](../adr/0048-a-read-scope-narrows-what-a-caller-reads.md)),
-and `RecordReadMasks`, the same for a `RecordReadMask` ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md)).
+`RecordReadMasks`, the same for a `RecordReadMask` ([ADR-065](../adr/0065-a-read-mask-rewrites-what-a-caller-reads-of-a-record.md));
+and `RecordValueProviders`, the same for a `RecordValueProvider` ([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)).
 
 - Platform (`WasichaiPlatformAutoConfiguration`): `wasichaiSchemas`, `systemColumns`, `wasichaiMigrations`,
   `globalExceptionHandler`, `correlationIdWebFilter`, `requestMemoWebFilter`, `healthController`.

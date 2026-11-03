@@ -36,6 +36,9 @@ refusal fails the run, never the write that triggered it. They may write an `api
 ([ADR-040](../adr/0040-append-only-objects-and-a-pre-write-guard.md)). With no user to ask why, their writes carry the
 change reason `automation '<name>'`, which also satisfies a `requiresReason` object
 ([ADR-041](../adr/0041-a-change-reason-on-record-writes.md)).
+A `CREATE_RECORD` asks every `RecordValueProvider` with a null caller, and what they fix beats its `values`; saving a rule
+still asks it to name a required field with no default
+([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)).
 `CREATE_RECORD` fills what its `values` leave out with the target fields' defaults, as any create does, so a rule may
 leave out a `required` field that has one (ADR-031 D40).
 A queued run keeps the correlation id of the request whose change matched it (`automation_runs.correlation_id`), and

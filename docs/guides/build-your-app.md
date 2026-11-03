@@ -495,6 +495,32 @@ class ReceiptLines : RecordWriteGuard {
 }
 ```
 
+## A value the server fixes on a create
+
+A field the server fills from who calls, such as a record's owner, goes in a `RecordValueProvider` bean. Declare the field
+`"visible": false, "editable": false`, so no form offers it and no later write changes it:
+
+```kotlin
+@Component
+class CourseOwner : RecordValueProvider {
+    override suspend fun valuesFor(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>,
+        caller: AuthenticatedUser?
+    ): Map<String, Any?> {
+        if (definition.obj.name != "curso") return emptyMap()
+        // null: the platform or an automation, with nobody to name
+        return caller?.let { mapOf("propietario_id" to it.userId.toString()) }.orEmpty()
+    }
+}
+```
+
+It runs on every create, before the guards and the field validation, and `CREATE` is all the caller needs: one row, one
+audit entry, and the `POST` answers with the value. What it returns beats what the caller sent and the default.
+`attributes` is what the caller sent, so a provider may instead keep a sent value by leaving the key out, or refuse it with
+a `ValidationException`. A key that is no attribute of the object, or one two beans return, fails the write
+([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)).
+
 ## Who reads which records
 
 `READ` on an object opens every record of it, and `own_records_only` narrows that to the caller's own. When several

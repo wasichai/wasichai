@@ -25,6 +25,7 @@ import wasichai.automation.WebhookSender
 import wasichai.core.audit.AuditService
 import wasichai.core.autoconfigure.WasichaiDataAutoConfiguration
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordValueProviders
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.CurrentUser
@@ -91,7 +92,8 @@ class WasichaiAutomationAutoConfiguration {
         documents: ObjectProvider<DocumentIssuer>,
         guards: RecordWriteGuards,
         types: FieldTypeRegistry,
-        notifier: ObjectProvider<AutomationNotifier>
+        notifier: ObjectProvider<AutomationNotifier>,
+        values: RecordValueProviders
     ): AutomationRunner =
         AutomationRunner(
             automations,
@@ -105,7 +107,8 @@ class WasichaiAutomationAutoConfiguration {
             documents.getIfAvailable { NoDocumentIssuer() },
             guards,
             types,
-            notifier.getIfAvailable { NoAutomationNotifier() }
+            notifier.getIfAvailable { NoAutomationNotifier() },
+            values
         )
 
     @Bean
