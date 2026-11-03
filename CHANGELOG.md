@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/wasichai/wasichai/compare/v1.9.0...v1.10.0) (2026-11-03)
+
+
+### Features
+
+* **core:** per-language texts for objects, fields, enum options and relationships ([#157](https://github.com/wasichai/wasichai/issues/157)) ([1acc9a1](https://github.com/wasichai/wasichai/commit/1acc9a1b2e1f946948086a3308526c6530f36f90)), closes [#155](https://github.com/wasichai/wasichai/issues/155)
+
 ## [1.9.0](https://github.com/wasichai/wasichai/compare/v1.8.0...v1.9.0) (2026-11-03)
 
 
