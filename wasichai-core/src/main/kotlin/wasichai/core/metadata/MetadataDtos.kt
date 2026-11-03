@@ -24,6 +24,11 @@ data class FieldRequest(
     val indexed: Boolean = false,
     // a DATETIME field's IANA zone, e.g. "America/Lima" (ADR-063). blank or left out is none
     val timeZone: String? = null,
+    // per language tag (ADR-078): a blank text drops its language
+    val labels: Map<String, String?>? = null,
+    val descriptions: Map<String, String?>? = null,
+    // an ENUM option's text per language, by option value: { "LECTURA": { "en": "Reading" } }
+    val enumOptionLabels: Map<String, Map<String, String?>?>? = null,
     // properties only a module's field type reads. core keeps them for it. a constructor
     // parameter, not a body property, so copy()/equals/hashCode carry it like every other field.
     @get:JsonIgnore @param:JsonAnySetter val extensions: Map<String, Any?> = emptyMap()
@@ -44,7 +49,11 @@ data class CreateObjectRequest(
     // the generic record api does not write it; only the app's own code does
     val apiOnly: Boolean = false,
     // every record write must carry a change reason (ADR-041)
-    val requiresReason: Boolean = false
+    val requiresReason: Boolean = false,
+    // per language tag (ADR-078): a blank text drops its language
+    val labels: Map<String, String?>? = null,
+    val pluralLabels: Map<String, String?>? = null,
+    val descriptions: Map<String, String?>? = null
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -63,7 +72,11 @@ data class UpdateFieldRequest(
     // null leaves it, blank clears it, a name sets it (ADR-063)
     val timeZone: String? = null,
     // checked as the type parses it; blank clears it (issue 60)
-    val defaultValue: String? = null
+    val defaultValue: String? = null,
+    // null leaves them, a map replaces them, {} clears them (ADR-078)
+    val labels: Map<String, String?>? = null,
+    val descriptions: Map<String, String?>? = null,
+    val enumOptionLabels: Map<String, Map<String, String?>?>? = null
 )
 
 data class UpdateObjectRequest(
@@ -81,7 +94,11 @@ data class UpdateObjectRequest(
     val appendOnly: Boolean? = null,
     val apiOnly: Boolean? = null,
     // same rule: left out keeps it (ADR-041)
-    val requiresReason: Boolean? = null
+    val requiresReason: Boolean? = null,
+    // null leaves them, a map replaces them, {} clears them (ADR-078)
+    val labels: Map<String, String?>? = null,
+    val pluralLabels: Map<String, String?>? = null,
+    val descriptions: Map<String, String?>? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -103,6 +120,10 @@ data class FieldResponse(
     @get:JsonInclude(JsonInclude.Include.NON_DEFAULT) val indexed: Boolean = false,
     // same rule: only written when the field declares one (ADR-063)
     @get:JsonInclude(JsonInclude.Include.NON_NULL) val timeZone: String? = null,
+    // per language tag, only written when some are stored, so a field without reads exactly as before (ADR-078)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val enumOptionLabels: Map<String, Map<String, String>> = emptyMap(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -126,6 +147,10 @@ data class ObjectResponse(
     val appendOnly: Boolean = false,
     val apiOnly: Boolean = false,
     val requiresReason: Boolean = false,
+    // per language tag, only written when some are stored (ADR-078)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val pluralLabels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -149,6 +174,10 @@ data class ObjectDefinitionResponse(
     val appendOnly: Boolean = false,
     val apiOnly: Boolean = false,
     val requiresReason: Boolean = false,
+    // per language tag, only written when some are stored (ADR-078)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val pluralLabels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

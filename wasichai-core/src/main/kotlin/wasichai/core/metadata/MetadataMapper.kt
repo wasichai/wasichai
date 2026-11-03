@@ -25,6 +25,9 @@ class MetadataMapper(
             appendOnly = definition.obj.appendOnly,
             apiOnly = definition.obj.apiOnly,
             requiresReason = definition.obj.requiresReason,
+            labels = definition.obj.labels,
+            pluralLabels = definition.obj.pluralLabels,
+            descriptions = definition.obj.descriptions,
             extensions = types.objectProperties(definition)
         )
 
@@ -45,6 +48,9 @@ class MetadataMapper(
             appendOnly = definition.obj.appendOnly,
             apiOnly = definition.obj.apiOnly,
             requiresReason = definition.obj.requiresReason,
+            labels = definition.obj.labels,
+            pluralLabels = definition.obj.pluralLabels,
+            descriptions = definition.obj.descriptions,
             extensions = types.objectProperties(definition)
         )
 
@@ -81,6 +87,9 @@ class MetadataMapper(
             editable = field.editable,
             indexed = field.indexed,
             timeZone = field.timeZone,
+            labels = field.labels,
+            descriptions = field.descriptions,
+            enumOptionLabels = field.enumOptionLabels,
             extensions = types.fieldProperties(field)
         )
 }

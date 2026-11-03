@@ -28,7 +28,7 @@ internal class MetadataSnapshots(
             "requiresReason" to obj.requiresReason,
             "fields" to objectFields.map { state(it, it.relationTargetObjectId?.let(targets::get)) },
             "actions" to actions.findByObject(obj.organizationId, obj.id).associate { it.name to it.label }
-        )
+        ) + translations("labels" to obj.labels, "pluralLabels" to obj.pluralLabels, "descriptions" to obj.descriptions)
     }
 
     suspend fun field(
@@ -62,7 +62,7 @@ internal class MetadataSnapshots(
             )
         // an installed field type's own columns, by column name
         if (field.attributes.isNotEmpty()) state["attributes"] = field.attributes
-        return state
+        return state + translations("labels" to field.labels, "descriptions" to field.descriptions, "enumOptionLabels" to field.enumOptionLabels)
     }
 
     private suspend fun targetNames(
@@ -75,3 +75,7 @@ internal class MetadataSnapshots(
             .mapNotNull { id -> objects.findById(organizationId, id)?.let { id to it.name } }
             .toMap()
 }
+
+// the per-language texts an entry tells of, left out when none are stored, so an entry of a model without them reads as
+// before (ADR-078)
+internal fun translations(vararg texts: Pair<String, Map<String, Any>>): Map<String, Any?> = texts.filter { it.second.isNotEmpty() }.toMap()

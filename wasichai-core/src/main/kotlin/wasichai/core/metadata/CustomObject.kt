@@ -24,7 +24,11 @@ data class CustomObject(
     // the generic record api does not write it; only in-process callers do (ADR-040)
     val apiOnly: Boolean = false,
     // every write of its records says why: no reason, nothing stored (ADR-041)
-    val requiresReason: Boolean = false
+    val requiresReason: Boolean = false,
+    // label, pluralLabel and description per language tag; the single texts stay the fallback (ADR-078)
+    val labels: LocalizedText = emptyMap(),
+    val pluralLabels: LocalizedText = emptyMap(),
+    val descriptions: LocalizedText = emptyMap()
 )
 
 data class CustomField(
@@ -48,7 +52,12 @@ data class CustomField(
     // a single-column index on every organization's table (ADR-036). relations get one anyway.
     val indexed: Boolean = false,
     // a DATETIME field's IANA zone (ADR-063). the column keeps instants either way
-    val timeZone: String? = null
+    val timeZone: String? = null,
+    // label and description per language tag, and an ENUM option's text per option value. the stored value,
+    // its check and validation never read them (ADR-078)
+    val labels: LocalizedText = emptyMap(),
+    val descriptions: LocalizedText = emptyMap(),
+    val enumOptionLabels: Map<String, LocalizedText> = emptyMap()
 )
 
 // object plus its fields. what the UI needs to render anything.

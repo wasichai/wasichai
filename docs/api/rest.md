@@ -536,6 +536,34 @@ Every published name is refused as a field name with `400 … is reserved by the
 the case it is sent in. SQL keywords are refused too but are not published: they are not names anyone
 reaches for by accident.
 
+## Texts per language
+
+An object, a field, an `ENUM` field's options and a relationship may carry their texts per language beside the single
+ones, which keep their meaning and stay the fallback
+([ADR-078](../adr/0078-per-language-metadata-texts-resolved-by-the-client.md)). The server never picks one: the client
+takes the active language, then its primary subtag (`pt` for `pt-BR`), then the single text, as for workflow labels.
+
+| Where | Beside | Map |
+|---|---|---|
+| Object | `label`, `pluralLabel`, `description` | `labels`, `pluralLabels`, `descriptions` |
+| Field | `label`, `description` | `labels`, `descriptions` |
+| `ENUM` field | `enumOptions` | `enumOptionLabels`: option → language → text |
+| Relationship | `label`, `inverseLabel` | `labels`, `inverseLabels` |
+
+```json
+{ "name": "tipo", "label": "Tipo", "type": "ENUM", "labels": { "en": "Type" },
+  "enumOptions": ["LECTURA", "VIDEO"],
+  "enumOptionLabels": { "LECTURA": { "en": "Reading" }, "VIDEO": { "en": "Video" } } }
+```
+
+Each key must be a language tag (`es`, `en`, `pt-BR`), else `400` naming the map; texts are trimmed and a blank one
+drops its language. An `enumOptionLabels` key that is not an option of the field is a `400` naming `enumOptionLabels`.
+The stored value, its validation and the column's check read only `enumOptions`; an option removed takes its texts
+with it. On `POST` the maps are optional. On `PUT`, leaving one out keeps it and sending one replaces it (`{}` clears
+it), so applying the same model twice changes nothing. A response writes a map only when it holds something.
+`GET /api/objects/{object}/relationships` adds `labels`, the texts of each side's `label`, and `objectLabels`, the
+other object's plural ones. A field the caller may not read is not listed, nor are its texts.
+
 ## Relationships
 
 ```http

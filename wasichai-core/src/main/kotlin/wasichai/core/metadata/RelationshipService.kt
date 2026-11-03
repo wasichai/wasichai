@@ -21,7 +21,10 @@ data class CreateRelationshipRequest(
     val source: String,
     val target: String,
     // field that carries the FK; defaults to the referenced object's name
-    val fieldName: String? = null
+    val fieldName: String? = null,
+    // per language tag (ADR-078): a blank text drops its language
+    val labels: Map<String, String?>? = null,
+    val inverseLabels: Map<String, String?>? = null
 )
 
 // null means "leave as it is". type, source and target are accepted only to be refused: see update.
@@ -30,7 +33,10 @@ data class UpdateRelationshipRequest(
     val inverseLabel: String? = null,
     val type: String? = null,
     val source: String? = null,
-    val target: String? = null
+    val target: String? = null,
+    // null leaves them, a map replaces them, {} clears them (ADR-078)
+    val labels: Map<String, String?>? = null,
+    val inverseLabels: Map<String, String?>? = null
 )
 
 // one relationship, seen from the object you are standing on. direction: which way a relationship
@@ -40,7 +46,9 @@ data class RelatedSide(
     val otherObject: CustomObject,
     val label: String,
     val many: Boolean,
-    val direction: RelationshipDirection? = null
+    val direction: RelationshipDirection? = null,
+    // label's texts per language: the relationship's, its inverse's, or the other object's plural ones (ADR-078)
+    val labels: LocalizedText = emptyMap()
 ) {
     // the end this side stands on is the source. on a self-relationship the object is both ends,
     // so the direction decides.
@@ -91,6 +99,9 @@ class RelationshipService(
         }
 
         val type = RelationshipType.parse(request.type)
+        // checked before any DDL: a bad key must not leave a column behind
+        val labels = LocalizedTexts.checked(request.labels, "labels")
+        val inverseLabels = LocalizedTexts.checked(request.inverseLabels, "inverseLabels")
         val source = objectOrFail(user.organizationId, request.source, "source")
         val target = objectOrFail(user.organizationId, request.target, "target")
 
@@ -139,7 +150,9 @@ class RelationshipService(
                     sourceObjectId = source.id,
                     targetObjectId = target.id,
                     relationFieldId = relationFieldId,
-                    joinTable = joinTable
+                    joinTable = joinTable,
+                    labels = labels,
+                    inverseLabels = inverseLabels
                 )
             )
         audit.record(user, AdminEntity.RELATIONSHIP, created.id, AdminOperation.CREATE, null, snapshot(created))
@@ -181,7 +194,9 @@ class RelationshipService(
             relationships.update(
                 relationship.copy(
                     label = label ?: relationship.label,
-                    inverseLabel = if (request.inverseLabel != null) inverseLabel else relationship.inverseLabel
+                    inverseLabel = if (request.inverseLabel != null) inverseLabel else relationship.inverseLabel,
+                    labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: relationship.labels,
+                    inverseLabels = request.inverseLabels?.let { LocalizedTexts.checked(it, "inverseLabels") } ?: relationship.inverseLabels
                 )
             )
         audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.UPDATE, snapshot(relationship), snapshot(updated))
@@ -243,7 +258,7 @@ class RelationshipService(
             "target" to objects.findById(relationship.organizationId, relationship.targetObjectId)?.name,
             "fieldName" to relationship.relationFieldId?.let { fields.findById(it)?.name },
             "joinTable" to relationship.joinTable
-        )
+        ) + translations("labels" to relationship.labels, "inverseLabels" to relationship.inverseLabels)
 
     // a relationship's change, told by its source object (ADR-066)
     private suspend fun relationshipChange(
@@ -294,7 +309,13 @@ class RelationshipService(
             }
         val label =
             if (fromSource) relationship.label else relationship.inverseLabel ?: other.pluralLabel
-        return RelatedSide(relationship, other, label, many, direction.takeIf { relationship.selfReferencing })
+        val labels =
+            when {
+                fromSource -> relationship.labels
+                relationship.inverseLabel != null || relationship.inverseLabels.isNotEmpty() -> relationship.inverseLabels
+                else -> other.pluralLabels
+            }
+        return RelatedSide(relationship, other, label, many, direction.takeIf { relationship.selfReferencing }, labels)
     }
 
     private suspend fun objectOrFail(
