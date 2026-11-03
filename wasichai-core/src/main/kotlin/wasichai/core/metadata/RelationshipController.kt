@@ -25,7 +25,10 @@ data class RelationshipResponse(
     val source: String,
     val target: String,
     val fieldName: String?,
-    val joinTable: String?
+    val joinTable: String?,
+    // per language tag, only written when some are stored (ADR-078)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val inverseLabels: Map<String, String> = emptyMap()
 )
 
 // the same relationship as seen from one object: which object is on the other end, and how many.
@@ -38,7 +41,10 @@ data class RelatedSideResponse(
     val objectName: String,
     val objectLabel: String,
     val many: Boolean,
-    @field:JsonInclude(JsonInclude.Include.NON_NULL) val direction: String? = null
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val direction: String? = null,
+    // label's and objectLabel's texts per language, only written when some are stored (ADR-078)
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val objectLabels: Map<String, String> = emptyMap()
 )
 
 @Component
@@ -59,7 +65,9 @@ class RelationshipMapper(
             source = objects.findById(organizationId, relationship.sourceObjectId)?.name.orEmpty(),
             target = objects.findById(organizationId, relationship.targetObjectId)?.name.orEmpty(),
             fieldName = relationship.relationFieldId?.let { fields.findById(it)?.name },
-            joinTable = relationship.joinTable
+            joinTable = relationship.joinTable,
+            labels = relationship.labels,
+            inverseLabels = relationship.inverseLabels
         )
 
     fun toResponse(side: RelatedSide): RelatedSideResponse =
@@ -70,7 +78,9 @@ class RelationshipMapper(
             objectName = side.otherObject.name,
             objectLabel = side.otherObject.pluralLabel,
             many = side.many,
-            direction = side.direction?.wire
+            direction = side.direction?.wire,
+            labels = side.labels,
+            objectLabels = side.otherObject.pluralLabels
         )
 }
 

@@ -8,6 +8,8 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Repository
+import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import wasichai.core.common.ValidationException
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
@@ -77,7 +79,10 @@ data class Relationship(
     val sourceObjectId: UUID,
     val targetObjectId: UUID,
     val relationFieldId: UUID?,
-    val joinTable: String?
+    val joinTable: String?,
+    // label and inverseLabel per language tag; the single texts stay the fallback (ADR-078)
+    val labels: LocalizedText = emptyMap(),
+    val inverseLabels: LocalizedText = emptyMap()
 ) {
     // source and target are one object: a parent unit, a previous version, a duplicate-of
     val selfReferencing: Boolean get() = sourceObjectId == targetObjectId
@@ -85,22 +90,29 @@ data class Relationship(
 
 private const val RELATIONSHIP_COLUMNS =
     "id, organization_id, name, label, inverse_label, type, source_object_id, target_object_id, " +
-        "relation_field_id, join_table"
+        "relation_field_id, join_table, translations::text AS translations"
 
 @Repository
 class RelationshipRepository(
     private val db: DatabaseClient,
-    private val schemas: WasichaiSchemas
+    private val schemas: WasichaiSchemas,
+    // defaulted: an app that built one before keeps compiling
+    objectMapper: ObjectMapper = JsonMapper()
 ) {
+    private val translations = TranslationsColumn(objectMapper)
+
+    private fun translationsOf(relationship: Relationship): String =
+        translations.write(mapOf("labels" to relationship.labels, "inverseLabels" to relationship.inverseLabels))
+
     suspend fun insert(relationship: Relationship): Relationship =
         db
             .sql(
                 """
                 INSERT INTO ${schemas.metadata}.relationships
                     (id, organization_id, name, label, inverse_label, type, source_object_id,
-                     target_object_id, relation_field_id, join_table)
+                     target_object_id, relation_field_id, join_table, translations)
                 VALUES (:id, :organizationId, :name, :label, :inverseLabel, :type, :sourceObjectId,
-                        :targetObjectId, :relationFieldId, :joinTable)
+                        :targetObjectId, :relationFieldId, :joinTable, CAST(:translations AS jsonb))
                 RETURNING $RELATIONSHIP_COLUMNS
                 """.trimIndent()
             ).bind("id", relationship.id)
@@ -113,6 +125,7 @@ class RelationshipRepository(
             .bind("targetObjectId", relationship.targetObjectId)
             .bindNullable("relationFieldId", relationship.relationFieldId)
             .bindNullable("joinTable", relationship.joinTable)
+            .bind("translations", translationsOf(relationship))
             .map(::map)
             .one()
             .awaitSingle()
@@ -144,13 +157,14 @@ class RelationshipRepository(
             .sql(
                 """
                 UPDATE ${schemas.metadata}.relationships
-                SET label = :label, inverse_label = :inverseLabel
+                SET label = :label, inverse_label = :inverseLabel, translations = CAST(:translations AS jsonb)
                 WHERE id = :id
                 RETURNING $RELATIONSHIP_COLUMNS
                 """.trimIndent()
             ).bind("id", relationship.id)
             .bind("label", relationship.label)
             .bindNullable("inverseLabel", relationship.inverseLabel)
+            .bind("translations", translationsOf(relationship))
             .map(::map)
             .one()
             .awaitSingle()
@@ -195,8 +209,9 @@ class RelationshipRepository(
     private fun map(
         row: Row,
         metadata: RowMetadata
-    ): Relationship =
-        Relationship(
+    ): Relationship {
+        val texts = translations.read(Rows.stringOrNull(row, "translations"))
+        return Relationship(
             id = Rows.uuid(row, "id"),
             organizationId = Rows.uuid(row, "organization_id"),
             name = Rows.string(row, "name"),
@@ -206,6 +221,9 @@ class RelationshipRepository(
             sourceObjectId = Rows.uuid(row, "source_object_id"),
             targetObjectId = Rows.uuid(row, "target_object_id"),
             relationFieldId = Rows.uuidOrNull(row, "relation_field_id"),
-            joinTable = Rows.stringOrNull(row, "join_table")
+            joinTable = Rows.stringOrNull(row, "join_table"),
+            labels = texts.texts("labels"),
+            inverseLabels = texts.texts("inverseLabels")
         )
+    }
 }

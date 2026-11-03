@@ -102,4 +102,32 @@ class MetadataJsonTest {
 
         assertThat(withExtension).isNotEqualTo(withoutExtension)
     }
+
+    @Test
+    fun `per-language texts are written only when stored (ADR-078)`() {
+        val plain = mapper.readTree(mapper.writeValueAsString(response(emptyMap())))
+        assertThat(plain.has("labels")).isFalse()
+        assertThat(plain.has("enumOptionLabels")).isFalse()
+
+        val translated =
+            mapper.readTree(
+                mapper.writeValueAsString(
+                    response(emptyMap()).copy(
+                        type = "ENUM",
+                        enumOptions = listOf("LECTURA"),
+                        labels = mapOf("en" to "Lot"),
+                        enumOptionLabels = mapOf("LECTURA" to mapOf("en" to "Reading"))
+                    )
+                )
+            )
+        assertThat(translated.get("labels").get("en").asString()).isEqualTo("Lot")
+        assertThat(
+            translated
+                .get("enumOptionLabels")
+                .get("LECTURA")
+                .get("en")
+                .asString()
+        ).isEqualTo("Reading")
+        assertThat(translated.has("descriptions")).isFalse()
+    }
 }

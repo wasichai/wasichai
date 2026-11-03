@@ -45,6 +45,10 @@ An app overrides any core bean by declaring its own bean of the same type — se
   ([ADR-055](../adr/0055-tenant-provisioning-apart-from-tenant-administration.md)).
 - Custom Objects and Fields: object and field metadata, under `/api/objects` and `/api/metadata/objects` (system
   fields under `/api/metadata/system-fields`), the 12 scalar field types and the `FieldTypeRegistry`.
+- Texts per language: objects (`labels`, `pluralLabels`, `descriptions`), fields (`labels`, `descriptions`), `ENUM`
+  options (`enumOptionLabels`) and relationships (`labels`, `inverseLabels`) carry a text per language tag beside the
+  single ones, which stay the fallback; the client picks the language
+  ([ADR-078](../adr/0078-per-language-metadata-texts-resolved-by-the-client.md)).
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`. A
@@ -367,6 +371,10 @@ cascading from the organization and the user, with an index on `created_at` for 
 ([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)).
 `V18__field_time_zone.sql` adds `custom_fields.time_zone`, nullable text: a `DATETIME` field's IANA zone, checked by
 `MetadataService`, never by the database ([ADR-063](../adr/0063-a-datetime-field-may-name-its-time-zone.md)).
+`V19__translations.sql` adds `translations jsonb NOT NULL DEFAULT '{}'` to `custom_objects`, `custom_fields` and
+`relationships`: each property's text per language, and for an `ENUM` field its options'. Keys are checked by
+`MetadataService` and `RelationshipService`, never by the database
+([ADR-078](../adr/0078-per-language-metadata-texts-resolved-by-the-client.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes

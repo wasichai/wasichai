@@ -482,6 +482,19 @@ These are the only intended differences. Anything else that behaves differently 
   ([ADR-074](0074-a-download-is-checked-against-the-stored-sha256.md),
   [wasichai#144](https://github.com/wasichai/wasichai/issues/144)). Tested by `DigestCheckTest` and `FilesApiTest`.
 
+**Because a model is read in more than one language**
+
+- **D54. Objects, fields, enum options and relationships carry their texts per language.** The original's model had
+  one text per label. Now an object (`labels`, `pluralLabels`, `descriptions`), a field (`labels`, `descriptions`), an
+  `ENUM` field's options (`enumOptionLabels`) and a relationship (`labels`, `inverseLabels`) may carry a text per
+  language tag beside the single ones, which keep their meaning; a key that is not a language tag is a `400` naming
+  the map, and a response writes a map only when it holds something, so a model without them reads as before
+  ([ADR-078](0078-per-language-metadata-texts-resolved-by-the-client.md),
+  [wasichai#155](https://github.com/wasichai/wasichai/issues/155)). The `translations` column of `custom_objects`,
+  `custom_fields` and `relationships` is a known schema-parity deviation, and on a fresh database it moves the
+  `wasichai-gis` and `wasichai-files` columns one more place. Tested by `MetadataTranslationsApiTest`,
+  `LocalizedTextsTest`, `MetadataJsonTest`, `RelationshipSideTest` and `SchemaParityTest`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw

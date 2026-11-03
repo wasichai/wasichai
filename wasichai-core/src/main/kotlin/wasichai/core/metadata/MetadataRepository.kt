@@ -19,7 +19,7 @@ import java.util.UUID
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
         "physical_table, created_at, updated_at, indexes::text AS indexes, unique_constraints::text AS unique_constraints, " +
-        "append_only, api_only, requires_reason"
+        "append_only, api_only, requires_reason, translations::text AS translations"
 
 @Repository
 class CustomObjectRepository(
@@ -27,15 +27,18 @@ class CustomObjectRepository(
     private val schemas: WasichaiSchemas,
     private val objectMapper: ObjectMapper
 ) {
+    private val translations = TranslationsColumn(objectMapper)
+
     suspend fun insert(obj: CustomObject): CustomObject =
         db
             .sql(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
                     (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes,
-                     unique_constraints, append_only, api_only, requires_reason)
+                     unique_constraints, append_only, api_only, requires_reason, translations)
                 VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
-                        CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly, :requiresReason)
+                        CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly, :requiresReason,
+                        CAST(:translations AS jsonb))
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
@@ -51,9 +54,13 @@ class CustomObjectRepository(
             .bind("appendOnly", obj.appendOnly)
             .bind("apiOnly", obj.apiOnly)
             .bind("requiresReason", obj.requiresReason)
+            .bind("translations", translationsOf(obj))
             .map(::mapObject)
             .one()
             .awaitSingle()
+
+    private fun translationsOf(obj: CustomObject): String =
+        translations.write(mapOf("labels" to obj.labels, "pluralLabels" to obj.pluralLabels, "descriptions" to obj.descriptions))
 
     suspend fun findByName(
         organizationId: UUID,
@@ -110,7 +117,7 @@ class CustomObjectRepository(
                 SET label = :label, plural_label = :pluralLabel, description = :description,
                     enabled = :enabled, indexes = CAST(:indexes AS jsonb),
                     unique_constraints = CAST(:uniqueConstraints AS jsonb), append_only = :appendOnly, api_only = :apiOnly,
-                    requires_reason = :requiresReason, updated_at = now()
+                    requires_reason = :requiresReason, translations = CAST(:translations AS jsonb), updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
@@ -125,6 +132,7 @@ class CustomObjectRepository(
             .bind("appendOnly", obj.appendOnly)
             .bind("apiOnly", obj.apiOnly)
             .bind("requiresReason", obj.requiresReason)
+            .bind("translations", translationsOf(obj))
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -145,8 +153,9 @@ class CustomObjectRepository(
     private fun mapObject(
         row: Row,
         metadata: RowMetadata
-    ): CustomObject =
-        CustomObject(
+    ): CustomObject {
+        val texts = translations.read(Rows.stringOrNull(row, "translations"))
+        return CustomObject(
             id = Rows.uuid(row, "id"),
             organizationId = Rows.uuid(row, "organization_id"),
             name = Rows.string(row, "name"),
@@ -161,8 +170,12 @@ class CustomObjectRepository(
             uniqueConstraints = fieldSets(row, "unique_constraints"),
             appendOnly = Rows.bool(row, "append_only"),
             apiOnly = Rows.bool(row, "api_only"),
-            requiresReason = Rows.bool(row, "requires_reason")
+            requiresReason = Rows.bool(row, "requires_reason"),
+            labels = texts.texts("labels"),
+            pluralLabels = texts.texts("pluralLabels"),
+            descriptions = texts.texts("descriptions")
         )
+    }
 
     private fun fieldSets(
         row: Row,
@@ -172,7 +185,8 @@ class CustomObjectRepository(
 
 private const val FIELD_COLUMNS =
     "id, object_id, name, label, type, column_name, required, is_unique, default_value, " +
-        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed, time_zone"
+        "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed, time_zone, " +
+        "translations::text AS translations"
 
 @Repository
 class CustomFieldRepository(
@@ -185,6 +199,10 @@ class CustomFieldRepository(
     private val attributeColumns: List<String> = types.attributeColumns.keys.toList()
     private val selectColumns: String = FIELD_COLUMNS + attributeColumns.joinToString("") { ", " + SqlIdentifier.quote(it) }
     private val table: String = "${schemas.metadata}.custom_fields"
+    private val translations = TranslationsColumn(objectMapper)
+
+    private fun translationsOf(field: CustomField): String =
+        translations.write(mapOf("labels" to field.labels, "descriptions" to field.descriptions, "enumOptions" to field.enumOptionLabels))
 
     suspend fun insert(field: CustomField): CustomField {
         val extraColumns = attributeColumns.joinToString("") { ", " + SqlIdentifier.quote(it) }
@@ -195,9 +213,9 @@ class CustomFieldRepository(
                     """
                     INSERT INTO $table
                         (id, object_id, name, label, type, column_name, required, is_unique, default_value,
-                         description, position, enum_options, relation_target_object_id, visible, editable, indexed, time_zone$extraColumns)
+                         description, position, enum_options, relation_target_object_id, visible, editable, indexed, time_zone, translations$extraColumns)
                     VALUES (:id, :objectId, :name, :label, :type, :columnName, :required, :unique, :defaultValue,
-                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed, :timeZone$extraValues)
+                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed, :timeZone, CAST(:translations AS jsonb)$extraValues)
                     RETURNING $selectColumns
                     """.trimIndent()
                 ).bind("id", field.id)
@@ -217,6 +235,7 @@ class CustomFieldRepository(
                 .bind("editable", field.editable)
                 .bind("indexed", field.indexed)
                 .bindNullable("timeZone", field.timeZone)
+                .bind("translations", translationsOf(field))
         attributeColumns.forEachIndexed { index, column ->
             val value = field.attributes[column]
             spec = spec.bindNullable("a$index", value, types.attributeColumns.getValue(column))
@@ -275,7 +294,7 @@ class CustomFieldRepository(
                 SET label = :label, required = :required, is_unique = :unique, description = :description,
                     position = :position, enum_options = CAST(:enumOptions AS jsonb), visible = :visible,
                     editable = :editable, indexed = :indexed, time_zone = :timeZone, default_value = :defaultValue,
-                    updated_at = now()
+                    translations = CAST(:translations AS jsonb), updated_at = now()
                 WHERE id = :id
                 RETURNING $selectColumns
                 """.trimIndent()
@@ -291,6 +310,7 @@ class CustomFieldRepository(
             .bind("indexed", field.indexed)
             .bindNullable("timeZone", field.timeZone)
             .bindNullable("defaultValue", field.defaultValue)
+            .bind("translations", translationsOf(field))
             .map(::mapField)
             .one()
             .awaitSingle()
@@ -325,8 +345,9 @@ class CustomFieldRepository(
     private fun mapField(
         row: Row,
         metadata: RowMetadata
-    ): CustomField =
-        CustomField(
+    ): CustomField {
+        val texts = translations.read(Rows.stringOrNull(row, "translations"))
+        return CustomField(
             id = Rows.uuid(row, "id"),
             objectId = Rows.uuid(row, "object_id"),
             name = Rows.string(row, "name"),
@@ -348,6 +369,10 @@ class CustomFieldRepository(
             visible = Rows.bool(row, "visible"),
             editable = Rows.bool(row, "editable"),
             indexed = Rows.bool(row, "indexed"),
-            timeZone = Rows.stringOrNull(row, "time_zone")
+            timeZone = Rows.stringOrNull(row, "time_zone"),
+            labels = texts.texts("labels"),
+            descriptions = texts.texts("descriptions"),
+            enumOptionLabels = texts.options("enumOptions")
         )
+    }
 }

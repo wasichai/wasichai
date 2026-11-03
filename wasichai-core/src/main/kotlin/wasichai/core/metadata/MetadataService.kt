@@ -114,7 +114,10 @@ class MetadataService(
                 updatedAt = null,
                 appendOnly = request.appendOnly,
                 apiOnly = request.apiOnly,
-                requiresReason = request.requiresReason
+                requiresReason = request.requiresReason,
+                labels = LocalizedTexts.checked(request.labels, "labels"),
+                pluralLabels = LocalizedTexts.checked(request.pluralLabels, "pluralLabels"),
+                descriptions = LocalizedTexts.checked(request.descriptions, "descriptions")
             )
 
         var stored = objects.insert(obj)
@@ -231,6 +234,14 @@ class MetadataService(
                 else -> existing.defaultValue
             }
 
+        // a map replaces, null keeps. options that are gone take their texts with them (ADR-078)
+        val enumOptionLabels =
+            if (request.enumOptionLabels != null) {
+                LocalizedTexts.checkedOptions(request.enumOptionLabels, enumOptions, "enumOptionLabels")
+            } else {
+                existing.enumOptionLabels.filterKeys { it in enumOptions.orEmpty() }
+            }
+
         val updated =
             existing.copy(
                 label = request.label?.trim()?.ifBlank { existing.label } ?: existing.label,
@@ -244,7 +255,10 @@ class MetadataService(
                 indexed = request.indexed ?: existing.indexed,
                 // only how a wall time is read changes: the column keeps its instants (ADR-063)
                 timeZone = if (request.timeZone == null) existing.timeZone else FieldTimeZones.checked(existing.type, request.timeZone),
-                defaultValue = defaultValue
+                defaultValue = defaultValue,
+                labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: existing.labels,
+                descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: existing.descriptions,
+                enumOptionLabels = enumOptionLabels
             )
 
         // metadata and table move together, in one transaction
@@ -347,7 +361,11 @@ class MetadataService(
                     uniqueConstraints = uniques,
                     appendOnly = request.appendOnly ?: obj.appendOnly,
                     apiOnly = request.apiOnly ?: obj.apiOnly,
-                    requiresReason = request.requiresReason ?: obj.requiresReason
+                    requiresReason = request.requiresReason ?: obj.requiresReason,
+                    // null keeps: a client that predates the maps must not clear them by saving a label (ADR-078)
+                    labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: obj.labels,
+                    pluralLabels = request.pluralLabels?.let { LocalizedTexts.checked(it, "pluralLabels") } ?: obj.pluralLabels,
+                    descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: obj.descriptions
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op
@@ -484,7 +502,10 @@ class MetadataService(
                 visible = request.visible,
                 editable = request.editable,
                 indexed = request.indexed,
-                timeZone = FieldTimeZones.checked(type, request.timeZone)
+                timeZone = FieldTimeZones.checked(type, request.timeZone),
+                labels = LocalizedTexts.checked(request.labels, "labels"),
+                descriptions = LocalizedTexts.checked(request.descriptions, "descriptions"),
+                enumOptionLabels = LocalizedTexts.checkedOptions(request.enumOptionLabels, enumOptions, "enumOptionLabels")
             )
         if (field.indexed) FieldSets.requireIndexable(field, "indexed", types)
         // a default every later create would trip over is refused now, once (issue 60)

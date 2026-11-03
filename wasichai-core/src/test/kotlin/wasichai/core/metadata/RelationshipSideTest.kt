@@ -104,4 +104,35 @@ class RelationshipSideTest {
                 assertThat((error as ValidationException).violations.single().field).isEqualTo("direction")
             }
         }
+
+    @Test
+    fun `each side carries the texts per language of its label (ADR-078)`() =
+        runTest {
+            val service = service()
+            val translatedPerson = person.copy(pluralLabels = mapOf("es" to "Personas"))
+            val objects = mock(CustomObjectRepository::class.java)
+            listOf(unit, translatedPerson).forEach { doReturn(it).`when`(objects).findById(org, it.id) }
+            val withPeople =
+                RelationshipService(
+                    mock(RelationshipRepository::class.java),
+                    objects,
+                    mock(CustomFieldRepository::class.java),
+                    mock(MetadataService::class.java),
+                    mock(ObjectSchemaManager::class.java),
+                    mock(CurrentUser::class.java),
+                    mock(AdminAudit::class.java)
+                )
+            val rel =
+                relationship(
+                    RelationshipType.MANY_TO_ONE,
+                    unit,
+                    person
+                ).copy(labels = mapOf("es" to "Titular"), inverseLabels = mapOf("es" to "Unidades"))
+
+            assertThat(service.side(rel, unit).labels).isEqualTo(mapOf("es" to "Titular"))
+            assertThat(service.side(rel, person).labels).isEqualTo(mapOf("es" to "Unidades"))
+            // no inverse label at all: the other object's plural, and its texts
+            val bare = relationship(RelationshipType.MANY_TO_ONE, translatedPerson, unit, inverseLabel = null).copy(sourceObjectId = translatedPerson.id)
+            assertThat(withPeople.side(bare, unit).labels).isEqualTo(mapOf("es" to "Personas"))
+        }
 }

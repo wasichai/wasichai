@@ -2,6 +2,22 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-03 — Objects, fields, enum options and relationships carry their texts per language
+
+An object (`labels`, `pluralLabels`, `descriptions`), a field (`labels`, `descriptions`), an `ENUM` field's options
+(`enumOptionLabels`: option → language → text) and a relationship (`labels`, `inverseLabels`) take a text per language
+tag beside the single ones, which keep their meaning and stay the fallback; the client picks the language, as for
+workflow labels ([wasichai#155](https://github.com/wasichai/wasichai/issues/155);
+[ADR-078](adr/0078-per-language-metadata-texts-resolved-by-the-client.md)). A key that is not a language tag is a `400`
+naming the map, a blank text drops its language, and an option key that is no option of the field is a `400` on
+`enumOptionLabels`; the stored value and its check read only `enumOptions`, and an option removed takes its texts with
+it. On update a map left out is kept and a map sent replaces it, so applying a model twice changes nothing.
+`V19__translations.sql` adds one `translations` jsonb per table, `{}` for what was stored before. A response writes a
+map only when it holds something; a related side adds `labels` and `objectLabels`. Field permissions apply unchanged.
+A difference from the original, ADR-031 D54; the column is a known schema-parity deviation. REST change: additive.
+New tests: `LocalizedTextsTest`, `MetadataTranslationsApiTest` and cases in `MetadataJsonTest` and
+`RelationshipSideTest`.
+
 ## 2026-11-03 — Shell, dialogs and admin screens in wasichai-ui, after the wasichai-learning redesign
 
 Seventeen changes to `@wasichai/core`, `@wasichai/ui` and `@wasichai/testing`, each its own pull request,

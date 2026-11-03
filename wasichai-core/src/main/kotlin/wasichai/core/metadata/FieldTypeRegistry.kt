@@ -161,7 +161,10 @@ class FieldTypeRegistry(
                 "visible",
                 "editable",
                 "indexed",
-                "timeZone"
+                "timeZone",
+                "labels",
+                "descriptions",
+                "enumOptionLabels"
             )
 
         // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`.
@@ -181,7 +184,10 @@ class FieldTypeRegistry(
                 "uniqueConstraints",
                 "appendOnly",
                 "apiOnly",
-                "requiresReason"
+                "requiresReason",
+                "labels",
+                "pluralLabels",
+                "descriptions"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata

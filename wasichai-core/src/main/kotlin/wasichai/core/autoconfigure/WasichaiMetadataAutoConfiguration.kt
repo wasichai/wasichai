@@ -73,8 +73,9 @@ class WasichaiMetadataAutoConfiguration {
     @ConditionalOnMissingBean
     fun relationshipRepository(
         db: DatabaseClient,
-        schemas: WasichaiSchemas
-    ): RelationshipRepository = RelationshipRepository(db, schemas)
+        schemas: WasichaiSchemas,
+        objectMapper: JsonMapper
+    ): RelationshipRepository = RelationshipRepository(db, schemas, objectMapper)
 
     @Bean
     @ConditionalOnMissingBean
