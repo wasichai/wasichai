@@ -2,6 +2,39 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-03 — Shell, dialogs and admin screens in wasichai-ui, after the wasichai-learning redesign
+
+Seventeen changes to `@wasichai/core`, `@wasichai/ui` and `@wasichai/testing`, each its own pull request,
+from the limitations the wasichai-learning redesign measured on 1.6.0. Without the new options nothing changes, except
+where a line says so. REST change: none.
+
+- **Shell** (`AppShell`): the narrow drawer's close button carries `data-slot="nav-close"` and `Dialog`'s X
+  `dialog-close` ([wasichai-ui#122](https://github.com/wasichai/wasichai-ui/issues/122)); a menu entry with no
+  destination is a disabled link (`role="link"`, `aria-disabled`, `nav-item`)
+  ([#131](https://github.com/wasichai/wasichai-ui/issues/131)); «Auditoría» has an icon
+  ([#135](https://github.com/wasichai/wasichai-ui/issues/135)); a «Saltar al contenido» link is the first tab stop
+  ([#132](https://github.com/wasichai/wasichai-ui/issues/132)); the open drawer is a modal dialog named «Menú»
+  ([#133](https://github.com/wasichai/wasichai-ui/issues/133)); `appLogo` draws a logo before the name in the sidebar,
+  the drawer and the login page ([#126](https://github.com/wasichai/wasichai-ui/issues/126)); `shellHome` hides or
+  renames «Inicio» ([#138](https://github.com/wasichai/wasichai-ui/issues/138)); `shellChrome({ pathname, search })`
+  returns `'compact'` for the narrow shell at every width ([#123](https://github.com/wasichai/wasichai-ui/issues/123)).
+- **Start page**: `homeRoute` is also called when `GET /auth/me/permissions` fails, with no permissions and
+  `{ permissionsFailed: true }`, where it used to fall back to the dashboard
+  ([#136](https://github.com/wasichai/wasichai-ui/issues/136)).
+- **Router**: `WasichaiApp` runs on `createBrowserRouter`, so a page can hold a navigation with `useBlocker`, and
+  `renderWithProviders` on `createMemoryRouter` ([#128](https://github.com/wasichai/wasichai-ui/issues/128)). No
+  existing test changed.
+- **Components**: `PageHeader` pads 16px below `md`, wraps its actions and takes `breadcrumbs`, `children` and
+  `containerClassName` ([#124](https://github.com/wasichai/wasichai-ui/issues/124)); `EmptyState` takes `description`
+  and `headingLevel` ([#125](https://github.com/wasichai/wasichai-ui/issues/125)); `ReasonDialog` takes `label` and
+  `maxLength`, and `reasonProblem` a limit ([#129](https://github.com/wasichai/wasichai-ui/issues/129));
+  `ConfirmDialog` and `ReasonDialog` give focus back on close (`useReturnFocus`)
+  ([#134](https://github.com/wasichai/wasichai-ui/issues/134)); `Alert` takes an `icon`
+  ([#130](https://github.com/wasichai/wasichai-ui/issues/130)); `extendCn({ fontSizes })` teaches `cn` an app's text
+  sizes ([#127](https://github.com/wasichai/wasichai-ui/issues/127)).
+- **Admin screens**: a `403` on a screen's list shows «No tienes permiso para ver esto» without its forms, and another
+  failure an error with a retry, never the empty list ([#139](https://github.com/wasichai/wasichai-ui/issues/139)).
+
 ## 2026-11-03 — The server fixes a value on a create
 
 A `RecordValueProvider` bean returns values for a record being created, from the object, what the caller sent and who
