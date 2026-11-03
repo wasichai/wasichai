@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/wasichai/wasichai/compare/v1.8.0...v1.9.0) (2026-11-03)
+
+
+### Features
+
+* **core:** let a read scope narrow by another object through a subquery ([#149](https://github.com/wasichai/wasichai/issues/149)) ([8930612](https://github.com/wasichai/wasichai/commit/89306122787a6e1c683f5fe9e3dd269cd655c369))
+* **core:** RecordValueProvider, values the server fixes on a create ([#154](https://github.com/wasichai/wasichai/issues/154)) ([7eb04f7](https://github.com/wasichai/wasichai/commit/7eb04f7a59e3c335094749d089c60c5f324bda37))
+
 ## [1.8.0](https://github.com/wasichai/wasichai/compare/v1.7.0...v1.8.0) (2026-11-01)
 
 
