@@ -12,8 +12,11 @@ import org.springframework.http.HttpHeaders
 import wasichai.automation.AutomationRunner
 import wasichai.core.common.ValidationException
 import wasichai.core.data.ChangeReason
+import wasichai.core.data.RecordValueProvider
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuard
+import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.metadata.ObjectDefinition
 import java.util.UUID
 
 // ADR-040: an automation writes as the platform, through RecordStore. appendOnly and every
@@ -29,6 +32,17 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
                 override suspend fun beforeWrite(change: RecordWrite) {
                     if (change.attributes?.get("codigo") == "LOG-VETO") throw ValidationException("Vetoed", "codigo", "the guard said no")
                 }
+            }
+
+        // ADR-077: asked with nobody as the caller, and beats what the rule renders
+        @Bean
+        fun fixedOrigin(): RecordValueProvider =
+            object : RecordValueProvider {
+                override suspend fun valuesFor(
+                    definition: ObjectDefinition,
+                    attributes: Map<String, Any?>,
+                    caller: AuthenticatedUser?
+                ): Map<String, Any?> = if (definition.obj.name.startsWith("autofixed") && caller == null) mapOf("origen" to "SERVER") else emptyMap()
             }
     }
 
@@ -117,6 +131,48 @@ class AutomationWriteRulesTest : FullAppIntegrationTest() {
             .expectBody()
             .jsonPath("$[0].reason")
             .isEqualTo("automation '$creator'")
+    }
+
+    @Test
+    fun `an automation's create takes what a provider fixes, over what the rule names`() {
+        val source = uniqueName("autofixsrc")
+        val target = uniqueName("autofixed")
+        createObject(source, appendOnly = false)
+        client
+            .post()
+            .uri("/api/objects")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(
+                mapOf(
+                    "name" to target,
+                    "label" to target,
+                    "fields" to
+                        listOf(
+                            mapOf("name" to "codigo", "type" to "TEXT"),
+                            mapOf("name" to "origen", "type" to "TEXT", "required" to true, "editable" to false)
+                        )
+                )
+            ).exchange()
+            .expectStatus()
+            .isCreated
+        // saving a rule still asks it to name a required field: the provider's answer depends on the write
+        val values = mapOf("codigo" to "LOG-{{codigo}}", "origen" to "RULE")
+        val automation = save(source, mapOf("type" to "CREATE_RECORD", "targetObject" to target, "values" to values))
+
+        createRecord(source, "A-1")
+        assertThat(drain()).isEqualTo(1)
+
+        runOf(source, automation).jsonPath("$[0].status").isEqualTo("SUCCEEDED")
+        client
+            .get()
+            .uri("/api/objects/$target/records")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.content[0].attributes.origen")
+            .isEqualTo("SERVER")
     }
 
     // D29: a rendered RELATION value naming no record fails the run on the field, through the same check

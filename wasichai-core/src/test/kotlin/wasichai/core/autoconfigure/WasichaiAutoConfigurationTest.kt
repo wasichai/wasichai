@@ -39,6 +39,8 @@ import wasichai.core.data.RecordReadScope
 import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
 import wasichai.core.data.RecordSubqueries
+import wasichai.core.data.RecordValueProvider
+import wasichai.core.data.RecordValueProviders
 import wasichai.core.data.WorkflowStates
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthenticatedUser
@@ -54,6 +56,7 @@ import wasichai.core.identity.ServiceAccountTokenService
 import wasichai.core.identity.UserInfo
 import wasichai.core.identity.WasichaiJwtKey
 import wasichai.core.metadata.CustomField
+import wasichai.core.metadata.CustomObject
 import wasichai.core.metadata.FieldType
 import wasichai.core.metadata.FieldTypeHandler
 import wasichai.core.metadata.FieldTypeRegistry
@@ -288,6 +291,50 @@ class WasichaiAutoConfigurationTest {
                 assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
                 assertThat(context.getBeansOfType(ModuleMigration::class.java)).hasSize(2)
             }
+    }
+
+    // ADR-077: an app adds a provider; the collector and the service take it, nothing else changes
+    @Test
+    fun `a RecordValueProvider bean reaches the collector`() {
+        val provider =
+            object : RecordValueProvider {
+                override suspend fun valuesFor(
+                    definition: ObjectDefinition,
+                    attributes: Map<String, Any?>,
+                    caller: AuthenticatedUser?
+                ): Map<String, Any?> = mapOf("codigo" to "SRV")
+            }
+        val field =
+            CustomField(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "codigo",
+                "codigo",
+                FieldType.TEXT,
+                "codigo",
+                false,
+                false,
+                null,
+                null,
+                0,
+                null,
+                null,
+                emptyMap(),
+                true,
+                true
+            )
+        val obj = CustomObject(field.objectId, UUID.randomUUID(), "predio", "Predio", "Predios", null, true, "predio__1234abcd", null, null)
+        runner.withBean(RecordValueProvider::class.java, { provider }).run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context).hasSingleBean(RecordService::class.java)
+            val fixed =
+                runBlocking {
+                    context
+                        .getBean(RecordValueProviders::class.java)
+                        .fixedFor(ObjectDefinition(obj, listOf(field)), emptyMap(), null, context.getBean(FieldTypeRegistry::class.java))
+                }
+            assertThat(fixed).containsEntry("codigo", "SRV")
+        }
     }
 
     @Test

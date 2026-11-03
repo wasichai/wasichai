@@ -9,9 +9,11 @@ import wasichai.core.common.ValidationException
 import wasichai.core.data.RecordChange
 import wasichai.core.data.RecordChangeKind
 import wasichai.core.data.RecordStore
+import wasichai.core.data.RecordValueProviders
 import wasichai.core.data.RecordWrite
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.WorkflowStates
+import wasichai.core.data.writing
 import wasichai.core.metadata.FieldDefaults
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataService
@@ -32,7 +34,8 @@ class AutomationRunner(
     private val documents: DocumentIssuer,
     private val guards: RecordWriteGuards,
     private val types: FieldTypeRegistry,
-    private val notifier: AutomationNotifier = NoAutomationNotifier()
+    private val notifier: AutomationNotifier = NoAutomationNotifier(),
+    private val values: RecordValueProviders = RecordValueProviders.NONE
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -166,8 +169,10 @@ class AutomationRunner(
             )
         val change = run.toChange()
         val rendered = action.values.mapValues { (_, template) -> AutomationRules.render(template, change) }
-        // what the rule leaves out takes the field's default, as any create does (issue 60)
-        val (writable, attributes) = FieldDefaults.applied(target, rendered, types)
+        // what the server fixes (ADR-077), with nobody as the caller, then what the rule leaves out takes the
+        // field's default, as any create does (issue 60)
+        val fixed = values.fixedFor(target, rendered, caller = null, types)
+        val (writable, attributes) = FieldDefaults.applied(target.writing(fixed.keys), rendered + fixed, types)
         val workflow = workflows.stateOf(run.organizationId, target.obj.id)
         guards.beforeWrite(
             target,

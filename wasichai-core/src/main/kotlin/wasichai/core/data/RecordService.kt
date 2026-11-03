@@ -91,6 +91,8 @@ class RecordService(
     private val idempotency: IdempotencyKeys,
     // the app's read masks (ADR-065). defaulted: code that builds this service itself keeps compiling
     private val masks: RecordReadMasks = RecordReadMasks.NONE,
+    // what the server fixes on a create (ADR-077). defaulted, as masks
+    private val values: RecordValueProviders = RecordValueProviders.NONE,
     transactions: () -> TransactionalOperator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -272,7 +274,7 @@ class RecordService(
     ): RecordResponse {
         val write = open(objectName, Actions.CREATE, reason, viaApi)
         val fieldAccess = write.caller.fieldAccess(write.definition.obj.id)
-        val creation = creation(write.definition, fieldAccess, request)
+        val creation = creation(write, fieldAccess, request)
         val workflow = workflows.stateOf(write.caller.organizationId, write.definition.obj.id)
         return write.created(creation, fieldAccess, workflow, checked = null)
     }
@@ -318,7 +320,7 @@ class RecordService(
         val creations =
             requests.map { request ->
                 try {
-                    Result.success(creation(definition, fieldAccess, request))
+                    Result.success(creation(write, fieldAccess, request))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -348,23 +350,26 @@ class RecordService(
         }
     }
 
-    // a create's request, judged without the database: what the store writes, and with which definition
+    // a create's request, judged before anything is written: what the store writes, and with which definition
     private class Creation(
         val target: ObjectDefinition,
         val attributes: Map<String, Any?>,
         val sections: Map<String, Map<String, Any?>>
     )
 
-    private fun creation(
-        definition: ObjectDefinition,
+    private suspend fun creation(
+        write: Write,
         fieldAccess: FieldAccess,
         request: RecordRequest
     ): Creation {
+        val definition = write.definition
         val sections = installed(request.sections)
-        // only what the caller sent is theirs to be refused; a default is the field's own value (issue 60)
+        // only what the caller sent is theirs to be refused; a default is the field's own value (issue 60),
+        // and what a provider fixes the server's (ADR-077). a key it fixes counts as sent, so no default beats it
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
-        rejectUnwritableRequired(definition, fieldAccess)
-        val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess), request.attributes, types)
+        val fixed = values.fixedFor(definition, request.attributes, write.caller.user, types)
+        rejectUnwritableRequired(definition, fieldAccess, fixed.keys)
+        val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess).writing(fixed.keys), request.attributes + fixed, types)
         return Creation(target, attributes, sections)
     }
 
@@ -781,14 +786,15 @@ class RecordService(
     }
 
     // a required field nobody may write would fail on NOT NULL: say so instead of a 500. one with a
-    // default gets it on create, so it passes
+    // default gets it on create, so it passes, and so does one a provider fixes
     private fun rejectUnwritableRequired(
         definition: ObjectDefinition,
-        fieldAccess: FieldAccess
+        fieldAccess: FieldAccess,
+        fixed: Set<String>
     ) {
         if (fieldAccess.unrestricted) return
         val blocked =
-            definition.fields.firstOrNull { it.required && !FieldDefaults.appliesTo(it, types) && !fieldAccess.canWrite(it.id) }
+            definition.fields.firstOrNull { it.required && it.name !in fixed && !FieldDefaults.appliesTo(it, types) && !fieldAccess.canWrite(it.id) }
                 ?: return
         throw ForbiddenException(
             "Field '${blocked.name}' is required but your roles may not write it, so you cannot create ${definition.obj.name}"

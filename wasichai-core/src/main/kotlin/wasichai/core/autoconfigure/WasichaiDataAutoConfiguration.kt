@@ -29,6 +29,8 @@ import wasichai.core.data.RecordReadScopes
 import wasichai.core.data.RecordService
 import wasichai.core.data.RecordStore
 import wasichai.core.data.RecordSubqueries
+import wasichai.core.data.RecordValueProvider
+import wasichai.core.data.RecordValueProviders
 import wasichai.core.data.RecordWriteGuard
 import wasichai.core.data.RecordWriteGuards
 import wasichai.core.data.RelatedRecordController
@@ -146,6 +148,10 @@ class WasichaiDataAutoConfiguration {
         store: RecordStore
     ): RecordReadMasks = RecordReadMasks(masks.orderedStream().toList(), store)
 
+    // no @ConditionalOnMissingBean: an app adds a RecordValueProvider, it never swaps out another's (ADR-077)
+    @Bean
+    fun recordValueProviders(providers: ObjectProvider<RecordValueProvider>): RecordValueProviders = RecordValueProviders(providers.orderedStream().toList())
+
     // no @ConditionalOnMissingBean: appendOnly is for everyone, an app adds a RecordWriteGuard, never swaps this (ADR-040)
     @Bean
     fun recordWriteGuards(
@@ -193,6 +199,7 @@ class WasichaiDataAutoConfiguration {
         tenants: TenantDirectory,
         idempotency: IdempotencyKeys,
         masks: RecordReadMasks,
+        values: RecordValueProviders,
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): RecordService =
         RecordService(
@@ -209,7 +216,8 @@ class WasichaiDataAutoConfiguration {
             readScopes,
             tenants,
             idempotency,
-            masks
+            masks,
+            values
         ) { TransactionalOperator.create(transactionManager.getObject()) }
 
     // Idempotency-Key on record creation (ADR-058). the transaction manager is looked up on first use, as for ClusterLock
