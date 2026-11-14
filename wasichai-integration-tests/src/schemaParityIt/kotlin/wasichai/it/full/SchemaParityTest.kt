@@ -58,13 +58,28 @@ class SchemaParityTest : FullAppIntegrationTest() {
             "column custom_fields.geometry_type #19 text" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.srid #20 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
             "column custom_fields.dimension #21 integer" to "ADR-031 D22: shifted by custom_fields.indexed",
-            // core's V18 adds time_zone and V19 translations too, so on a fresh database the gis columns sit three
-            // places later, and the files columns one place later than before V19
+            // core's V18 adds time_zone, V19 translations and V20 audited too, so on a fresh database the gis columns
+            // sit four places later, and the files columns two places later than before V19
             "column custom_fields.time_zone #20 text" to "ADR-031 D48: a DATETIME field's time zone",
-            "column custom_fields.geometry_type #22 text" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations",
-            "column custom_fields.srid #23 integer" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations",
-            "column custom_fields.dimension #24 integer" to "ADR-031 D22, D48, D54: shifted by indexed, time_zone and translations"
+            "column custom_fields.geometry_type #23 text" to "ADR-031 D22, D48, D54, D56: shifted by indexed, time_zone, translations and audited",
+            "column custom_fields.srid #24 integer" to "ADR-031 D22, D48, D54, D56: shifted by indexed, time_zone, translations and audited",
+            "column custom_fields.dimension #25 integer" to "ADR-031 D22, D48, D54, D56: shifted by indexed, time_zone, translations and audited"
         ) +
+            // what an object's record writes leave in the audit log (ADR-031 D56, ADR-079)
+            listOf(
+                "column custom_objects.audit_mode #17 text NOT NULL DEFAULT 'FULL'::text",
+                "constraint custom_objects.custom_objects_audit_mode_check CHECK ((audit_mode = ANY (ARRAY['FULL'::text, 'OPERATION'::text, 'NONE'::text])))",
+                "constraint custom_objects.custom_objects_audit_mode_not_null NOT NULL audit_mode",
+                "column custom_fields.audited #22 boolean NOT NULL DEFAULT true",
+                "constraint custom_fields.custom_fields_audited_not_null NOT NULL audited"
+            ).associateWith { "ADR-031 D56: audit modes of objects and fields" } +
+            // the app's declared model that owns an object or a relationship (ADR-031 D57, ADR-081)
+            listOf(
+                "column custom_objects.declared_by #18 text",
+                "constraint custom_objects.custom_objects_declared_by_valid CHECK ((declared_by ~ '^[a-z][a-z0-9_-]{0,48}\$'::text))",
+                "column relationships.declared_by #13 text",
+                "constraint relationships.relationships_declared_by_valid CHECK ((declared_by ~ '^[a-z][a-z0-9_-]{0,48}\$'::text))"
+            ).associateWith { "ADR-031 D57: models an app declares, ensured by the platform" } +
             // per-language texts of the model (ADR-031 D54, ADR-078): one jsonb per metadata table
             listOf(
                 "column custom_objects.translations #16 jsonb NOT NULL DEFAULT '{}'::jsonb",
@@ -412,9 +427,9 @@ class SchemaParityTest : FullAppIntegrationTest() {
                     "$FIELD_TYPES])))",
                 "constraint custom_fields.custom_fields_type_valid CHECK ((type = ANY (ARRAY[" +
                     "$FIELD_TYPES, 'FILE'::text, 'IMAGE'::text])))",
-                // one place later for translations (D54)
-                "column custom_fields.file_max_bytes #25 bigint",
-                "column custom_fields.file_content_types #26 text",
+                // two places later, for translations (D54) and audited (D56)
+                "column custom_fields.file_max_bytes #26 bigint",
+                "column custom_fields.file_content_types #27 text",
                 "constraint custom_fields.custom_fields_file_max_bytes_valid CHECK (((file_max_bytes IS NULL) OR (file_max_bytes > 0)))",
                 "column stored_files.id #1 uuid NOT NULL",
                 "column stored_files.organization_id #2 uuid NOT NULL",
