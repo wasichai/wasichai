@@ -163,6 +163,8 @@ data class ObjectResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
     // OPERATION or NONE; left out for FULL, so an object that declares nothing reads exactly as before (ADR-079)
     @get:JsonInclude(JsonInclude.Include.NON_NULL) val auditMode: String? = null,
+    // the app's declared model that owns it; its model changes only through that app (ADR-081). left out otherwise
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val declaredBy: String? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -192,6 +194,8 @@ data class ObjectDefinitionResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
     // OPERATION or NONE; left out for FULL, so an object that declares nothing reads exactly as before (ADR-079)
     @get:JsonInclude(JsonInclude.Include.NON_NULL) val auditMode: String? = null,
+    // the app's declared model that owns it; its model changes only through that app (ADR-081). left out otherwise
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val declaredBy: String? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

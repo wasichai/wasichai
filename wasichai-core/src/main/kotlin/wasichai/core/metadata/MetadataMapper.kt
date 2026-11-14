@@ -32,6 +32,7 @@ class MetadataMapper(
                 definition.obj.auditMode
                     .takeUnless { it == AuditMode.FULL }
                     ?.name,
+            declaredBy = definition.obj.declaredBy,
             extensions = types.objectProperties(definition)
         )
 
@@ -59,6 +60,7 @@ class MetadataMapper(
                 definition.obj.auditMode
                     .takeUnless { it == AuditMode.FULL }
                     ?.name,
+            declaredBy = definition.obj.declaredBy,
             extensions = types.objectProperties(definition)
         )
 

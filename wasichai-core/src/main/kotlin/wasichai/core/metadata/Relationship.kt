@@ -82,7 +82,9 @@ data class Relationship(
     val joinTable: String?,
     // label and inverseLabel per language tag; the single texts stay the fallback (ADR-078)
     val labels: LocalizedText = emptyMap(),
-    val inverseLabels: LocalizedText = emptyMap()
+    val inverseLabels: LocalizedText = emptyMap(),
+    // the app's declared model that owns it, null when a person made it (ADR-081)
+    val declaredBy: String? = null
 ) {
     // source and target are one object: a parent unit, a previous version, a duplicate-of
     val selfReferencing: Boolean get() = sourceObjectId == targetObjectId
@@ -90,7 +92,7 @@ data class Relationship(
 
 private const val RELATIONSHIP_COLUMNS =
     "id, organization_id, name, label, inverse_label, type, source_object_id, target_object_id, " +
-        "relation_field_id, join_table, translations::text AS translations"
+        "relation_field_id, join_table, translations::text AS translations, declared_by"
 
 @Repository
 class RelationshipRepository(
@@ -110,9 +112,9 @@ class RelationshipRepository(
                 """
                 INSERT INTO ${schemas.metadata}.relationships
                     (id, organization_id, name, label, inverse_label, type, source_object_id,
-                     target_object_id, relation_field_id, join_table, translations)
+                     target_object_id, relation_field_id, join_table, translations, declared_by)
                 VALUES (:id, :organizationId, :name, :label, :inverseLabel, :type, :sourceObjectId,
-                        :targetObjectId, :relationFieldId, :joinTable, CAST(:translations AS jsonb))
+                        :targetObjectId, :relationFieldId, :joinTable, CAST(:translations AS jsonb), :declaredBy)
                 RETURNING $RELATIONSHIP_COLUMNS
                 """.trimIndent()
             ).bind("id", relationship.id)
@@ -126,6 +128,7 @@ class RelationshipRepository(
             .bindNullable("relationFieldId", relationship.relationFieldId)
             .bindNullable("joinTable", relationship.joinTable)
             .bind("translations", translationsOf(relationship))
+            .bindNullable("declaredBy", relationship.declaredBy)
             .map(::map)
             .one()
             .awaitSingle()
@@ -151,13 +154,13 @@ class RelationshipRepository(
             .one()
             .awaitFirstOrNull()
 
-    // only the labels. what backs a relationship never moves: see RelationshipService.update.
+    // only the labels and the owner. what backs a relationship never moves: see RelationshipService.update.
     suspend fun update(relationship: Relationship): Relationship =
         db
             .sql(
                 """
                 UPDATE ${schemas.metadata}.relationships
-                SET label = :label, inverse_label = :inverseLabel, translations = CAST(:translations AS jsonb)
+                SET label = :label, inverse_label = :inverseLabel, translations = CAST(:translations AS jsonb), declared_by = :declaredBy
                 WHERE id = :id
                 RETURNING $RELATIONSHIP_COLUMNS
                 """.trimIndent()
@@ -165,6 +168,7 @@ class RelationshipRepository(
             .bind("label", relationship.label)
             .bindNullable("inverseLabel", relationship.inverseLabel)
             .bind("translations", translationsOf(relationship))
+            .bindNullable("declaredBy", relationship.declaredBy)
             .map(::map)
             .one()
             .awaitSingle()
@@ -223,7 +227,8 @@ class RelationshipRepository(
             relationFieldId = Rows.uuidOrNull(row, "relation_field_id"),
             joinTable = Rows.stringOrNull(row, "join_table"),
             labels = texts.texts("labels"),
-            inverseLabels = texts.texts("inverseLabels")
+            inverseLabels = texts.texts("inverseLabels"),
+            declaredBy = Rows.stringOrNull(row, "declared_by")
         )
     }
 }

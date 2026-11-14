@@ -68,7 +68,10 @@ internal class MetadataSnapshots(
     }
 
     // only when it says something, so an entry of an object without it reads as before (ADR-079)
-    private fun auditMode(obj: CustomObject): Map<String, Any?> = if (obj.auditMode == AuditMode.FULL) emptyMap() else mapOf("auditMode" to obj.auditMode.name)
+    private fun auditMode(obj: CustomObject): Map<String, Any?> =
+        (if (obj.auditMode == AuditMode.FULL) emptyMap() else mapOf("auditMode" to obj.auditMode.name)) +
+            // the same, for the model that owns it (ADR-081)
+            (obj.declaredBy?.let { mapOf("declaredBy" to it) } ?: emptyMap())
 
     private suspend fun targetNames(
         organizationId: UUID,

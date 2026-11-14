@@ -16,6 +16,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.PasswordPolicy
 import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.WasichaiSchemas
@@ -43,7 +44,9 @@ class OrganizationService(
     private val audit: AdminAudit,
     private val passwordPolicy: PasswordPolicy,
     // a deleted tenant's definitions leave the cache (ADR-066). defaulted: uncached, as before
-    private val changes: MetadataChanges = MetadataChanges.uncached()
+    private val changes: MetadataChanges = MetadataChanges.uncached(),
+    // the app's declared models, ensured in a tenant as it is provisioned (ADR-081). defaulted: none
+    private val declaredModels: DeclaredModels? = null
 ) {
     suspend fun current(): Organization {
         val user = currentUser.require()
@@ -165,6 +168,8 @@ class OrganizationService(
             null,
             snapshot(created) + ("adminEmail" to request.adminEmail.trim().lowercase())
         )
+        // born with the app's model, in this same transaction: a model that cannot be made leaves no tenant (ADR-081)
+        declaredModels?.ensure(organizationId)
         return created
     }
 

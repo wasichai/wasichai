@@ -19,7 +19,7 @@ import java.util.UUID
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
         "physical_table, created_at, updated_at, indexes::text AS indexes, unique_constraints::text AS unique_constraints, " +
-        "append_only, api_only, requires_reason, translations::text AS translations, audit_mode"
+        "append_only, api_only, requires_reason, translations::text AS translations, audit_mode, declared_by"
 
 @Repository
 class CustomObjectRepository(
@@ -35,10 +35,10 @@ class CustomObjectRepository(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
                     (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes,
-                     unique_constraints, append_only, api_only, requires_reason, translations, audit_mode)
+                     unique_constraints, append_only, api_only, requires_reason, translations, audit_mode, declared_by)
                 VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
                         CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly, :requiresReason,
-                        CAST(:translations AS jsonb), :auditMode)
+                        CAST(:translations AS jsonb), :auditMode, :declaredBy)
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
@@ -56,6 +56,7 @@ class CustomObjectRepository(
             .bind("requiresReason", obj.requiresReason)
             .bind("translations", translationsOf(obj))
             .bind("auditMode", obj.auditMode.name)
+            .bindNullable("declaredBy", obj.declaredBy)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -119,7 +120,7 @@ class CustomObjectRepository(
                     enabled = :enabled, indexes = CAST(:indexes AS jsonb),
                     unique_constraints = CAST(:uniqueConstraints AS jsonb), append_only = :appendOnly, api_only = :apiOnly,
                     requires_reason = :requiresReason, translations = CAST(:translations AS jsonb), audit_mode = :auditMode,
-                    updated_at = now()
+                    declared_by = :declaredBy, updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
@@ -136,6 +137,7 @@ class CustomObjectRepository(
             .bind("requiresReason", obj.requiresReason)
             .bind("translations", translationsOf(obj))
             .bind("auditMode", obj.auditMode.name)
+            .bindNullable("declaredBy", obj.declaredBy)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -177,7 +179,8 @@ class CustomObjectRepository(
             labels = texts.texts("labels"),
             pluralLabels = texts.texts("pluralLabels"),
             descriptions = texts.texts("descriptions"),
-            auditMode = AuditMode.valueOf(Rows.string(row, "audit_mode"))
+            auditMode = AuditMode.valueOf(Rows.string(row, "audit_mode")),
+            declaredBy = Rows.stringOrNull(row, "declared_by")
         )
     }
 

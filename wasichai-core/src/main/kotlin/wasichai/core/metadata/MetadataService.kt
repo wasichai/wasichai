@@ -17,7 +17,8 @@ import wasichai.core.platform.SqlIdentifier
 import wasichai.core.platform.SystemColumns
 import java.util.UUID
 
-// every change to an object or a field leaves one admin audit entry (ADR-049)
+// every change to an object or a field leaves one admin audit entry (ADR-049). a person changes it with
+// MANAGE_METADATA; the platform ensuring an app's declared model too, and only it changes what that model owns (ADR-081)
 @Service
 class MetadataService(
     private val objects: CustomObjectRepository,
@@ -89,17 +90,17 @@ class MetadataService(
 
     @Transactional
     suspend fun createObject(request: CreateObjectRequest): ObjectDefinition {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val name = SqlIdentifier.requireValidObjectName(request.name.trim().lowercase())
 
-        if (objects.findByName(user.organizationId, name) != null) {
+        if (objects.findByName(actor.organizationId, name) != null) {
             throw ConflictException("Object '$name' already exists")
         }
 
         val obj =
             CustomObject(
                 id = UUID.randomUUID(),
-                organizationId = user.organizationId,
+                organizationId = actor.organizationId,
                 name = name,
                 label = request.label.trim(),
                 pluralLabel =
@@ -109,7 +110,7 @@ class MetadataService(
                         .ifBlank { request.label.trim() },
                 description = request.description?.trim(),
                 enabled = true,
-                physicalTable = physicalTableName(name, user.organizationId),
+                physicalTable = physicalTableName(name, actor.organizationId),
                 createdAt = null,
                 updatedAt = null,
                 appendOnly = request.appendOnly,
@@ -118,21 +119,23 @@ class MetadataService(
                 labels = LocalizedTexts.checked(request.labels, "labels"),
                 pluralLabels = LocalizedTexts.checked(request.pluralLabels, "pluralLabels"),
                 descriptions = LocalizedTexts.checked(request.descriptions, "descriptions"),
-                auditMode = AuditMode.parse(request.auditMode) ?: AuditMode.FULL
+                auditMode = AuditMode.parse(request.auditMode) ?: AuditMode.FULL,
+                // the platform ensuring a declared model owns what it makes (ADR-081)
+                declaredBy = actor.model
             )
 
         var stored = objects.insert(obj)
         val storedFields =
             request.fields.mapIndexed { index, field ->
-                fields.insert(buildField(stored.id, field, index, user.organizationId))
+                fields.insert(buildField(stored.id, field, index, actor.organizationId))
             }
         // the sets name fields, so they are checked once the fields exist (a relation may point at this object)
         val indexes = FieldSets.normalize(INDEXES, request.indexes, storedFields, types)
         val uniques = FieldSets.normalize(UNIQUE_CONSTRAINTS, request.uniqueConstraints, storedFields, types, minFields = 2)
         if (indexes.isNotEmpty() || uniques.isNotEmpty()) stored = objects.update(stored.copy(indexes = indexes, uniqueConstraints = uniques))
-        schema.createTable(stored, storedFields, relationTables(storedFields, user.organizationId))
-        audit.record(user, AdminEntity.OBJECT, stored.id, AdminOperation.CREATE, null, snapshots.obj(stored))
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.CREATE, stored.id, stored.name))
+        schema.createTable(stored, storedFields, relationTables(storedFields, actor.organizationId))
+        actor.record(audit, AdminEntity.OBJECT, stored.id, AdminOperation.CREATE, null, snapshots.obj(stored))
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.OBJECT, AdminOperation.CREATE, stored.id, stored.name))
         return ObjectDefinition(stored, storedFields)
     }
 
@@ -155,18 +158,19 @@ class MetadataService(
         request: FieldRequest,
         audited: Boolean
     ): CustomField {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val obj =
-            objects.findByName(user.organizationId, objectName)
+            objects.findByName(actor.organizationId, objectName)
                 ?: throw NotFoundException("Object '$objectName' does not exist")
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         if (fields.findByObject(obj.id).any { it.name == request.name.trim().lowercase() }) {
             throw ConflictException("Field '${request.name}' already exists on '$objectName'")
         }
         val position = fields.maxPosition(obj.id) + 1
-        val stored = fields.insert(buildField(obj.id, request, position, user.organizationId))
-        schema.addColumn(obj, stored, relationTables(listOf(stored), user.organizationId))
-        if (audited) audit.record(user, AdminEntity.FIELD, stored.id, AdminOperation.CREATE, null, snapshots.field(obj, stored))
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.CREATE, obj.id, obj.name, stored.name))
+        val stored = fields.insert(buildField(obj.id, request, position, actor.organizationId))
+        schema.addColumn(obj, stored, relationTables(listOf(stored), actor.organizationId))
+        if (audited) actor.record(audit, AdminEntity.FIELD, stored.id, AdminOperation.CREATE, null, snapshots.field(obj, stored))
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.FIELD, AdminOperation.CREATE, obj.id, obj.name, stored.name))
         return stored
     }
 
@@ -176,13 +180,14 @@ class MetadataService(
         fieldName: String,
         request: UpdateFieldRequest
     ): CustomField {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val obj =
-            objects.findByName(user.organizationId, objectName)
+            objects.findByName(actor.organizationId, objectName)
                 ?: throw NotFoundException("Object '$objectName' does not exist")
         val existing =
             fields.findByName(obj.id, fieldName)
                 ?: throw NotFoundException("Field '$fieldName' does not exist on '$objectName'")
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
 
         // layouts and rules store field names, so a rename would break them in silence
         if (request.name != null && request.name.trim().lowercase() != existing.name) {
@@ -279,8 +284,8 @@ class MetadataService(
             schema.replaceEnumCheck(obj, existing, updated.enumOptions.orEmpty())
         }
         val saved = fields.update(updated)
-        audit.record(user, AdminEntity.FIELD, existing.id, AdminOperation.UPDATE, snapshots.field(obj, existing), snapshots.field(obj, saved))
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.UPDATE, obj.id, obj.name, saved.name))
+        actor.record(audit, AdminEntity.FIELD, existing.id, AdminOperation.UPDATE, snapshots.field(obj, existing), snapshots.field(obj, saved))
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.FIELD, AdminOperation.UPDATE, obj.id, obj.name, saved.name))
         return saved
     }
 
@@ -289,18 +294,19 @@ class MetadataService(
         objectName: String,
         fieldName: String
     ) {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val obj =
-            objects.findByName(user.organizationId, objectName)
+            objects.findByName(actor.organizationId, objectName)
                 ?: throw NotFoundException("Object '$objectName' does not exist")
         val field =
             fields.findByName(obj.id, fieldName)
                 ?: throw NotFoundException("Field '$fieldName' does not exist on '$objectName'")
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         rejectAppendOnly(obj, "its field '$fieldName'")
 
         // a relationship owns its field. dropping it here would leave the relationship half deleted.
         if (field.type == FieldType.RELATION) {
-            val owner = relationships.findForObject(user.organizationId, obj.id).firstOrNull { it.relationFieldId == field.id }
+            val owner = relationships.findForObject(actor.organizationId, obj.id).firstOrNull { it.relationFieldId == field.id }
             if (owner != null) {
                 throw ConflictException(
                     "Field '$fieldName' belongs to relationship '${owner.name}'. Delete the relationship instead."
@@ -321,8 +327,8 @@ class MetadataService(
         val before = snapshots.field(obj, field)
         schema.dropColumn(obj, field)
         fields.delete(field.id)
-        audit.record(user, AdminEntity.FIELD, field.id, AdminOperation.DELETE, before, null)
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.FIELD, AdminOperation.DELETE, obj.id, obj.name, field.name))
+        actor.record(audit, AdminEntity.FIELD, field.id, AdminOperation.DELETE, before, null)
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.FIELD, AdminOperation.DELETE, obj.id, obj.name, field.name))
     }
 
     @Transactional
@@ -330,10 +336,11 @@ class MetadataService(
         name: String,
         request: UpdateObjectRequest
     ): ObjectDefinition {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val obj =
-            objects.findByName(user.organizationId, name)
+            objects.findByName(actor.organizationId, name)
                 ?: throw NotFoundException("Object '$name' does not exist")
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         // the name is the API path and the physical table. accepting it silently would be a lie.
         if (request.name != null && request.name.trim().lowercase() != obj.name) {
             throw ValidationException(
@@ -369,7 +376,9 @@ class MetadataService(
                     pluralLabels = request.pluralLabels?.let { LocalizedTexts.checked(it, "pluralLabels") } ?: obj.pluralLabels,
                     descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: obj.descriptions,
                     // null keeps, as the write flags: an editor that predates it must not switch it back to FULL
-                    auditMode = AuditMode.parse(request.auditMode) ?: obj.auditMode
+                    auditMode = AuditMode.parse(request.auditMode) ?: obj.auditMode,
+                    // a declared model takes over an object a person made, once it matches (ADR-081)
+                    declaredBy = actor.model ?: obj.declaredBy
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op
@@ -379,17 +388,18 @@ class MetadataService(
                 schema.syncUniqueConstraints(ObjectDefinition(obj, objectFields), ObjectDefinition(updated, objectFields))
             }
         }
-        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(updated))
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.UPDATE, obj.id, obj.name))
+        actor.record(audit, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(updated))
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.OBJECT, AdminOperation.UPDATE, obj.id, obj.name))
         return ObjectDefinition(updated, objectFields)
     }
 
     @Transactional
     suspend fun deleteObject(name: String) {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val obj =
-            objects.findByName(user.organizationId, name)
+            objects.findByName(actor.organizationId, name)
                 ?: throw NotFoundException("Object '$name' does not exist")
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         rejectAppendOnly(obj, "it")
 
         // another object's RELATION column points here. dropping the table would strip its
@@ -398,17 +408,19 @@ class MetadataService(
         if (pointing.isNotEmpty()) {
             val owners =
                 pointing.mapNotNull { field ->
-                    objects.findById(user.organizationId, field.objectId)?.let { "${it.name}.${field.name}" }
+                    objects.findById(actor.organizationId, field.objectId)?.let { "${it.name}.${field.name}" }
                 }
             throw ConflictException("Object '$name' is referenced by ${owners.joinToString(", ")}. Remove those fields first.")
         }
 
-        // a join table holds links of both ends: an appendOnly other end keeps them (ADR-040)
-        val owned = relationships.findForObject(user.organizationId, obj.id)
+        // a join table holds links of both ends: an appendOnly other end keeps them (ADR-040). a declared
+        // relationship goes with the app that declares it, never with a person's object (ADR-081)
+        val owned = relationships.findForObject(actor.organizationId, obj.id)
+        owned.forEach { actor.requireMayChange(it.declaredBy, "Relationship '${it.name}'") }
         owned
             .filter { it.joinTable != null }
             .map { if (it.sourceObjectId == obj.id) it.targetObjectId else it.sourceObjectId }
-            .mapNotNull { objects.findById(user.organizationId, it) }
+            .mapNotNull { objects.findById(actor.organizationId, it) }
             .forEach { rejectAppendOnly(it, "the links '$name' shares with it") }
 
         // what is about to go, fields and declared actions included: they cascade with it
@@ -419,9 +431,9 @@ class MetadataService(
         }
         removals.forEach { it.objectRemoved(obj) }
         schema.dropTable(obj)
-        objects.delete(user.organizationId, obj.id)
-        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.DELETE, before, null)
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.OBJECT, AdminOperation.DELETE, obj.id, obj.name))
+        objects.delete(actor.organizationId, obj.id)
+        actor.record(audit, AdminEntity.OBJECT, obj.id, AdminOperation.DELETE, before, null)
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.OBJECT, AdminOperation.DELETE, obj.id, obj.name))
     }
 
     // a unique the data already breaks: the caller's 409, not a server error. thrown inside the

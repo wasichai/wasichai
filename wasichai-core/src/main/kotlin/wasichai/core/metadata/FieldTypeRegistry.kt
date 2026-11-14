@@ -189,7 +189,8 @@ class FieldTypeRegistry(
                 "labels",
                 "pluralLabels",
                 "descriptions",
-                "auditMode"
+                "auditMode",
+                "declaredBy"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata

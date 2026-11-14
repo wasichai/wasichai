@@ -55,7 +55,9 @@ data class CustomObject(
     val pluralLabels: LocalizedText = emptyMap(),
     val descriptions: LocalizedText = emptyMap(),
     // what its record writes leave in the audit log (ADR-079)
-    val auditMode: AuditMode = AuditMode.FULL
+    val auditMode: AuditMode = AuditMode.FULL,
+    // the app's declared model that owns it, null when a person made it (ADR-081)
+    val declaredBy: String? = null
 )
 
 data class CustomField(

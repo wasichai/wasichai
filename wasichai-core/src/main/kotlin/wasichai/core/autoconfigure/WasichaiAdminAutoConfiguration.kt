@@ -19,6 +19,7 @@ import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.PasswordPolicy
 import wasichai.core.identity.TokenRevocation
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
 import wasichai.core.metadata.ObjectActionRepository
@@ -73,8 +74,10 @@ class WasichaiAdminAutoConfiguration {
         schemas: WasichaiSchemas,
         audit: AdminAudit,
         passwordPolicy: PasswordPolicy,
-        changes: MetadataChanges
-    ): OrganizationService = OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit, passwordPolicy, changes)
+        changes: MetadataChanges,
+        declaredModels: DeclaredModels
+    ): OrganizationService =
+        OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit, passwordPolicy, changes, declaredModels)
 
     @Bean
     @ConditionalOnMissingBean
