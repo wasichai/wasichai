@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/wasichai/wasichai/compare/v1.10.0...v2.0.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core:** inside RecordService.asPlatform, a create, PUT or PATCH writes the read-only fields (editable: false) it sends, where it used to drop them. A person's create (POST /api/objects/{object}/records, or an in-process create with a token) that sends a non-null value for a read-only field is now a 403 instead of the value being dropped: leave the field out, or let a RecordValueProvider fix it.
+
+### Features
+
+* **core:** declared models, upsert by natural key, audit modes and read-only fields the platform writes ([#168](https://github.com/wasichai/wasichai/issues/168)) ([766cf92](https://github.com/wasichai/wasichai/commit/766cf9297cf233e47553c9528dcebd29177100fe))
+
 ## [1.10.0](https://github.com/wasichai/wasichai/compare/v1.9.0...v1.10.0) (2026-11-03)
 
 
