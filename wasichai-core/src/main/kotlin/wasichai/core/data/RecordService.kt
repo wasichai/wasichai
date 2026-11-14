@@ -101,9 +101,10 @@ class RecordService(
 
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
-     * acts in that organization, with no user. No permission or field rule applies, as for ADMIN; the
-     * writes leave `created_by`, `updated_by` and the audit `user_id` null, as an automation does
-     * (ADR-016). Composes with the caller's transaction either way round (ADR-038).
+     * acts in that organization, with no user. No permission or field rule applies, as for ADMIN, and a
+     * read-only field (`editable: false`) it sends is written: that flag limits people, not the platform
+     * (issue 166). The writes leave `created_by`, `updated_by` and the audit `user_id` null, as an
+     * automation does (ADR-016). Composes with the caller's transaction either way round (ADR-038).
      *
      * Background work only. Inside a request, with a token or without one, it throws: nothing a
      * request carries can become the platform.
@@ -368,8 +369,11 @@ class RecordService(
         // and what a provider fixes the server's (ADR-077). a key it fixes counts as sent, so no default beats it
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val fixed = values.fixedFor(definition, request.attributes, write.caller.user, types)
+        // a read-only field (editable: false) is the server's: a person's value is refused, the platform's lands (issue 166)
+        if (write.caller.user != null) rejectReadOnly(definition, request.attributes, fixed.keys)
         rejectUnwritableRequired(definition, fieldAccess, fixed.keys)
-        val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess).writing(fixed.keys), request.attributes + fixed, types)
+        val written = definition.writableBy(fieldAccess).writing(fixed.keys + write.caller.readOnlyWrites(definition, request.attributes))
+        val (target, attributes) = FieldDefaults.applied(written, request.attributes + fixed, types)
         return Creation(target, attributes, sections)
     }
 
@@ -441,8 +445,9 @@ class RecordService(
     /**
      * A partial update (ADR-051): JSON merge on `attributes`. Only the keys sent are written, `null` clears
      * one, every other field keeps its stored value, also against a concurrent write of another field. A
-     * key that is no attribute of the object is a 400 and a read-only field (`editable: false`) a 403;
-     * everything else is [update]'s: permissions, field rules, write rules, guards, audit and listeners.
+     * key that is no attribute of the object is a 400 and a read-only field (`editable: false`) a 403 for a
+     * person; the platform writes it (issue 166). Everything else is [update]'s: permissions, field rules,
+     * write rules, guards, audit and listeners.
      * Sections merge as they always do. [expectedUpdatedAt] as for [update].
      */
     suspend fun patch(
@@ -490,8 +495,9 @@ class RecordService(
         val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
-        // a PUT ignores what it cannot write by metadata; a PATCH names only what it means to change, so it says
-        if (partial) rejectUnknownOrReadOnly(definition, request.attributes)
+        // a person's PUT ignores what it cannot write by metadata; a PATCH names only what it means to change, so it says.
+        // the platform writes a read-only field it sends, either way (issue 166)
+        if (partial) rejectUnknownOrReadOnly(definition, request.attributes, readOnlyAllowed = caller.user == null)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val before =
@@ -501,8 +507,13 @@ class RecordService(
         val sent = if (partial) before.attributes + request.attributes else request.attributes
         write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = sent, reader = caller.user)
         // locked fields keep their stored value: a full-replace PUT must not blank them. a PATCH locks every
-        // field it did not send. the state is untouched here: it only moves through a transition.
-        val target = definition.writableBy(fieldAccess).let { if (partial) it.lockedBut(request.attributes.keys) else it }
+        // field it did not send. the state is untouched here: it only moves through a transition. a read-only
+        // field the platform did not send stays as stored, on a PUT too: only what it names is its to write
+        val target =
+            definition
+                .writableBy(fieldAccess)
+                .let { if (partial) it.lockedBut(request.attributes.keys) else it }
+                .writing(caller.readOnlyWrites(definition, request.attributes))
         val updated =
             if (expectedUpdatedAt == null) {
                 store.update(target, caller.organizationId, caller.userId, id, request.attributes, sections, workflow.attached)
@@ -772,17 +783,47 @@ class RecordService(
         }
     }
 
-    // a PATCH key must be an attribute of the object, and one its metadata lets anyone write (ADR-051)
+    // a PATCH key must be an attribute of the object, and one its metadata lets anyone write (ADR-051). the
+    // platform writes a read-only one too (issue 166)
     private fun rejectUnknownOrReadOnly(
         definition: ObjectDefinition,
-        attributes: Map<String, Any?>
+        attributes: Map<String, Any?>,
+        readOnlyAllowed: Boolean
     ) {
         attributes.keys.forEach { name ->
             val field =
                 definition.fields.firstOrNull { it.name == name && types.handler(it.type).section == null }
                     ?: throw ValidationException("Unknown field '$name'", name, "is not an attribute of '${definition.obj.name}'")
-            if (!field.editable) throw ForbiddenException("Field '$name' is read-only")
+            if (!field.editable && !readOnlyAllowed) throw ForbiddenException("Field '$name' is read-only")
         }
+    }
+
+    // a create's value for a read-only field, from a person: the store would drop it without a word, so the caller
+    // would believe it landed (issue 166). a 403, as a PATCH says. a key a provider fixes is the server's, and a
+    // null is no value: the field ends empty either way
+    private fun rejectReadOnly(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>,
+        fixed: Set<String>
+    ) {
+        val field =
+            definition.fields.firstOrNull {
+                !it.editable && it.name !in fixed && attributes[it.name] != null && types.handler(it.type).section == null
+            } ?: return
+        throw ForbiddenException("Field '${field.name}' is read-only")
+    }
+
+    // the read-only attribute fields the platform sends, and so writes: editable: false limits people (the generic api
+    // and the ui), never the platform (issue 166). a person writes none
+    private fun Caller.readOnlyWrites(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>
+    ): Set<String> {
+        if (user != null) return emptySet()
+        return definition.fields
+            .filter { !it.editable && it.name in attributes && types.handler(it.type).section == null }
+            .map { it.name }
+            .toSet()
     }
 
     // a required field nobody may write would fail on NOT NULL: say so instead of a 500. one with a
