@@ -5,6 +5,13 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import wasichai.core.common.ValidationException
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.UUID
 
 class FieldValueCodecTest {
@@ -72,6 +79,48 @@ class FieldValueCodecTest {
     @Test
     fun `a type core does not know is refused`() {
         assertThatThrownBy { FieldValueCodec.toDatabase(field(FieldType("SHAPE")), "{}") }
+            .isInstanceOf(ValidationException::class.java)
+    }
+
+    // server code builds values as kotlin objects: the stored type itself is taken as is (issue 167)
+    @Test
+    fun `a UUID or RELATION field takes a java UUID as well as its text`() {
+        val id = UUID.randomUUID()
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.UUID), id)).isEqualTo(id)
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.RELATION), id)).isEqualTo(id)
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.RELATION), id.toString())).isEqualTo(id)
+        assertThatThrownBy { FieldValueCodec.toDatabase(field(FieldType.RELATION), 42) }
+            .isInstanceOf(ValidationException::class.java)
+            .hasMessageContaining("campo")
+    }
+
+    @Test
+    fun `a DATE field takes a LocalDate as well as its ISO text`() {
+        val day = LocalDate.of(2026, 11, 13)
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.DATE), day)).isEqualTo(day)
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.DATE), "2026-11-13")).isEqualTo(day)
+        assertThatThrownBy { FieldValueCodec.toDatabase(field(FieldType.DATE), Instant.parse("2026-11-13T00:00:00Z")) }
+            .isInstanceOf(ValidationException::class.java)
+    }
+
+    @Test
+    fun `a DATETIME field takes an OffsetDateTime, a ZonedDateTime or an Instant`() {
+        val offset = OffsetDateTime.of(2026, 11, 13, 9, 30, 0, 0, ZoneOffset.ofHours(-5))
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.DATETIME), offset)).isEqualTo(offset)
+        val zoned = ZonedDateTime.of(2026, 11, 13, 9, 30, 0, 0, ZoneId.of("America/Lima"))
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.DATETIME), zoned)).isEqualTo(zoned.toOffsetDateTime())
+        val instant = Instant.parse("2026-11-13T14:30:00Z")
+        val stored = FieldValueCodec.toDatabase(field(FieldType.DATETIME), instant) as OffsetDateTime
+        assertThat(stored.toInstant()).isEqualTo(instant)
+        // read back as the instant it is, the same text a string write gives
+        assertThat(FieldValueCodec.fromDatabase(stored)).isEqualTo("2026-11-13T14:30:00Z")
+        assertThat(FieldValueCodec.toDatabase(field(FieldType.DATETIME), "2026-11-13T09:30:00-05:00")).isEqualTo(offset)
+    }
+
+    // a wall time with no offset names no instant: guessing a zone would store the wrong moment
+    @Test
+    fun `a DATETIME field refuses a LocalDateTime`() {
+        assertThatThrownBy { FieldValueCodec.toDatabase(field(FieldType.DATETIME), LocalDateTime.of(2026, 11, 13, 9, 30)) }
             .isInstanceOf(ValidationException::class.java)
     }
 }
