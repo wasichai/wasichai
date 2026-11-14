@@ -521,6 +521,62 @@ audit entry, and the `POST` answers with the value. What it returns beats what t
 a `ValidationException`. A key that is no attribute of the object, or one two beans return, fails the write
 ([ADR-077](../adr/0077-the-server-fixes-a-value-on-a-create.md)).
 
+## Objects your code writes
+
+When your code writes an object of its own, a catalog it computes, declare the object in code instead of asking an
+administrator to make it in every tenant ([ADR-081](../adr/0081-models-an-app-declares-in-code.md)):
+
+```kotlin
+@Configuration
+class CatalogModel {
+    @Bean
+    fun catalog() =
+        DeclaredModel(
+            name = "catalogo",
+            objects =
+                listOf(
+                    CreateObjectRequest(
+                        name = "curso",
+                        label = "Curso",
+                        // the generic record api never writes it, and nobody edits it in the ui
+                        apiOnly = true,
+                        // your own schema keeps the trail: the log keeps who and when, not the states
+                        auditMode = "OPERATION",
+                        fields =
+                            listOf(
+                                FieldRequest(name = "codigo", type = "TEXT", required = true, unique = true, editable = false),
+                                FieldRequest(name = "nombre", type = "TEXT", editable = false),
+                                FieldRequest(name = "silabo", type = "LONG_TEXT", editable = false, audited = false)
+                            )
+                    )
+                )
+        )
+}
+```
+
+The platform makes it in every tenant at startup and in every tenant it provisions, changes what you change in the
+declaration on the next start, and reports in the log what it cannot change without losing data. Nobody else changes
+it: the metadata API answers a person with a `409`.
+
+Then sync it from your own data in one call. `upsertAll` creates what is new, patches what changed and leaves alone
+what reads the same, and with `deleteMissing` deletes what your data no longer has
+([ADR-080](../adr/0080-a-batch-write-by-natural-key.md)):
+
+```kotlin
+records.asPlatform(organizationId, "import:catalogo") {
+    records.upsertAll(
+        "curso",
+        key = listOf("codigo"),
+        requests = cursos.map { RecordRequest(mapOf("codigo" to it.codigo, "nombre" to it.nombre, "silabo" to it.silabo)) },
+        deleteMissing = true
+    )
+}
+```
+
+The platform writes the `editable: false` fields that people only read
+([ADR-082](../adr/0082-a-read-only-field-limits-people-not-the-platform.md)), and values may be the Kotlin types the
+columns store: a `UUID` for a `RELATION`, a `LocalDate`, an `Instant`.
+
 ## Who reads which records
 
 `READ` on an object opens every record of it, and `own_records_only` narrows that to the caller's own. When several

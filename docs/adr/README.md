@@ -116,3 +116,8 @@ supersedes it and says so in its status line.
 - [ADR-076: The app picks the shell menu and the start page](0076-the-app-picks-the-shell-menu-and-the-start-page.md)
 - [ADR-077: The server fixes a value on a create, through a `RecordValueProvider`](0077-the-server-fixes-a-value-on-a-create.md)
 - [ADR-078: Per-language texts of objects, fields, enum options and relationships](0078-per-language-metadata-texts-resolved-by-the-client.md)
+- [ADR-079: An object says what its record writes leave in the audit log](0079-what-a-record-write-leaves-in-the-audit-log.md)
+- [ADR-080: `RecordService.upsertAll`, a batch write by natural key](0080-a-batch-write-by-natural-key.md)
+- [ADR-081: Models an app declares in code, ensured by the platform](0081-models-an-app-declares-in-code.md)
+- [ADR-082: A read-only field limits people, not the platform](0082-a-read-only-field-limits-people-not-the-platform.md)
+- [ADR-083: An app mounts core's record screens in its own module](0083-an-app-mounts-cores-record-screens-in-its-own-module.md)

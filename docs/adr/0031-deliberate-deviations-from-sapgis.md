@@ -495,6 +495,38 @@ These are the only intended differences. Anything else that behaves differently 
   `wasichai-gis` and `wasichai-files` columns one more place. Tested by `MetadataTranslationsApiTest`,
   `LocalizedTextsTest`, `MetadataJsonTest`, `RelationshipSideTest` and `SchemaParityTest`.
 
+**Because an app's own code writes part of the model**
+
+- **D55. A read-only field limits people, not the platform.** The original dropped a value for a field with
+  `editable: false` without a word, whoever sent it. Now the platform (`RecordService.asPlatform`) writes the read-only
+  fields it sends on a create, a `PUT` and a `PATCH`, and a person's create that sends a non-`null` value for one is a
+  `403` "Field '…' is read-only", as a `PATCH` already was; a key a `RecordValueProvider` fixes passes. A person's `PUT`
+  still ignores them ([ADR-082](0082-a-read-only-field-limits-people-not-the-platform.md),
+  [wasichai#166](https://github.com/wasichai/wasichai/issues/166)). Tested by `PlatformFieldWriteApiTest` and
+  `RecordServiceValueProviderTest`.
+- **D56. An object says what its record writes leave in the audit log.** The original audited every record write with
+  both states. Now an object takes `auditMode` (`FULL`, the default; `OPERATION`, the entry without states; `NONE`, no
+  entry) and a field `audited: false`, whose value stays out of both states, which name it under `_omitted`; the history
+  answers it as `omitted`. A response writes either only when set
+  ([ADR-079](0079-what-a-record-write-leaves-in-the-audit-log.md),
+  [wasichai#164](https://github.com/wasichai/wasichai/issues/164)). `custom_objects.audit_mode` and
+  `custom_fields.audited` are known schema-parity deviations, and on a fresh database `audited` moves the `wasichai-gis`
+  and `wasichai-files` columns one more place. Tested by `AuditModeApiTest`, `AuditStatesTest` and `SchemaParityTest`.
+- **D57. Models an app declares are ensured by the platform and locked.** The original's model was made by people only.
+  Now an app's `DeclaredModel` beans are ensured in every tenant at startup and on provisioning, with no user and
+  `model:<name>` as the admin entries' source, and what a model owns carries `declaredBy`: the metadata API answers a
+  person's change to it with a `409` ([ADR-081](0081-models-an-app-declares-in-code.md),
+  [wasichai#165](https://github.com/wasichai/wasichai/issues/165)). `declared_by` on `custom_objects` and
+  `relationships` is a known schema-parity deviation. Tested by `DeclaredModelApiTest`, `DeclaredModelsTest` and
+  `SchemaParityTest`.
+- **D58. The record list reads stored views only with the views module.** The original's list always read the stored
+  views. Now `@wasichai/core`'s record list asks `GET /api/objects/{object}/views` only when the app registers
+  `viewsModule()` of `@wasichai/views`, and reads a `404` as no views, so an app without the module leaves no `404` in
+  the console; one whose server runs `wasichai-views` registers it to keep its saved views
+  ([ADR-083](0083-an-app-mounts-cores-record-screens-in-its-own-module.md),
+  [wasichai-ui#183](https://github.com/wasichai/wasichai-ui/issues/183)). Tested by `RecordListPage.test.tsx` and
+  `module.test.tsx` of `@wasichai/views`.
+
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
 own ([ADR-025](0025-extension-spis.md)). A `MULTI*` geometry field still cannot be drawn in the UI, because the draw
