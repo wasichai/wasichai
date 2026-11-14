@@ -28,6 +28,10 @@ class MetadataMapper(
             labels = definition.obj.labels,
             pluralLabels = definition.obj.pluralLabels,
             descriptions = definition.obj.descriptions,
+            auditMode =
+                definition.obj.auditMode
+                    .takeUnless { it == AuditMode.FULL }
+                    ?.name,
             extensions = types.objectProperties(definition)
         )
 
@@ -51,6 +55,10 @@ class MetadataMapper(
             labels = definition.obj.labels,
             pluralLabels = definition.obj.pluralLabels,
             descriptions = definition.obj.descriptions,
+            auditMode =
+                definition.obj.auditMode
+                    .takeUnless { it == AuditMode.FULL }
+                    ?.name,
             extensions = types.objectProperties(definition)
         )
 
@@ -90,6 +98,7 @@ class MetadataMapper(
             labels = field.labels,
             descriptions = field.descriptions,
             enumOptionLabels = field.enumOptionLabels,
+            audited = false.takeUnless { field.audited },
             extensions = types.fieldProperties(field)
         )
 }

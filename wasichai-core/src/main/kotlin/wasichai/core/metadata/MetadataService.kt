@@ -117,7 +117,8 @@ class MetadataService(
                 requiresReason = request.requiresReason,
                 labels = LocalizedTexts.checked(request.labels, "labels"),
                 pluralLabels = LocalizedTexts.checked(request.pluralLabels, "pluralLabels"),
-                descriptions = LocalizedTexts.checked(request.descriptions, "descriptions")
+                descriptions = LocalizedTexts.checked(request.descriptions, "descriptions"),
+                auditMode = AuditMode.parse(request.auditMode) ?: AuditMode.FULL
             )
 
         var stored = objects.insert(obj)
@@ -258,7 +259,8 @@ class MetadataService(
                 defaultValue = defaultValue,
                 labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: existing.labels,
                 descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: existing.descriptions,
-                enumOptionLabels = enumOptionLabels
+                enumOptionLabels = enumOptionLabels,
+                audited = request.audited ?: existing.audited
             )
 
         // metadata and table move together, in one transaction
@@ -365,7 +367,9 @@ class MetadataService(
                     // null keeps: a client that predates the maps must not clear them by saving a label (ADR-078)
                     labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: obj.labels,
                     pluralLabels = request.pluralLabels?.let { LocalizedTexts.checked(it, "pluralLabels") } ?: obj.pluralLabels,
-                    descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: obj.descriptions
+                    descriptions = request.descriptions?.let { LocalizedTexts.checked(it, "descriptions") } ?: obj.descriptions,
+                    // null keeps, as the write flags: an editor that predates it must not switch it back to FULL
+                    auditMode = AuditMode.parse(request.auditMode) ?: obj.auditMode
                 )
             )
         // the same sets again change nothing: applying a model twice is a no-op
@@ -505,7 +509,8 @@ class MetadataService(
                 timeZone = FieldTimeZones.checked(type, request.timeZone),
                 labels = LocalizedTexts.checked(request.labels, "labels"),
                 descriptions = LocalizedTexts.checked(request.descriptions, "descriptions"),
-                enumOptionLabels = LocalizedTexts.checkedOptions(request.enumOptionLabels, enumOptions, "enumOptionLabels")
+                enumOptionLabels = LocalizedTexts.checkedOptions(request.enumOptionLabels, enumOptions, "enumOptionLabels"),
+                audited = request.audited
             )
         if (field.indexed) FieldSets.requireIndexable(field, "indexed", types)
         // a default every later create would trip over is refused now, once (issue 60)

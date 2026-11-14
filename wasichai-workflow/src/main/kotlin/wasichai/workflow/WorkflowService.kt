@@ -284,15 +284,17 @@ class WorkflowService(
                 store.transitionStateIfUnchanged(visible, user.organizationId, user.userId, id, transition.from, transition.to, expectedUpdatedAt)
             } ?: throw missedTransition(definition, user, id, transition, expectedUpdatedAt)
 
-        audit.record(
+        // as the object says it is audited; the state is no field, so only the mode applies (ADR-079)
+        audit.recordWrite(
+            definition = definition,
             organizationId = user.organizationId,
             userId = user.userId,
-            objectName = definition.obj.name,
             recordId = id,
             operation = AuditOperation.UPDATE,
             before = mapOf("state" to transition.from),
             after = mapOf("state" to transition.to),
-            reason = changeReason
+            reason = changeReason,
+            fieldStates = false
         )
         // read unprojected: an automation must judge the whole record, not the fields this
         // caller may see. the transition itself already happened.

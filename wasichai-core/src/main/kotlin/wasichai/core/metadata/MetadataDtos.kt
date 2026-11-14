@@ -29,6 +29,8 @@ data class FieldRequest(
     val descriptions: Map<String, String?>? = null,
     // an ENUM option's text per language, by option value: { "LECTURA": { "en": "Reading" } }
     val enumOptionLabels: Map<String, Map<String, String?>?>? = null,
+    // false: the value stays out of the audited states (ADR-079)
+    val audited: Boolean = true,
     // properties only a module's field type reads. core keeps them for it. a constructor
     // parameter, not a body property, so copy()/equals/hashCode carry it like every other field.
     @get:JsonIgnore @param:JsonAnySetter val extensions: Map<String, Any?> = emptyMap()
@@ -53,7 +55,9 @@ data class CreateObjectRequest(
     // per language tag (ADR-078): a blank text drops its language
     val labels: Map<String, String?>? = null,
     val pluralLabels: Map<String, String?>? = null,
-    val descriptions: Map<String, String?>? = null
+    val descriptions: Map<String, String?>? = null,
+    // FULL, OPERATION or NONE (ADR-079); left out is FULL
+    val auditMode: String? = null
 )
 
 // null means "leave as it is". name and type are accepted only to be refused: see MetadataService.
@@ -76,7 +80,9 @@ data class UpdateFieldRequest(
     // null leaves them, a map replaces them, {} clears them (ADR-078)
     val labels: Map<String, String?>? = null,
     val descriptions: Map<String, String?>? = null,
-    val enumOptionLabels: Map<String, Map<String, String?>?>? = null
+    val enumOptionLabels: Map<String, Map<String, String?>?>? = null,
+    // null leaves it (ADR-079)
+    val audited: Boolean? = null
 )
 
 data class UpdateObjectRequest(
@@ -98,7 +104,9 @@ data class UpdateObjectRequest(
     // null leaves them, a map replaces them, {} clears them (ADR-078)
     val labels: Map<String, String?>? = null,
     val pluralLabels: Map<String, String?>? = null,
-    val descriptions: Map<String, String?>? = null
+    val descriptions: Map<String, String?>? = null,
+    // null leaves it, as the write flags (ADR-079)
+    val auditMode: String? = null
 )
 
 // installed field types add their own keys (FieldTypeRegistry.fieldProperties), flattened in
@@ -124,6 +132,8 @@ data class FieldResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val enumOptionLabels: Map<String, Map<String, String>> = emptyMap(),
+    // false, or left out when the field is audited, so a field that declares nothing reads exactly as before (ADR-079)
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val audited: Boolean? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -151,6 +161,8 @@ data class ObjectResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val pluralLabels: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
+    // OPERATION or NONE; left out for FULL, so an object that declares nothing reads exactly as before (ADR-079)
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val auditMode: String? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {
@@ -178,6 +190,8 @@ data class ObjectDefinitionResponse(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val pluralLabels: Map<String, String> = emptyMap(),
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val descriptions: Map<String, String> = emptyMap(),
+    // OPERATION or NONE; left out for FULL, so an object that declares nothing reads exactly as before (ADR-079)
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val auditMode: String? = null,
     // what installed field types add (R5). kept out of the json as itself, written flat below.
     @get:JsonIgnore val extensions: Map<String, Any?> = emptyMap()
 ) {

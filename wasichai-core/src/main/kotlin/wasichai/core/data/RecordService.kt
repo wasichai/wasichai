@@ -728,10 +728,11 @@ class RecordService(
         after: Map<String, Any?>? = null,
         state: String? = null
     ) {
-        audit.record(
+        // as the object says it is audited (ADR-079): listeners still hear of every write, whole
+        audit.recordWrite(
+            definition = definition,
             organizationId = caller.organizationId,
             userId = caller.userId,
-            objectName = definition.obj.name,
             recordId = recordId,
             operation = kind.auditOperation(),
             before = before,

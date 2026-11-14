@@ -28,7 +28,7 @@ internal class MetadataSnapshots(
             "requiresReason" to obj.requiresReason,
             "fields" to objectFields.map { state(it, it.relationTargetObjectId?.let(targets::get)) },
             "actions" to actions.findByObject(obj.organizationId, obj.id).associate { it.name to it.label }
-        ) + translations("labels" to obj.labels, "pluralLabels" to obj.pluralLabels, "descriptions" to obj.descriptions)
+        ) + translations("labels" to obj.labels, "pluralLabels" to obj.pluralLabels, "descriptions" to obj.descriptions) + auditMode(obj)
     }
 
     suspend fun field(
@@ -62,8 +62,13 @@ internal class MetadataSnapshots(
             )
         // an installed field type's own columns, by column name
         if (field.attributes.isNotEmpty()) state["attributes"] = field.attributes
+        // only when it says something, so an entry of a field without it reads as before (ADR-079)
+        if (!field.audited) state["audited"] = false
         return state + translations("labels" to field.labels, "descriptions" to field.descriptions, "enumOptionLabels" to field.enumOptionLabels)
     }
+
+    // only when it says something, so an entry of an object without it reads as before (ADR-079)
+    private fun auditMode(obj: CustomObject): Map<String, Any?> = if (obj.auditMode == AuditMode.FULL) emptyMap() else mapOf("auditMode" to obj.auditMode.name)
 
     private suspend fun targetNames(
         organizationId: UUID,
