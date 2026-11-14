@@ -17,6 +17,7 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.NotFoundException
+import wasichai.core.common.PageRequest
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
@@ -331,6 +332,135 @@ class RecordService(
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val checked = relationTargets(write, creations)
         return creations.map { write.created(it.getOrThrow(), fieldAccess, workflow, checked) }
+    }
+
+    /**
+     * Writes [requests] as records of [objectName] identified by their natural [key] (issue 163, ADR-080): a field
+     * with `unique: true` or one of the object's composite `uniqueConstraints` (ADR-037), named in any order. A
+     * request whose key no record carries is created, as [createAll] creates it; one whose record reads otherwise is
+     * patched, as [patch] does: only what it sends is written, `null` clears; one whose record already reads as it
+     * says is neither written, audited nor told. Values compare as a read answers them, so `"5"` matches `5`.
+     *
+     * [deleteMissing]: every record of the object in the caller's reach whose key no request carries is deleted, as
+     * [delete] does: a full sync. Deletes go first, then updates, then creates, each in order, so a sync can free a
+     * unique value before it is taken again.
+     *
+     * Every request carries every part of the key, not null, and no two the same key: a `400` on the field
+     * otherwise, before anything is written. A key it sends that is no attribute of the object is a `400`, and a
+     * read-only one a `403` for a person, as in a PATCH; the platform writes it (issue 166). The caller needs
+     * `CREATE` when something is created, `UPDATE` when a record carries one of the keys, `DELETE` with
+     * [deleteMissing], checked before the first write. Guards, validation, defaults, value providers, the audit
+     * row and listeners run per written record as in [create], [patch] and [delete], with [reason] (ADR-041) on each.
+     *
+     * One transaction: the caller's when there is one (ADR-038), else one of its own; a failure stores nothing. Works
+     * as the platform (ADR-039). In-process only, as [createAll]: an `apiOnly` object takes it (ADR-040).
+     */
+    suspend fun upsertAll(
+        objectName: String,
+        key: List<String>,
+        requests: List<RecordRequest>,
+        reason: String? = null,
+        deleteMissing: Boolean = false
+    ): UpsertResult =
+        if (inTransaction()) {
+            upsertEach(objectName, key, requests, reason, deleteMissing)
+        } else {
+            operator.executeAndAwait { upsertEach(objectName, key, requests, reason, deleteMissing) }
+        }
+
+    private suspend fun upsertEach(
+        objectName: String,
+        key: List<String>,
+        requests: List<RecordRequest>,
+        reason: String?,
+        deleteMissing: Boolean
+    ): UpsertResult {
+        ChangeReason.normalize(reason)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        rejectDisabled(definition)
+        val natural = NaturalKey.of(definition, key, types)
+        // what a PATCH refuses, refused for every request before the first write
+        requests.forEach { rejectUnknownOrReadOnly(definition, it.attributes, readOnlyAllowed = caller.user == null) }
+        val keys = requests.mapIndexed { index, request -> natural.valuesOf(request, index) }
+        natural.rejectRepeats(keys)
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
+        val found = caller.carrying(definition, natural, keys, workflow.attached)
+        val creating = requests.indices.filter { keys[it] !in found }
+        if (creating.isNotEmpty()) caller.requirePermission(Actions.CREATE, definition.obj.id)
+        if (found.isNotEmpty()) caller.requirePermission(Actions.UPDATE, definition.obj.id)
+        if (deleteMissing) caller.requirePermission(Actions.DELETE, definition.obj.id)
+
+        val deleted = if (deleteMissing) caller.missing(definition, natural, keys.toSet()) else emptyList()
+        deleted.forEach { delete(objectName, it, reason, viaApi = false) }
+        val fieldAccess = caller.fieldAccess(definition.obj.id)
+        val answers = arrayOfNulls<RecordResponse>(requests.size)
+        var updated = 0
+        requests.forEachIndexed { index, request ->
+            val row = found[keys[index]] ?: return@forEachIndexed
+            answers[index] =
+                if (row.changedBy(definition, request, installed(request.sections), types)) {
+                    updated++
+                    patch(objectName, row.id, request, reason, viaApi = false, expectedUpdatedAt = null)
+                } else {
+                    row.answer(caller, definition, fieldAccess, row)
+                }
+        }
+        if (creating.isNotEmpty()) {
+            createEach(objectName, creating.map { requests[it] }, reason).forEachIndexed { index, created -> answers[creating[index]] = created }
+        }
+        return UpsertResult(
+            created = creating.size,
+            updated = updated,
+            unchanged = found.size - updated,
+            deleted = deleted.size,
+            records = answers.map { checkNotNull(it) }
+        )
+    }
+
+    // the records in the caller's reach that carry one of [keys], whole, by key. a chunk per page the store reads
+    private suspend fun Caller.carrying(
+        definition: ObjectDefinition,
+        natural: NaturalKey,
+        keys: List<List<Any?>>,
+        withState: Boolean
+    ): Map<List<Any?>, RecordRow> =
+        keys
+            .chunked(PageRequest.MAX_SIZE)
+            .flatMap { chunk ->
+                val query =
+                    RecordQuery(
+                        page = PageRequest(0, chunk.size),
+                        count = false,
+                        createdBy = ownerFilter(),
+                        withState = withState,
+                        criteria = scope(definition) + natural.criterion(chunk)
+                    )
+                store.query(definition, organizationId, query).content
+            }.associateBy { natural.valuesOf(it) }
+
+    // every record in the caller's reach whose key is not one of [kept], page by page
+    private suspend fun Caller.missing(
+        definition: ObjectDefinition,
+        natural: NaturalKey,
+        kept: Set<List<Any?>>
+    ): List<UUID> {
+        val gone = mutableListOf<UUID>()
+        var after: String? = null
+        do {
+            val query =
+                RecordQuery(
+                    page = PageRequest(0, PageRequest.MAX_SIZE),
+                    count = false,
+                    createdBy = ownerFilter(),
+                    criteria = scope(definition),
+                    after = after
+                )
+            val page = store.query(definition, organizationId, query)
+            page.content.filter { natural.valuesOf(it) !in kept }.forEach { gone += it.id }
+            after = page.nextCursor
+        } while (after != null)
+        return gone
     }
 
     // what the guard would look up record by record, once: defaults included, only the records the loop reaches.
