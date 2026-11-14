@@ -51,6 +51,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
   ([ADR-078](../adr/0078-per-language-metadata-texts-resolved-by-the-client.md)).
 - Declared actions: the verbs an object has beyond CRUD, under `/api/metadata/objects/{object}/actions`, granted and
   checked like the built-in ones ([ADR-042](../adr/0042-app-declared-actions.md)).
+- Declared models: an app's `DeclaredModel` beans, its objects, relationships and actions in the shapes the metadata
+  API takes, ensured by the platform in every tenant at startup and on provisioning; what a model owns carries
+  `declaredBy` and is the app's alone (see "Models an app declares" below).
 - Relationships: `/api/relationships`, plus the related-record routes nested under `/api/objects/{object}`. A
   relationship from an object to itself is read from either end with `direction=forward|inverse`, and listed once per
   direction (`RelatedSide.direction`, ADR-031 D42).
@@ -61,7 +64,10 @@ An app overrides any core bean by declaring its own bean of the same type — se
   answer with `Idempotent-Replayed: true`, another body under the key is a `422`, one still running a `409` with
   `Retry-After`; in process `RecordService.create(objectName, request, reason, idempotencyKey)`
   ([ADR-058](../adr/0058-idempotency-key-on-record-creation.md)). Many records of one object in one call:
-  `RecordService.createAll`, in process only (see "Many records of one object" below).
+  `RecordService.createAll`, and `RecordService.upsertAll` by natural key, in process only (see "Many records of one
+  object" below). A field with `editable: false` is read-only for people (a `403` on a `POST` or `PATCH` that sends
+  it) and written by the platform ([ADR-082](../adr/0082-a-read-only-field-limits-people-not-the-platform.md)). In
+  process a value may be the type its column stores: a `UUID`, a `LocalDate`, an `OffsetDateTime` or an `Instant`.
 - Audit and history: `/api/audit` and `/api/objects/{object}/records/{id}/history`. Changes to users, roles,
   permissions, service accounts, units, the model and the tenant are in the same log under reserved `admin:*` names,
   read by `MANAGE_ORGANIZATION` only ([ADR-049](../adr/0049-admin-changes-in-the-audit-log.md)). The admin services
@@ -71,6 +77,9 @@ An app overrides any core bean by declaring its own bean of the same type — se
   Both routes narrow by `from`, `to` and `userId` (the list also by `serviceAccount`) and page with `after=` and the
   `X-Next-Cursor` header, the body still a JSON array (`AuditQueryService.page`, `historyPage`;
   [ADR-052](../adr/0052-audit-pages-by-cursor-period-and-user.md)).
+  An object's `auditMode` (`FULL`, `OPERATION`, `NONE`) says what its record writes leave in the log, and a field's
+  `audited: false` keeps its value out of the states, which name it under `_omitted`; every record write goes through
+  `AuditService.recordWrite` ([ADR-079](../adr/0079-what-a-record-write-leaves-in-the-audit-log.md)).
   The table is append-only in the database: triggers refuse every `UPDATE`, `DELETE` and `TRUNCATE`, for every role,
   except a foreign-key action that only nulls `document_id` and a purge by the login `wasichai.audit.purge-role` names
   ([ADR-054](../adr/0054-audit-log-is-append-only-in-the-database.md)). Deleting a tenant leaves its entries in place:
@@ -158,6 +167,60 @@ each what `create` would answer. The batch throws the error the first failing re
 request order, and stores nothing. What it looked up stays as read at the start of the batch, so a change its own
 listeners make to a target's readability is not seen. It runs in the caller's transaction (ADR-038) or, with none, in
 its own. There is no REST route and no `Idempotency-Key` variant; `update` and `delete` have no batch form.
+
+`RecordService.upsertAll(objectName, key, requests, reason = null, deleteMissing = false)` writes records identified by
+their natural key: a field with `unique: true` or one of the object's `uniqueConstraints`, in any order
+([ADR-080](../adr/0080-a-batch-write-by-natural-key.md)):
+
+```kotlin
+val result: UpsertResult =
+    records.asPlatform(organizationId, "import:catalogo") {
+        records.upsertAll("curso", listOf("codigo"), cursos.map { RecordRequest(mapOf("codigo" to it.codigo, "nombre" to it.nombre)) }, deleteMissing = true)
+    }
+log.info("created {}, updated {}, unchanged {}, deleted {}", result.created, result.updated, result.unchanged, result.deleted)
+```
+
+A request no record carries is created as `createAll` creates it; one whose record reads otherwise is patched (only
+what it sends, `null` clears); one whose record already reads as it says is neither written, audited nor told. Values
+compare as a read answers them. `deleteMissing` deletes every record in the caller's reach that no request carries.
+Deletes go first, then updates, then creates. A missing, `null` or repeated key part, a key that is no attribute and a
+person's read-only key are refused before the first write; it needs `CREATE`, `UPDATE` and `DELETE` only as it uses
+them. One transaction, the caller's or its own; `records` answers one record per request, in order.
+
+### Models an app declares
+
+An app whose code depends on objects of its own declares them as `DeclaredModel` beans
+([ADR-081](../adr/0081-models-an-app-declares-in-code.md)):
+
+```kotlin
+@Bean
+fun curricula() =
+    DeclaredModel(
+        name = "curricula",
+        objects =
+            listOf(
+                CreateObjectRequest(
+                    name = "curso",
+                    label = "Curso",
+                    apiOnly = true,
+                    auditMode = "OPERATION",
+                    fields = listOf(FieldRequest(name = "codigo", type = "TEXT", unique = true), FieldRequest(name = "nombre", type = "TEXT", editable = false))
+                )
+            ),
+        actions = mapOf("curso" to listOf(ObjectActionRequest("PUBLICAR")))
+    )
+```
+
+`DeclaredModels` ensures every model in every tenant once the app is ready, and in a tenant as it is provisioned, in
+that transaction. What is missing is created and what differs and can change is changed, through the services a person
+calls; what matches is left alone, so a second run writes nothing; an object or a relationship a person made under a
+declared name is taken over once it matches. A field of another type, a relation that points elsewhere, a module
+type's settings or a relationship of another shape is reported in `DeclaredModelReport.incompatible`, logged as a
+`WARN` and not applied; a change the database refuses rolls the tenant's model back, is logged and retried on the next
+start. A field the tenant has and the model does not stays. One transaction per tenant and model, under a cluster lock.
+The admin entries have no user and say `model:<name>`. What a model owns carries `declaredBy`, and the metadata API
+answers a person's change to it with a `409`; its records follow the object's own write rules.
+`DeclaredModels.ensureAll()` and `ensure(organizationId)` run it on demand, for an app's own command.
 
 ### What a request reads of the model and the roles
 
@@ -308,6 +371,9 @@ authorization model.
   ([ADR-066](../adr/0066-cached-definitions-and-one-access-read-per-request.md)). For an app that keeps something
   derived from the model; it invalidates, it does not write to the database. A listener that throws is logged.
 - `WorkflowStates` — the state a record is in, if any; core's default is `NoWorkflowStates`, a null object.
+- `DeclaredModel` — a model an app's code depends on, ensured by the platform in every tenant
+  ([ADR-081](../adr/0081-models-an-app-declares-in-code.md)). Every bean is collected; two with one name, or one object
+  or relationship in two, refuse the context.
 - `ModuleMigration` — one Flyway location and history table per module ([ADR-026](../adr/0026-per-module-migrations.md));
   core registers its own (`core`) and its opt-in dev seed (`core_seed`).
 
@@ -331,7 +397,7 @@ and `RecordValueProviders`, the same for a `RecordValueProvider` ([ADR-077](../a
   `metadataMapper`, `relationshipMapper`, `callerPermissionsService`, `objectController`, `objectMetadataController`,
   `systemFieldController`, `relationshipController`, `callerPermissionsController`.
 - Data (`WasichaiDataAutoConfiguration`): `auditService`, `auditLogOwnershipCheck`, `adminAudit`, `auditQueryService`,
-  `auditController`, `workflowStates`, `recordStore`, `clusterLock`, `recordQueryParser`, `recordService`,
+  `auditController`, `workflowStates`, `recordStore`, `clusterLock`, `declaredModels`, `recordQueryParser`, `recordService`,
   `relatedRecordService`, `recordController`, `relatedRecordController`.
 - Admin (`WasichaiAdminAutoConfiguration`): `adminService`, `userAdminController`, `roleAdminController`,
   `organizationRepository`, `organizationService`, `organizationController`, `orgUnitService`, `orgUnitController`,
@@ -375,6 +441,11 @@ cascading from the organization and the user, with an index on `created_at` for 
 `relationships`: each property's text per language, and for an `ENUM` field its options'. Keys are checked by
 `MetadataService` and `RelationshipService`, never by the database
 ([ADR-078](../adr/0078-per-language-metadata-texts-resolved-by-the-client.md)).
+`V20__audit_modes.sql` adds `custom_objects.audit_mode` (`FULL` by default, a `CHECK` on `FULL`, `OPERATION` and
+`NONE`) and `custom_fields.audited` (`true` by default)
+([ADR-079](../adr/0079-what-a-record-write-leaves-in-the-audit-log.md)).
+`V21__declared_models.sql` adds `declared_by` to `custom_objects` and `relationships`, nullable, the owning model's
+name ([ADR-081](../adr/0081-models-an-app-declares-in-code.md)).
 
 `V13__audit_log_immutable.sql` adds `audit_log_guard()` and the triggers `audit_log_append_only` (`BEFORE UPDATE OR
 DELETE`, per row) and `audit_log_no_truncate` (`BEFORE TRUNCATE`); the repeatable `R__audit_purge_role.sql` writes
@@ -517,6 +588,12 @@ Core is always installed.
   (ADR-058).
 - D49: a change to the model reaches another node within `wasichai.metadata.cache.ttl` (default `5s`); `0s` reads the
   definition every time, as before (ADR-066).
+- D55: a read-only field (`editable: false`) is written by the platform, and a person's `POST` that sends a value for
+  it is a `403` (ADR-082).
+- D56: an object's `auditMode` and a field's `audited: false` shape what its record writes leave in the audit log;
+  `omitted` on history entries; two columns (ADR-079).
+- D57: models an app declares are ensured by the platform in every tenant and answer a person's change with a `409`;
+  `declaredBy` on objects and relationships; two columns (ADR-081).
 
 ## Known limitations
 

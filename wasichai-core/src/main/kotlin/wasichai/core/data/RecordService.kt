@@ -17,6 +17,7 @@ import wasichai.core.common.Actions
 import wasichai.core.common.ConflictException
 import wasichai.core.common.ForbiddenException
 import wasichai.core.common.NotFoundException
+import wasichai.core.common.PageRequest
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
@@ -101,9 +102,10 @@ class RecordService(
 
     /**
      * Runs [block] as the platform for [organizationId] (ADR-039): every call it makes to this service
-     * acts in that organization, with no user. No permission or field rule applies, as for ADMIN; the
-     * writes leave `created_by`, `updated_by` and the audit `user_id` null, as an automation does
-     * (ADR-016). Composes with the caller's transaction either way round (ADR-038).
+     * acts in that organization, with no user. No permission or field rule applies, as for ADMIN, and a
+     * read-only field (`editable: false`) it sends is written: that flag limits people, not the platform
+     * (issue 166). The writes leave `created_by`, `updated_by` and the audit `user_id` null, as an
+     * automation does (ADR-016). Composes with the caller's transaction either way round (ADR-038).
      *
      * Background work only. Inside a request, with a token or without one, it throws: nothing a
      * request carries can become the platform.
@@ -332,6 +334,135 @@ class RecordService(
         return creations.map { write.created(it.getOrThrow(), fieldAccess, workflow, checked) }
     }
 
+    /**
+     * Writes [requests] as records of [objectName] identified by their natural [key] (issue 163, ADR-080): a field
+     * with `unique: true` or one of the object's composite `uniqueConstraints` (ADR-037), named in any order. A
+     * request whose key no record carries is created, as [createAll] creates it; one whose record reads otherwise is
+     * patched, as [patch] does: only what it sends is written, `null` clears; one whose record already reads as it
+     * says is neither written, audited nor told. Values compare as a read answers them, so `"5"` matches `5`.
+     *
+     * [deleteMissing]: every record of the object in the caller's reach whose key no request carries is deleted, as
+     * [delete] does: a full sync. Deletes go first, then updates, then creates, each in order, so a sync can free a
+     * unique value before it is taken again.
+     *
+     * Every request carries every part of the key, not null, and no two the same key: a `400` on the field
+     * otherwise, before anything is written. A key it sends that is no attribute of the object is a `400`, and a
+     * read-only one a `403` for a person, as in a PATCH; the platform writes it (issue 166). The caller needs
+     * `CREATE` when something is created, `UPDATE` when a record carries one of the keys, `DELETE` with
+     * [deleteMissing], checked before the first write. Guards, validation, defaults, value providers, the audit
+     * row and listeners run per written record as in [create], [patch] and [delete], with [reason] (ADR-041) on each.
+     *
+     * One transaction: the caller's when there is one (ADR-038), else one of its own; a failure stores nothing. Works
+     * as the platform (ADR-039). In-process only, as [createAll]: an `apiOnly` object takes it (ADR-040).
+     */
+    suspend fun upsertAll(
+        objectName: String,
+        key: List<String>,
+        requests: List<RecordRequest>,
+        reason: String? = null,
+        deleteMissing: Boolean = false
+    ): UpsertResult =
+        if (inTransaction()) {
+            upsertEach(objectName, key, requests, reason, deleteMissing)
+        } else {
+            operator.executeAndAwait { upsertEach(objectName, key, requests, reason, deleteMissing) }
+        }
+
+    private suspend fun upsertEach(
+        objectName: String,
+        key: List<String>,
+        requests: List<RecordRequest>,
+        reason: String?,
+        deleteMissing: Boolean
+    ): UpsertResult {
+        ChangeReason.normalize(reason)
+        val caller = caller()
+        val definition = metadata.loadDefinition(caller.organizationId, objectName)
+        rejectDisabled(definition)
+        val natural = NaturalKey.of(definition, key, types)
+        // what a PATCH refuses, refused for every request before the first write
+        requests.forEach { rejectUnknownOrReadOnly(definition, it.attributes, readOnlyAllowed = caller.user == null) }
+        val keys = requests.mapIndexed { index, request -> natural.valuesOf(request, index) }
+        natural.rejectRepeats(keys)
+        val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
+        val found = caller.carrying(definition, natural, keys, workflow.attached)
+        val creating = requests.indices.filter { keys[it] !in found }
+        if (creating.isNotEmpty()) caller.requirePermission(Actions.CREATE, definition.obj.id)
+        if (found.isNotEmpty()) caller.requirePermission(Actions.UPDATE, definition.obj.id)
+        if (deleteMissing) caller.requirePermission(Actions.DELETE, definition.obj.id)
+
+        val deleted = if (deleteMissing) caller.missing(definition, natural, keys.toSet()) else emptyList()
+        deleted.forEach { delete(objectName, it, reason, viaApi = false) }
+        val fieldAccess = caller.fieldAccess(definition.obj.id)
+        val answers = arrayOfNulls<RecordResponse>(requests.size)
+        var updated = 0
+        requests.forEachIndexed { index, request ->
+            val row = found[keys[index]] ?: return@forEachIndexed
+            answers[index] =
+                if (row.changedBy(definition, request, installed(request.sections), types)) {
+                    updated++
+                    patch(objectName, row.id, request, reason, viaApi = false, expectedUpdatedAt = null)
+                } else {
+                    row.answer(caller, definition, fieldAccess, row)
+                }
+        }
+        if (creating.isNotEmpty()) {
+            createEach(objectName, creating.map { requests[it] }, reason).forEachIndexed { index, created -> answers[creating[index]] = created }
+        }
+        return UpsertResult(
+            created = creating.size,
+            updated = updated,
+            unchanged = found.size - updated,
+            deleted = deleted.size,
+            records = answers.map { checkNotNull(it) }
+        )
+    }
+
+    // the records in the caller's reach that carry one of [keys], whole, by key. a chunk per page the store reads
+    private suspend fun Caller.carrying(
+        definition: ObjectDefinition,
+        natural: NaturalKey,
+        keys: List<List<Any?>>,
+        withState: Boolean
+    ): Map<List<Any?>, RecordRow> =
+        keys
+            .chunked(PageRequest.MAX_SIZE)
+            .flatMap { chunk ->
+                val query =
+                    RecordQuery(
+                        page = PageRequest(0, chunk.size),
+                        count = false,
+                        createdBy = ownerFilter(),
+                        withState = withState,
+                        criteria = scope(definition) + natural.criterion(chunk)
+                    )
+                store.query(definition, organizationId, query).content
+            }.associateBy { natural.valuesOf(it) }
+
+    // every record in the caller's reach whose key is not one of [kept], page by page
+    private suspend fun Caller.missing(
+        definition: ObjectDefinition,
+        natural: NaturalKey,
+        kept: Set<List<Any?>>
+    ): List<UUID> {
+        val gone = mutableListOf<UUID>()
+        var after: String? = null
+        do {
+            val query =
+                RecordQuery(
+                    page = PageRequest(0, PageRequest.MAX_SIZE),
+                    count = false,
+                    createdBy = ownerFilter(),
+                    criteria = scope(definition),
+                    after = after
+                )
+            val page = store.query(definition, organizationId, query)
+            page.content.filter { natural.valuesOf(it) !in kept }.forEach { gone += it.id }
+            after = page.nextCursor
+        } while (after != null)
+        return gone
+    }
+
     // what the guard would look up record by record, once: defaults included, only the records the loop reaches.
     // best effort: a lookup that throws (an app's read scope, say) is left to the guard of the record that needs it,
     // so the batch throws where a create loop would, after any earlier record's own refusal
@@ -368,8 +499,11 @@ class RecordService(
         // and what a provider fixes the server's (ADR-077). a key it fixes counts as sent, so no default beats it
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val fixed = values.fixedFor(definition, request.attributes, write.caller.user, types)
+        // a read-only field (editable: false) is the server's: a person's value is refused, the platform's lands (issue 166)
+        if (write.caller.user != null) rejectReadOnly(definition, request.attributes, fixed.keys)
         rejectUnwritableRequired(definition, fieldAccess, fixed.keys)
-        val (target, attributes) = FieldDefaults.applied(definition.writableBy(fieldAccess).writing(fixed.keys), request.attributes + fixed, types)
+        val written = definition.writableBy(fieldAccess).writing(fixed.keys + write.caller.readOnlyWrites(definition, request.attributes))
+        val (target, attributes) = FieldDefaults.applied(written, request.attributes + fixed, types)
         return Creation(target, attributes, sections)
     }
 
@@ -441,8 +575,9 @@ class RecordService(
     /**
      * A partial update (ADR-051): JSON merge on `attributes`. Only the keys sent are written, `null` clears
      * one, every other field keeps its stored value, also against a concurrent write of another field. A
-     * key that is no attribute of the object is a 400 and a read-only field (`editable: false`) a 403;
-     * everything else is [update]'s: permissions, field rules, write rules, guards, audit and listeners.
+     * key that is no attribute of the object is a 400 and a read-only field (`editable: false`) a 403 for a
+     * person; the platform writes it (issue 166). Everything else is [update]'s: permissions, field rules,
+     * write rules, guards, audit and listeners.
      * Sections merge as they always do. [expectedUpdatedAt] as for [update].
      */
     suspend fun patch(
@@ -490,8 +625,9 @@ class RecordService(
         val definition = write.definition
         val sections = installed(request.sections)
         val fieldAccess = caller.fieldAccess(definition.obj.id)
-        // a PUT ignores what it cannot write by metadata; a PATCH names only what it means to change, so it says
-        if (partial) rejectUnknownOrReadOnly(definition, request.attributes)
+        // a person's PUT ignores what it cannot write by metadata; a PATCH names only what it means to change, so it says.
+        // the platform writes a read-only field it sends, either way (issue 166)
+        if (partial) rejectUnknownOrReadOnly(definition, request.attributes, readOnlyAllowed = caller.user == null)
         rejectUnwritable(definition, fieldAccess, request.attributes, sections)
         val workflow = workflows.stateOf(caller.organizationId, definition.obj.id)
         val before =
@@ -501,8 +637,13 @@ class RecordService(
         val sent = if (partial) before.attributes + request.attributes else request.attributes
         write.guard(RecordChangeKind.UPDATED, id, before = before.attributes, attributes = sent, reader = caller.user)
         // locked fields keep their stored value: a full-replace PUT must not blank them. a PATCH locks every
-        // field it did not send. the state is untouched here: it only moves through a transition.
-        val target = definition.writableBy(fieldAccess).let { if (partial) it.lockedBut(request.attributes.keys) else it }
+        // field it did not send. the state is untouched here: it only moves through a transition. a read-only
+        // field the platform did not send stays as stored, on a PUT too: only what it names is its to write
+        val target =
+            definition
+                .writableBy(fieldAccess)
+                .let { if (partial) it.lockedBut(request.attributes.keys) else it }
+                .writing(caller.readOnlyWrites(definition, request.attributes))
         val updated =
             if (expectedUpdatedAt == null) {
                 store.update(target, caller.organizationId, caller.userId, id, request.attributes, sections, workflow.attached)
@@ -717,10 +858,11 @@ class RecordService(
         after: Map<String, Any?>? = null,
         state: String? = null
     ) {
-        audit.record(
+        // as the object says it is audited (ADR-079): listeners still hear of every write, whole
+        audit.recordWrite(
+            definition = definition,
             organizationId = caller.organizationId,
             userId = caller.userId,
-            objectName = definition.obj.name,
             recordId = recordId,
             operation = kind.auditOperation(),
             before = before,
@@ -772,17 +914,47 @@ class RecordService(
         }
     }
 
-    // a PATCH key must be an attribute of the object, and one its metadata lets anyone write (ADR-051)
+    // a PATCH key must be an attribute of the object, and one its metadata lets anyone write (ADR-051). the
+    // platform writes a read-only one too (issue 166)
     private fun rejectUnknownOrReadOnly(
         definition: ObjectDefinition,
-        attributes: Map<String, Any?>
+        attributes: Map<String, Any?>,
+        readOnlyAllowed: Boolean
     ) {
         attributes.keys.forEach { name ->
             val field =
                 definition.fields.firstOrNull { it.name == name && types.handler(it.type).section == null }
                     ?: throw ValidationException("Unknown field '$name'", name, "is not an attribute of '${definition.obj.name}'")
-            if (!field.editable) throw ForbiddenException("Field '$name' is read-only")
+            if (!field.editable && !readOnlyAllowed) throw ForbiddenException("Field '$name' is read-only")
         }
+    }
+
+    // a create's value for a read-only field, from a person: the store would drop it without a word, so the caller
+    // would believe it landed (issue 166). a 403, as a PATCH says. a key a provider fixes is the server's, and a
+    // null is no value: the field ends empty either way
+    private fun rejectReadOnly(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>,
+        fixed: Set<String>
+    ) {
+        val field =
+            definition.fields.firstOrNull {
+                !it.editable && it.name !in fixed && attributes[it.name] != null && types.handler(it.type).section == null
+            } ?: return
+        throw ForbiddenException("Field '${field.name}' is read-only")
+    }
+
+    // the read-only attribute fields the platform sends, and so writes: editable: false limits people (the generic api
+    // and the ui), never the platform (issue 166). a person writes none
+    private fun Caller.readOnlyWrites(
+        definition: ObjectDefinition,
+        attributes: Map<String, Any?>
+    ): Set<String> {
+        if (user != null) return emptySet()
+        return definition.fields
+            .filter { !it.editable && it.name in attributes && types.handler(it.type).section == null }
+            .map { it.name }
+            .toSet()
     }
 
     // a required field nobody may write would fail on NOT NULL: say so instead of a 500. one with a

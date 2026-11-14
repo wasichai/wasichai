@@ -191,15 +191,17 @@ class ObjectActionService(
         objectName: String,
         request: ObjectActionRequest
     ): ObjectAction {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
-        val obj = objectOrFail(user.organizationId, objectName)
+        val actor = ModelOwner.actor(currentUser)
+        val obj = objectOrFail(actor.organizationId, objectName)
+        // a declared object's verbs are its app's (ADR-081)
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         val name = requireValidName(request.name)
-        if (actions.exists(user.organizationId, obj.id, name)) {
+        if (actions.exists(actor.organizationId, obj.id, name)) {
             throw ConflictException("Action '$name' already exists on '${obj.name}'")
         }
         val before = snapshots.obj(obj)
-        val declared = actions.insert(user.organizationId, ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
-        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
+        val declared = actions.insert(actor.organizationId, ObjectAction(obj.id, name, request.label?.trim()?.ifBlank { null } ?: name))
+        actor.record(audit, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
         return declared
     }
 
@@ -208,14 +210,15 @@ class ObjectActionService(
         objectName: String,
         actionName: String
     ) {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
-        val obj = objectOrFail(user.organizationId, objectName)
+        val actor = ModelOwner.actor(currentUser)
+        val obj = objectOrFail(actor.organizationId, objectName)
+        actor.requireMayChange(obj.declaredBy, "Object '${obj.name}'")
         val name = actionName.trim().uppercase()
         val before = snapshots.obj(obj)
-        if (!actions.delete(user.organizationId, obj.id, name)) {
+        if (!actions.delete(actor.organizationId, obj.id, name)) {
             throw NotFoundException("Action '$name' does not exist on '${obj.name}'")
         }
-        audit.record(user, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
+        actor.record(audit, AdminEntity.OBJECT, obj.id, AdminOperation.UPDATE, before, snapshots.obj(obj))
     }
 
     private suspend fun objectOrFail(

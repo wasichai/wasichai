@@ -2,11 +2,15 @@ package wasichai.core.metadata
 
 import wasichai.core.common.ValidationException
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.UUID
 
-// json value -> db value for the core types, with validation
+// json value -> db value for the core types, with validation. a value built in process may already be the
+// stored type (a UUID, a LocalDate, an instant): taken as it is, as DECIMAL takes a Number (issue 167)
 object FieldValueCodec {
     private val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 
@@ -67,12 +71,26 @@ object FieldValueCodec {
                     is String -> value.toBooleanStrictOrNull() ?: reject(field, "is not a boolean")
                     else -> reject(field, "is not a boolean")
                 }
-            FieldType.DATE -> runCatching { LocalDate.parse(text(field, value)) }.getOrElse { reject(field, "is not an ISO date") }
+            FieldType.DATE ->
+                when (value) {
+                    is LocalDate -> value
+                    else -> runCatching { LocalDate.parse(text(field, value)) }.getOrElse { reject(field, "is not an ISO date") }
+                }
+            // an instant has no offset of its own: UTC, the one fromDatabase answers in. a LocalDateTime has no instant, so it stays refused
             FieldType.DATETIME ->
-                runCatching { OffsetDateTime.parse(text(field, value)) }
-                    .getOrElse { reject(field, "is not an ISO date-time") }
+                when (value) {
+                    is OffsetDateTime -> value
+                    is ZonedDateTime -> value.toOffsetDateTime()
+                    is Instant -> value.atOffset(ZoneOffset.UTC)
+                    else ->
+                        runCatching { OffsetDateTime.parse(text(field, value)) }
+                            .getOrElse { reject(field, "is not an ISO date-time") }
+                }
             FieldType.UUID, FieldType.RELATION ->
-                runCatching { UUID.fromString(text(field, value)) }.getOrElse { reject(field, "is not a UUID") }
+                when (value) {
+                    is UUID -> value
+                    else -> runCatching { UUID.fromString(text(field, value)) }.getOrElse { reject(field, "is not a UUID") }
+                }
             // a module type goes through its own handler, never here
             else -> reject(field, "is not a core field type")
         }

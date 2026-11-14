@@ -11,6 +11,7 @@ import org.springframework.r2dbc.core.DatabaseClient
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.audit.AuditOperation
 import wasichai.core.audit.AuditService
+import wasichai.core.common.ForbiddenException
 import wasichai.core.common.PageResponse
 import wasichai.core.common.ValidationException
 import wasichai.core.identity.AccessPolicy
@@ -488,14 +489,17 @@ class RecordServiceValueProviderTest {
             assertThat(created.attributes["propietario_id"]).isEqualTo(SYSTEM_OWNER)
         }
 
+    // a read-only field is the platform's to write (issue 166): what it sends lands when no provider fixes the key
     @Test
-    fun `the platform's create with a provider that fixes nothing stores no owner`() =
+    fun `the platform's create with a provider that fixes nothing stores what the platform sent`() =
         runTest {
             val records = service(providers(ownerIsTheCaller))
 
             val created = records.asPlatform(organizationId) { records.create("predio", RecordRequest(mapOf("codigo" to "C-1", "propietario_id" to spoofed))) }
 
-            assertThat(created.attributes["propietario_id"]).isNull()
+            assertThat(created.attributes["propietario_id"]).isEqualTo(spoofed)
+            assertThat(records.asPlatform(organizationId) { records.create("predio", RecordRequest(mapOf("codigo" to "C-2"))) }.attributes["propietario_id"])
+                .isNull()
         }
 
     @Test
@@ -508,9 +512,13 @@ class RecordServiceValueProviderTest {
 
             assertThat(guarded.single().attributes).isEqualTo(mapOf("codigo" to "C-1", "propietario_id" to spoofed, "nivel" to "BASICO"))
             assertThat(created.attributes).isEqualTo(mapOf("codigo" to "C-1", "propietario_id" to spoofed, "nivel" to "BASICO"))
-            // a locked field stays locked: what is sent is dropped, as before
-            service(RecordValueProviders.NONE).create("predio", RecordRequest(mapOf("codigo" to "C-2", "propietario_id" to spoofed)))
-            assertThat(inserted.last()["propietario_id"]).isNull()
+            // a read-only field stays read-only: what a person sends is a 403, not dropped in silence (issue 166)
+            val before = inserted.size
+            assertThatThrownBy {
+                runBlocking { service(RecordValueProviders.NONE).create("predio", RecordRequest(mapOf("codigo" to "C-2", "propietario_id" to spoofed))) }
+            }.isInstanceOf(ForbiddenException::class.java)
+                .hasMessageContaining("propietario_id")
+            assertThat(inserted).hasSize(before)
         }
 
     private companion object {

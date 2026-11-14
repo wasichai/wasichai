@@ -1,8 +1,33 @@
 package wasichai.core.metadata
 
+import wasichai.core.common.ValidationException
 import wasichai.core.identity.FieldAccess
 import java.time.Instant
 import java.util.UUID
+
+// what a record write of an object leaves in the audit log (issue 164, ADR-079). links and state transitions too;
+// a document's ISSUE entry always stays: a document never exists without its history entry
+enum class AuditMode {
+    // the operation and the record before and after, as always
+    FULL,
+
+    // the operation, who, when, from where and why: no states
+    OPERATION,
+
+    // no entry at all
+    NONE;
+
+    companion object {
+        const val PROPERTY = "auditMode"
+
+        // null stays null: "not sent". any case, trimmed
+        fun parse(raw: String?): AuditMode? {
+            val name = raw?.trim()?.uppercase() ?: return null
+            return entries.firstOrNull { it.name == name }
+                ?: throw ValidationException("Unknown audit mode '$raw'", PROPERTY, "must be one of ${entries.joinToString(", ")}")
+        }
+    }
+}
 
 data class CustomObject(
     val id: UUID,
@@ -28,7 +53,11 @@ data class CustomObject(
     // label, pluralLabel and description per language tag; the single texts stay the fallback (ADR-078)
     val labels: LocalizedText = emptyMap(),
     val pluralLabels: LocalizedText = emptyMap(),
-    val descriptions: LocalizedText = emptyMap()
+    val descriptions: LocalizedText = emptyMap(),
+    // what its record writes leave in the audit log (ADR-079)
+    val auditMode: AuditMode = AuditMode.FULL,
+    // the app's declared model that owns it, null when a person made it (ADR-081)
+    val declaredBy: String? = null
 )
 
 data class CustomField(
@@ -57,7 +86,9 @@ data class CustomField(
     // its check and validation never read them (ADR-078)
     val labels: LocalizedText = emptyMap(),
     val descriptions: LocalizedText = emptyMap(),
-    val enumOptionLabels: Map<String, LocalizedText> = emptyMap()
+    val enumOptionLabels: Map<String, LocalizedText> = emptyMap(),
+    // false: its value stays out of the audited states, which name it as omitted (ADR-079)
+    val audited: Boolean = true
 )
 
 // object plus its fields. what the UI needs to render anything.

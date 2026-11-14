@@ -19,7 +19,7 @@ import java.util.UUID
 private const val OBJECT_COLUMNS =
     "id, organization_id, name, label, plural_label, description, enabled, " +
         "physical_table, created_at, updated_at, indexes::text AS indexes, unique_constraints::text AS unique_constraints, " +
-        "append_only, api_only, requires_reason, translations::text AS translations"
+        "append_only, api_only, requires_reason, translations::text AS translations, audit_mode, declared_by"
 
 @Repository
 class CustomObjectRepository(
@@ -35,10 +35,10 @@ class CustomObjectRepository(
                 """
                 INSERT INTO ${schemas.metadata}.custom_objects
                     (id, organization_id, name, label, plural_label, description, enabled, physical_table, indexes,
-                     unique_constraints, append_only, api_only, requires_reason, translations)
+                     unique_constraints, append_only, api_only, requires_reason, translations, audit_mode, declared_by)
                 VALUES (:id, :organizationId, :name, :label, :pluralLabel, :description, :enabled, :physicalTable,
                         CAST(:indexes AS jsonb), CAST(:uniqueConstraints AS jsonb), :appendOnly, :apiOnly, :requiresReason,
-                        CAST(:translations AS jsonb))
+                        CAST(:translations AS jsonb), :auditMode, :declaredBy)
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
             ).bind("id", obj.id)
@@ -55,6 +55,8 @@ class CustomObjectRepository(
             .bind("apiOnly", obj.apiOnly)
             .bind("requiresReason", obj.requiresReason)
             .bind("translations", translationsOf(obj))
+            .bind("auditMode", obj.auditMode.name)
+            .bindNullable("declaredBy", obj.declaredBy)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -117,7 +119,8 @@ class CustomObjectRepository(
                 SET label = :label, plural_label = :pluralLabel, description = :description,
                     enabled = :enabled, indexes = CAST(:indexes AS jsonb),
                     unique_constraints = CAST(:uniqueConstraints AS jsonb), append_only = :appendOnly, api_only = :apiOnly,
-                    requires_reason = :requiresReason, translations = CAST(:translations AS jsonb), updated_at = now()
+                    requires_reason = :requiresReason, translations = CAST(:translations AS jsonb), audit_mode = :auditMode,
+                    declared_by = :declaredBy, updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 RETURNING $OBJECT_COLUMNS
                 """.trimIndent()
@@ -133,6 +136,8 @@ class CustomObjectRepository(
             .bind("apiOnly", obj.apiOnly)
             .bind("requiresReason", obj.requiresReason)
             .bind("translations", translationsOf(obj))
+            .bind("auditMode", obj.auditMode.name)
+            .bindNullable("declaredBy", obj.declaredBy)
             .map(::mapObject)
             .one()
             .awaitSingle()
@@ -173,7 +178,9 @@ class CustomObjectRepository(
             requiresReason = Rows.bool(row, "requires_reason"),
             labels = texts.texts("labels"),
             pluralLabels = texts.texts("pluralLabels"),
-            descriptions = texts.texts("descriptions")
+            descriptions = texts.texts("descriptions"),
+            auditMode = AuditMode.valueOf(Rows.string(row, "audit_mode")),
+            declaredBy = Rows.stringOrNull(row, "declared_by")
         )
     }
 
@@ -186,7 +193,7 @@ class CustomObjectRepository(
 private const val FIELD_COLUMNS =
     "id, object_id, name, label, type, column_name, required, is_unique, default_value, " +
         "description, position, enum_options::text AS enum_options, relation_target_object_id, visible, editable, indexed, time_zone, " +
-        "translations::text AS translations"
+        "translations::text AS translations, audited"
 
 @Repository
 class CustomFieldRepository(
@@ -213,9 +220,11 @@ class CustomFieldRepository(
                     """
                     INSERT INTO $table
                         (id, object_id, name, label, type, column_name, required, is_unique, default_value,
-                         description, position, enum_options, relation_target_object_id, visible, editable, indexed, time_zone, translations$extraColumns)
+                         description, position, enum_options, relation_target_object_id, visible, editable, indexed, time_zone, translations,
+                         audited$extraColumns)
                     VALUES (:id, :objectId, :name, :label, :type, :columnName, :required, :unique, :defaultValue,
-                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed, :timeZone, CAST(:translations AS jsonb)$extraValues)
+                            :description, :position, CAST(:enumOptions AS jsonb), :relationTarget, :visible, :editable, :indexed, :timeZone,
+                            CAST(:translations AS jsonb), :audited$extraValues)
                     RETURNING $selectColumns
                     """.trimIndent()
                 ).bind("id", field.id)
@@ -236,6 +245,7 @@ class CustomFieldRepository(
                 .bind("indexed", field.indexed)
                 .bindNullable("timeZone", field.timeZone)
                 .bind("translations", translationsOf(field))
+                .bind("audited", field.audited)
         attributeColumns.forEachIndexed { index, column ->
             val value = field.attributes[column]
             spec = spec.bindNullable("a$index", value, types.attributeColumns.getValue(column))
@@ -294,7 +304,7 @@ class CustomFieldRepository(
                 SET label = :label, required = :required, is_unique = :unique, description = :description,
                     position = :position, enum_options = CAST(:enumOptions AS jsonb), visible = :visible,
                     editable = :editable, indexed = :indexed, time_zone = :timeZone, default_value = :defaultValue,
-                    translations = CAST(:translations AS jsonb), updated_at = now()
+                    translations = CAST(:translations AS jsonb), audited = :audited, updated_at = now()
                 WHERE id = :id
                 RETURNING $selectColumns
                 """.trimIndent()
@@ -311,6 +321,7 @@ class CustomFieldRepository(
             .bindNullable("timeZone", field.timeZone)
             .bindNullable("defaultValue", field.defaultValue)
             .bind("translations", translationsOf(field))
+            .bind("audited", field.audited)
             .map(::mapField)
             .one()
             .awaitSingle()
@@ -372,7 +383,8 @@ class CustomFieldRepository(
             timeZone = Rows.stringOrNull(row, "time_zone"),
             labels = texts.texts("labels"),
             descriptions = texts.texts("descriptions"),
-            enumOptionLabels = texts.options("enumOptions")
+            enumOptionLabels = texts.options("enumOptions"),
+            audited = Rows.bool(row, "audited")
         )
     }
 }

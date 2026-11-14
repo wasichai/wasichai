@@ -29,4 +29,23 @@ class AuditLogAdminAudit(
             after = after
         )
     }
+
+    override suspend fun recordPlatform(
+        organizationId: UUID,
+        entity: AdminEntity,
+        id: UUID,
+        operation: AdminOperation,
+        before: Map<String, Any?>?,
+        after: Map<String, Any?>?
+    ) {
+        audit.record(
+            organizationId = organizationId,
+            userId = null,
+            objectName = entity.objectName,
+            recordId = id,
+            operation = AuditOperation.valueOf(operation.name),
+            before = before,
+            after = after
+        )
+    }
 }

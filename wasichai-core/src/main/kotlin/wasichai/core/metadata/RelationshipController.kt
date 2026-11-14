@@ -28,7 +28,9 @@ data class RelationshipResponse(
     val joinTable: String?,
     // per language tag, only written when some are stored (ADR-078)
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val labels: Map<String, String> = emptyMap(),
-    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val inverseLabels: Map<String, String> = emptyMap()
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY) val inverseLabels: Map<String, String> = emptyMap(),
+    // the app's declared model that owns it (ADR-081). left out otherwise
+    @get:JsonInclude(JsonInclude.Include.NON_NULL) val declaredBy: String? = null
 )
 
 // the same relationship as seen from one object: which object is on the other end, and how many.
@@ -67,7 +69,8 @@ class RelationshipMapper(
             fieldName = relationship.relationFieldId?.let { fields.findById(it)?.name },
             joinTable = relationship.joinTable,
             labels = relationship.labels,
-            inverseLabels = relationship.inverseLabels
+            inverseLabels = relationship.inverseLabels,
+            declaredBy = relationship.declaredBy
         )
 
     fun toResponse(side: RelatedSide): RelatedSideResponse =

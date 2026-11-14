@@ -4,6 +4,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
+import wasichai.core.metadata.ObjectDefinition
 import wasichai.core.platform.ChangeOrigin
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.core.platform.bindNullable
@@ -18,6 +19,38 @@ class AuditService(
     private val objectMapper: ObjectMapper,
     private val schemas: WasichaiSchemas
 ) {
+    /**
+     * A record write of [definition]'s object, as its metadata says it is audited (issue 164, ADR-079): every state
+     * under `FULL`, minus the fields with `audited: false`, which the state names as omitted; the entry without states
+     * under `OPERATION`; nothing under `NONE`. Every record write of core and the modules comes through here; an
+     * entry that is not a record write (a document's `ISSUE`, the admin trail) goes to [record].
+     *
+     * [fieldStates] false: the states are no record fields (a link, a state transition), so only the mode applies.
+     */
+    suspend fun recordWrite(
+        definition: ObjectDefinition,
+        organizationId: UUID,
+        userId: UUID?,
+        recordId: UUID,
+        operation: AuditOperation,
+        before: Map<String, Any?>? = null,
+        after: Map<String, Any?>? = null,
+        reason: String? = null,
+        fieldStates: Boolean = true
+    ) {
+        val entry = AuditStates.of(definition, before, after, fieldStates) ?: return
+        record(
+            organizationId = organizationId,
+            userId = userId,
+            objectName = definition.obj.name,
+            recordId = recordId,
+            operation = operation,
+            before = entry.before,
+            after = entry.after,
+            reason = reason
+        )
+    }
+
     suspend fun record(
         organizationId: UUID,
         userId: UUID?,

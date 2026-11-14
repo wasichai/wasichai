@@ -392,6 +392,33 @@ Three flags, all `false` unless set, all in the create request, in `PUT` and in 
 On `PUT`, leaving any of the three flags out keeps it as it is (unlike `enabled`, which defaults to `true`): a client
 that does not know a flag never switches it off by saving a label.
 
+### Audit mode
+
+`auditMode` says what the object's record writes leave in the audit log
+([ADR-079](../adr/0079-what-a-record-write-leaves-in-the-audit-log.md)): `FULL`, the default, the entry and the record
+before and after; `OPERATION`, the entry, who, when, the correlation id, the source and the reason, without the states;
+`NONE`, no entry. Any case on the way in. It covers every record write of the object: the record API, an in-process
+write, an automation's, a workflow transition, a link or unlink; a document's `ISSUE` entry always stays. A field's
+`audited: false` keeps its value out of both states (see Fields).
+
+```json
+{ "name": "curso", "label": "Curso", "auditMode": "OPERATION", "fields": [] }
+```
+
+It is in the create request and in `PUT`, where leaving it out keeps it; it needs `MANAGE_METADATA` and leaves an
+`admin:object` entry, like any change to the object. A response writes it only when it is not `FULL`. Another value is
+a `400` on `auditMode`.
+
+### Declared by an app
+
+An object or a relationship an app declares in code is made and kept by the platform in every tenant
+([ADR-081](../adr/0081-models-an-app-declares-in-code.md)), and its responses carry `"declaredBy": "<model>"`. Through
+this API it is the app's alone: relabelling, enabling or deleting the object, adding, changing or deleting its fields,
+declaring or removing its actions, changing or deleting the relationship, a relationship that would add a column to
+the object, and deleting another object one of its relationships joins answer `409` naming the model, for `ADMIN`
+too. Its records are not locked: the object's write rules decide. A response leaves `declaredBy` out for what a person
+made.
+
 ## Declared actions
 
 ```http
@@ -503,6 +530,11 @@ it, and changing it moves no data. A field comes back with `timeZone` only when 
 { "name": "ocurrido", "label": "Ocurrido", "type": "DATETIME", "timeZone": "America/Lima" }
 ```
 
+`audited: false` keeps the field's value out of the audit log: both states of every entry leave it out and name it
+under `_omitted`, and the history answers `omitted` with it (see "Audit and history";
+[ADR-079](../adr/0079-what-a-record-write-leaves-in-the-audit-log.md)). Default `true`; on `PUT`, leaving it out keeps
+it; a field comes back with `audited` only when it is `false`.
+
 `name` and `type` are immutable: views, forms and automation rules refer to a field by name, and a
 type change may lose data. Sending either is answered with `400` naming the field — add a new field
 instead.
@@ -573,6 +605,9 @@ PUT    /api/relationships/{name}              the labels, and only the labels
 DELETE /api/relationships/{name}
 GET    /api/objects/{object}/relationships    the relationships this object takes part in, either side
 ```
+
+A relationship an app declares carries `declaredBy`, and `PUT` and `DELETE` on it are a `409` (see "Declared by an
+app" under Objects).
 
 ```json
 {
@@ -1236,6 +1271,15 @@ defaults were checked) is a `400` on the field until it is fixed with `PUT …/f
 guards and listeners see the defaults as stored. `PUT` and `PATCH` never apply a default: `PUT` still clears what it
 leaves out (ADR-031 D40).
 
+### Read-only fields
+
+A field whose metadata says `editable: false` is read-only for people: the UI draws it read-only, a `POST` that sends
+a value for it is a `403` "Field '…' is read-only" and nothing is stored (a `null` is no value, and a key a
+`RecordValueProvider` fixes passes), a `PATCH` naming it is the same `403`, and a `PUT` ignores it. The platform writes
+it: inside `RecordService.asPlatform`, a create, a `PUT` and a `PATCH` store every read-only field they send, and a
+`PUT` that leaves one out keeps it, so a field the server computes is read-only in the UI without making the object
+`apiOnly` ([ADR-082](../adr/0082-a-read-only-field-limits-people-not-the-platform.md), ADR-031 D55).
+
 ### Read scope
 
 An app may keep a person or a service account to some records of an object, such as those of their projects, with a
@@ -1472,6 +1516,12 @@ address of its backing user, `<id>@service-accounts.invalid`. Neither survives d
 instead to keep the trail readable.
 
 `changes` holds only the fields that actually differ; `CREATE` and `DELETE` carry an empty list.
+
+An object's `auditMode` decides what its record writes leave here (see "Audit mode" under Objects): `OPERATION`
+entries carry an empty `changes`, and under `NONE` there is no entry. A field with `audited: false` never appears in
+`changes`; an entry whose states left one out answers `"omitted": ["contenido"]`, only the fields the caller may read,
+and leaves `omitted` out when it left out nothing
+([ADR-079](../adr/0079-what-a-record-write-leaves-in-the-audit-log.md)).
 
 `reason` is what the write's `X-Change-Reason` said (see "Change reason" under Records), `null` when it said nothing.
 An automation's writes carry `automation '<name>'`. It is free text about the change, not a field value, so it is
@@ -2025,9 +2075,9 @@ RFC 7807 `application/problem+json`:
 |---|---|
 | 400 | validation: bad value, unknown field, wrong geometry type, invalid technical name; no change reason on a `requiresReason` object |
 | 401 | missing or invalid token |
-| 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object |
+| 403 | authenticated but lacking the object/action permission; a record write through the generic API on an `apiOnly` object; a person's value for a read-only field on `POST` or `PATCH` |
 | 404 | unknown object or record |
-| 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile |
+| 409 | duplicate name; a repeated unique value (`errors[]` names its fields); changing or deleting an `appendOnly` record; a reference deleted meanwhile; changing the model an app declares |
 | 409 | an `Idempotency-Key` whose first request is still running, with `Retry-After` (`errors[]` names `Idempotency-Key`) |
 | 412 | `If-Match` no longer matches the record: someone wrote it since it was read (`errors[]` names `If-Match`) |
 | 422 | an `Idempotency-Key` sent before with another body or object (`errors[]` names `Idempotency-Key`) |

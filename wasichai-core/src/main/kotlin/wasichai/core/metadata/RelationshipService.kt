@@ -92,9 +92,9 @@ class RelationshipService(
 
     @Transactional
     suspend fun create(request: CreateRelationshipRequest): Relationship {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val name = SqlIdentifier.requireValidName(request.name.trim().lowercase(), "relationship", "name", MAX_NAME)
-        if (relationships.findByName(user.organizationId, name) != null) {
+        if (relationships.findByName(actor.organizationId, name) != null) {
             throw ConflictException("Relationship '$name' already exists")
         }
 
@@ -102,14 +102,14 @@ class RelationshipService(
         // checked before any DDL: a bad key must not leave a column behind
         val labels = LocalizedTexts.checked(request.labels, "labels")
         val inverseLabels = LocalizedTexts.checked(request.inverseLabels, "inverseLabels")
-        val source = objectOrFail(user.organizationId, request.source, "source")
-        val target = objectOrFail(user.organizationId, request.target, "target")
+        val source = objectOrFail(actor.organizationId, request.source, "source")
+        val target = objectOrFail(actor.organizationId, request.target, "target")
 
         var relationFieldId: UUID? = null
         var joinTable: String? = null
 
         if (type.usesJoinTable) {
-            joinTable = "rel_${name}__${user.organizationId.toString().replace("-", "").take(8)}"
+            joinTable = "rel_${name}__${actor.organizationId.toString().replace("-", "").take(8)}"
             if (relationships.tableExists(joinTable)) {
                 throw ConflictException("Join table '$joinTable' already exists")
             }
@@ -142,7 +142,7 @@ class RelationshipService(
             relationships.insert(
                 Relationship(
                     id = UUID.randomUUID(),
-                    organizationId = user.organizationId,
+                    organizationId = actor.organizationId,
                     name = name,
                     label = request.label.trim(),
                     inverseLabel = request.inverseLabel?.trim(),
@@ -152,11 +152,13 @@ class RelationshipService(
                     relationFieldId = relationFieldId,
                     joinTable = joinTable,
                     labels = labels,
-                    inverseLabels = inverseLabels
+                    inverseLabels = inverseLabels,
+                    // the platform ensuring a declared model owns what it makes (ADR-081)
+                    declaredBy = actor.model
                 )
             )
-        audit.record(user, AdminEntity.RELATIONSHIP, created.id, AdminOperation.CREATE, null, snapshot(created))
-        changes.changed(MetadataChange(user.organizationId, MetadataChangeKind.RELATIONSHIP, AdminOperation.CREATE, source.id, source.name, name))
+        actor.record(audit, AdminEntity.RELATIONSHIP, created.id, AdminOperation.CREATE, null, snapshot(created))
+        changes.changed(MetadataChange(actor.organizationId, MetadataChangeKind.RELATIONSHIP, AdminOperation.CREATE, source.id, source.name, name))
         return created
     }
 
@@ -167,10 +169,11 @@ class RelationshipService(
         name: String,
         request: UpdateRelationshipRequest
     ): Relationship {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val relationship =
-            relationships.findByName(user.organizationId, name)
+            relationships.findByName(actor.organizationId, name)
                 ?: throw NotFoundException("Relationship '$name' does not exist")
+        actor.requireMayChange(relationship.declaredBy, "Relationship '$name'")
 
         listOf("type" to request.type, "source" to request.source, "target" to request.target)
             .firstOrNull { it.second != null }
@@ -196,20 +199,23 @@ class RelationshipService(
                     label = label ?: relationship.label,
                     inverseLabel = if (request.inverseLabel != null) inverseLabel else relationship.inverseLabel,
                     labels = request.labels?.let { LocalizedTexts.checked(it, "labels") } ?: relationship.labels,
-                    inverseLabels = request.inverseLabels?.let { LocalizedTexts.checked(it, "inverseLabels") } ?: relationship.inverseLabels
+                    inverseLabels = request.inverseLabels?.let { LocalizedTexts.checked(it, "inverseLabels") } ?: relationship.inverseLabels,
+                    // a declared model takes over a relationship a person made, once it matches (ADR-081)
+                    declaredBy = actor.model ?: relationship.declaredBy
                 )
             )
-        audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.UPDATE, snapshot(relationship), snapshot(updated))
+        actor.record(audit, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.UPDATE, snapshot(relationship), snapshot(updated))
         changes.changed(relationshipChange(relationship, AdminOperation.UPDATE))
         return updated
     }
 
     @Transactional
     suspend fun delete(name: String) {
-        val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
+        val actor = ModelOwner.actor(currentUser)
         val relationship =
-            relationships.findByName(user.organizationId, name)
+            relationships.findByName(actor.organizationId, name)
                 ?: throw NotFoundException("Relationship '$name' does not exist")
+        actor.requireMayChange(relationship.declaredBy, "Relationship '$name'")
         // its join table holds links of both ends, its field sits on one: either way stored values go
         val holders =
             if (relationship.joinTable != null) {
@@ -218,13 +224,15 @@ class RelationshipService(
                 listOfNotNull(relationship.relationFieldId?.let { fields.findById(it)?.objectId })
             }
         holders
-            .mapNotNull { objects.findById(user.organizationId, it) }
+            .mapNotNull { objects.findById(actor.organizationId, it) }
             .forEach { rejectAppendOnly(it, "relationship '$name'") }
 
         val column =
             relationship.relationFieldId?.let { fieldId ->
-                fields.findById(fieldId)?.let { field -> objects.findById(user.organizationId, field.objectId)?.let { owner -> owner to field } }
+                fields.findById(fieldId)?.let { field -> objects.findById(actor.organizationId, field.objectId)?.let { owner -> owner to field } }
             }
+        // the column sits on its object's table: a declared one keeps its fields (ADR-081)
+        column?.let { (owner, _) -> actor.requireMayChange(owner.declaredBy, "Object '${owner.name}'") }
         // postgres would drop a composite index or unique with the column while the metadata still lists it (ADR-036, ADR-037)
         column?.let { (owner, field) ->
             FieldSets.blocking(field.name, owner)?.let { set ->
@@ -243,7 +251,7 @@ class RelationshipService(
             fields.delete(field.id)
         }
         relationships.delete(relationship.id)
-        audit.record(user, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.DELETE, before, null)
+        actor.record(audit, AdminEntity.RELATIONSHIP, relationship.id, AdminOperation.DELETE, before, null)
         changes.changed(change)
     }
 
@@ -258,7 +266,9 @@ class RelationshipService(
             "target" to objects.findById(relationship.organizationId, relationship.targetObjectId)?.name,
             "fieldName" to relationship.relationFieldId?.let { fields.findById(it)?.name },
             "joinTable" to relationship.joinTable
-        ) + translations("labels" to relationship.labels, "inverseLabels" to relationship.inverseLabels)
+        ) + translations("labels" to relationship.labels, "inverseLabels" to relationship.inverseLabels) +
+            // only when a declared model owns it, so an entry of a person's reads as before (ADR-081)
+            (relationship.declaredBy?.let { mapOf("declaredBy" to it) } ?: emptyMap())
 
     // a relationship's change, told by its source object (ADR-066)
     private suspend fun relationshipChange(

@@ -128,10 +128,11 @@ class AutomationRunner(
                 emptyMap(),
                 workflow.attached
             )
-        audit.record(
+        // as the object says it is audited (ADR-079)
+        audit.recordWrite(
+            definition = definition,
             organizationId = run.organizationId,
             userId = null,
-            objectName = definition.obj.name,
             recordId = recordId,
             operation = AuditOperation.UPDATE,
             before = current.attributes,
@@ -189,10 +190,10 @@ class AutomationRunner(
         )
         val created =
             store.insert(writable, run.organizationId, run.userId, attributes, emptyMap(), workflow)
-        audit.record(
+        audit.recordWrite(
+            definition = target,
             organizationId = run.organizationId,
             userId = null,
-            objectName = target.obj.name,
             recordId = created.id,
             operation = AuditOperation.CREATE,
             after = created.attributes,

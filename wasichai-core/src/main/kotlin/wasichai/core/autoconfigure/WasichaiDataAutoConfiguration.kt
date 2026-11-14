@@ -42,9 +42,13 @@ import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.DeclaredModel
+import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
+import wasichai.core.metadata.ObjectActionRepository
+import wasichai.core.metadata.ObjectActionService
 import wasichai.core.metadata.RelationshipMapper
 import wasichai.core.metadata.RelationshipRepository
 import wasichai.core.metadata.RelationshipService
@@ -116,6 +120,37 @@ class WasichaiDataAutoConfiguration {
         db: DatabaseClient,
         transactionManager: ObjectProvider<ReactiveTransactionManager>
     ): ClusterLock = ClusterLock(db) { TransactionalOperator.create(transactionManager.getObject()) }
+
+    // the app's declared models, ensured in every tenant once the app is ready and in every tenant provisioned
+    // (ADR-081). none declared: nothing runs
+    @Bean
+    @ConditionalOnMissingBean
+    fun declaredModels(
+        models: ObjectProvider<DeclaredModel>,
+        tenants: TenantDirectory,
+        metadata: MetadataService,
+        relationshipService: RelationshipService,
+        actionService: ObjectActionService,
+        objects: CustomObjectRepository,
+        fields: CustomFieldRepository,
+        relationships: RelationshipRepository,
+        actions: ObjectActionRepository,
+        types: FieldTypeRegistry,
+        lock: ClusterLock
+    ): DeclaredModels =
+        DeclaredModels(
+            models.orderedStream().toList(),
+            tenants,
+            metadata,
+            relationshipService,
+            actionService,
+            objects,
+            fields,
+            relationships,
+            actions,
+            types,
+            lock
+        )
 
     @Bean
     @ConditionalOnMissingBean

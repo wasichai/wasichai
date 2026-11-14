@@ -36,7 +36,9 @@ data class AuditEntry(
     @field:JsonInclude(JsonInclude.Include.NON_NULL) val serviceAccount: String? = null,
     // the request it came from and what wrote it (ADR-050). left out on rows older than both
     @field:JsonInclude(JsonInclude.Include.NON_NULL) val correlationId: String? = null,
-    @field:JsonInclude(JsonInclude.Include.NON_NULL) val source: String? = null
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val source: String? = null,
+    // the fields whose values the entry left out (audited: false, ADR-079), those the caller may read. left out when none
+    @field:JsonInclude(JsonInclude.Include.NON_EMPTY) val omitted: List<String> = emptyList()
 )
 
 // what GET /api/audit narrows by besides the object, the record and the operation. blank is no filter.
@@ -323,6 +325,9 @@ class AuditQueryService(
         return rows.map { row ->
             val allowed = readable.getOrPut(row.objectName) { readableFields(user, row.objectName) }
             val mask = masked.getOrPut(row.objectName) { maskedDefinition(user, row.objectName) }
+            // the marker of what a state left out is no field: it never reaches a mask or the diff (ADR-079)
+            val omitted = (AuditStates.omittedIn(row.before) + AuditStates.omittedIn(row.after)).distinct().filter { allowed == null || it in allowed }
+            val states = row.copy(before = AuditStates.withoutMarker(row.before), after = AuditStates.withoutMarker(row.after))
             AuditEntry(
                 id = row.id.toString(),
                 userEmail = row.userEmail,
@@ -330,12 +335,13 @@ class AuditQueryService(
                 recordId = row.recordId?.toString(),
                 operation = row.operation,
                 occurredAt = row.occurredAt,
-                changes = changes(mask?.let { masked(user, it, row) } ?: row, allowed),
+                changes = changes(mask?.let { masked(user, it, states) } ?: states, allowed),
                 documentId = row.documentId?.toString(),
                 reason = row.reason,
                 serviceAccount = row.serviceAccount,
                 correlationId = row.correlationId,
-                source = row.source
+                source = row.source,
+                omitted = omitted
             )
         }
     }

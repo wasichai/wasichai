@@ -40,4 +40,17 @@ interface AdminAudit {
         before: Map<String, Any?>?,
         after: Map<String, Any?>?
     )
+
+    /**
+     * A change the platform makes in [organizationId] with nobody behind it: an app's declared model it ensures
+     * (ADR-081). The entry has no user; its source says what wrote it (ADR-050).
+     */
+    suspend fun recordPlatform(
+        organizationId: UUID,
+        entity: AdminEntity,
+        id: UUID,
+        operation: AdminOperation,
+        before: Map<String, Any?>?,
+        after: Map<String, Any?>?
+    )
 }

@@ -2,6 +2,82 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-14 — Record screens inside an app's module, and stored views only with the views module
+
+`RecordListPage`, `RecordDetailPage` and `RecordFormPage` of `@wasichai/core` take `objectName` (`recordId` on the
+detail and the form), `routes` and `readOnly`, so an app shows the records of one of its objects inside its own module
+([wasichai-ui#182](https://github.com/wasichai/wasichai-ui/issues/182)). `routes` (`RecordRoutes`: `records`, `record`,
+`newRecord`) names route keys of the app's module; the links between list, detail and form come from the registry,
+filled with the current route's params, `:object` and `:id`, and a missing `newRecord` means no create. Links to other
+objects (a related list's «Editar», a `NAVIGATE` action) stay core's. `readOnly` takes away create, edit, delete, link
+and unlink whatever the user may do, draws no write-policy notice, and hands `readOnly` to `recordListActions`,
+`recordPanels`, page components and page actions: `@wasichai/workflow` then shows the state without transitions and
+`@wasichai/documents` lists the issued documents without an issue. With a record the form edits it (`PUT`, «Editar
+registro»); read only, an edit shows the record without a save and a create draws no form. Without props every screen
+behaves as before.
+
+**Breaking, for 2.0.0:** the record list asks `GET /api/objects/{object}/views` only when `@wasichai/views` is
+registered, so an app without it no longer leaves a `404` in the browser console on every list; `useViews` reads a
+`404` as no views, without a retry ([wasichai-ui#183](https://github.com/wasichai/wasichai-ui/issues/183)). An app
+whose server runs `wasichai-views` registers `viewsModule()` to keep its saved views in the lists. ADR-031 D58,
+[ADR-083](adr/0083-an-app-mounts-cores-record-screens-in-its-own-module.md). REST change: none.
+New tests: cases in `RecordListPage.test.tsx`, `RecordDetailPage.test.tsx`, `RecordFormPage.test.tsx`,
+`PageRenderer.test.tsx` and `RelatedList.links.test.tsx` (core), `module.test.tsx` (views), `TransitionAction.test.tsx`
+and `WorkflowComponent.test.tsx` (workflow), and `RecordDocuments.test.tsx` (documents).
+
+## 2026-11-14 — Objects an app declares in code, ensured by the platform
+
+An app registers `DeclaredModel` beans: objects with their fields, indexes, uniques and flags, relationships and
+declared actions, in the shapes the metadata API takes ([wasichai#165](https://github.com/wasichai/wasichai/issues/165);
+[ADR-081](adr/0081-models-an-app-declares-in-code.md)). `DeclaredModels` ensures every model in every tenant of the
+`TenantDirectory` once the app is ready, and in a tenant as it is provisioned, in that transaction: what is missing is
+created, what differs and can change is changed, what matches is left alone (a second run writes nothing), and an
+object or a relationship a person made under a declared name is taken over. A field of another type, a relation that
+moved, a module type's settings or a relationship of another shape is reported in `DeclaredModelReport` and not
+applied; a change the database refuses rolls back the tenant's model and is logged. One transaction per tenant and
+model, under a cluster lock. The admin entries have no user and say `model:<name>` (`AdminAudit.recordPlatform`, new:
+breaking for an app that implements `AdminAudit`). What a model owns carries `declaredBy`, answered on objects and
+relationships, and the metadata API answers a person's change to it with a `409`. `V21__declared_models.sql` adds the
+columns. ADR-031 D57. REST change: additive (`declaredBy`, the `409`). New tests: `DeclaredModelApiTest`,
+`DeclaredModelsTest` and a case in `SchemaParityTest`.
+
+## 2026-11-14 — A batch write by natural key
+
+`RecordService.upsertAll(objectName, key, requests, reason, deleteMissing)` writes records identified by a unique
+field or one of the object's composite unique constraints ([wasichai#163](https://github.com/wasichai/wasichai/issues/163);
+[ADR-080](adr/0080-a-batch-write-by-natural-key.md)): what no record carries is created as `createAll` creates it, what
+reads otherwise is patched, and what already reads as sent is neither written, audited nor told. Values compare as a
+read answers them. `deleteMissing` deletes every record in the caller's reach the list leaves out. Deletes, then
+updates, then creates. A missing, `null` or repeated key, a key that is no attribute and a person's read-only key are
+refused before the first write; `CREATE`, `UPDATE` and `DELETE` are checked as needed. One transaction, the caller's or
+its own; it works as the platform and is in process only. `UpsertResult` counts what was created, updated, unchanged
+and deleted, and carries one record per request. REST change: none. New tests: `RecordUpsertApiTest`.
+
+## 2026-11-14 — An object says what its record writes leave in the audit log
+
+An object takes `auditMode`: `FULL` (the default, as before), `OPERATION` (the entry, who, when and why, without the
+states) or `NONE` (no entry); a field takes `audited: false`, which keeps its value out of both states, which then name
+it under `_omitted` ([wasichai#164](https://github.com/wasichai/wasichai/issues/164);
+[ADR-079](adr/0079-what-a-record-write-leaves-in-the-audit-log.md)). The history lists what changed of the rest and
+answers `omitted`. The mode covers `RecordService`, automations, workflow transitions and links; a document's `ISSUE`
+entry always stays. Both flags change through the metadata API (`MANAGE_METADATA`, an admin entry), keep their value
+when an update leaves them out, and are written in a response only when set. `AuditService.recordWrite` is the one
+path. `V20__audit_modes.sql` adds the columns. ADR-031 D56. REST change: additive (`auditMode`, `audited`, `omitted`).
+New tests: `AuditModeApiTest`, `AuditStatesTest` and a case in `SchemaParityTest`.
+
+## 2026-11-14 — A read-only field is the platform's to write, and the codec takes Kotlin values
+
+`editable: false` limits people, not the platform ([wasichai#166](https://github.com/wasichai/wasichai/issues/166);
+[ADR-082](adr/0082-a-read-only-field-limits-people-not-the-platform.md)): inside `asPlatform` a create, a `PUT` and a
+`PATCH` write the read-only fields they send, where the store dropped them without a word, and one a `PUT` leaves out
+keeps its value. A person's create that sends a non-`null` value for a read-only field is a `403` naming it, as a
+`PATCH` already was; a key a `RecordValueProvider` fixes passes, and a person's `PUT` still ignores them. Breaking, for
+2.0.0. The codec takes a `java.util.UUID` for `UUID` and `RELATION`, a `LocalDate` for `DATE`, and an `OffsetDateTime`,
+`ZonedDateTime` or `Instant` for `DATETIME`, beside their text
+([wasichai#167](https://github.com/wasichai/wasichai/issues/167)). ADR-031 D55. REST change: a `403` where a value was
+dropped. New tests: `PlatformFieldWriteApiTest` and cases in `FieldValueCodecTest` and
+`RecordServiceValueProviderTest`.
+
 ## 2026-11-03 — wasichai-ui shows the model in the user's language
 
 `@wasichai/core` picks the per-language texts of ADR-078 as it does workflow labels: the active language, its primary

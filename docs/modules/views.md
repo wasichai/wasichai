@@ -2,8 +2,11 @@
 
 `wasichai-views` gives an object named list configurations: which columns show, their order, exact-match filters, a
 sort and a page size (ADR-012). One view may be flagged default. Installing the module adds the storage and REST API
-for views, and a builder screen to edit them; core's own record list already reads stored views and falls back to a
-generated one when none is stored, so this module only adds the part that authors them.
+for views, and a builder screen to edit them. Core's own record list reads stored views when the app registers this
+module's frontend, `viewsModule()` of `@wasichai/views`, and falls back to a generated one when none is stored, so
+this module adds the part that authors them. Since wasichai-ui 2.0.0 an app whose server runs this module and that
+registers no `viewsModule()` lists on the generated view only: the list no longer asks a server that may lack the
+module (ADR-031 D58, [ADR-083](../adr/0083-an-app-mounts-cores-record-screens-in-its-own-module.md)).
 
 ## Install
 

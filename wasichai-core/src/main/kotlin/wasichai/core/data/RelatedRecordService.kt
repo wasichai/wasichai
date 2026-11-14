@@ -340,15 +340,17 @@ class RelatedRecordService(
             Triple(ends.otherDefinition, ends.otherId, ends.recordId)
         ).forEach { (definition, id, other) ->
             val (before, after) = linkChange(ends.relationship.name, other, linked)
-            audit.record(
+            // each end as its object says it is audited; a link is no field, so only the mode applies (ADR-079)
+            audit.recordWrite(
+                definition = definition,
                 organizationId = ends.user.organizationId,
                 userId = ends.user.userId,
-                objectName = definition.obj.name,
                 recordId = id,
                 operation = AuditOperation.UPDATE,
                 before = before,
                 after = after,
-                reason = reason
+                reason = reason,
+                fieldStates = false
             )
         }
     }

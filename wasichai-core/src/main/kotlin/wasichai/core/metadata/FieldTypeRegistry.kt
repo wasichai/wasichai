@@ -164,7 +164,8 @@ class FieldTypeRegistry(
                 "timeZone",
                 "labels",
                 "descriptions",
-                "enumOptionLabels"
+                "enumOptionLabels",
+                "audited"
             )
 
         // ObjectResponse's and ObjectDefinitionResponse's own constructor properties, minus `extensions`.
@@ -187,7 +188,9 @@ class FieldTypeRegistry(
                 "requiresReason",
                 "labels",
                 "pluralLabels",
-                "descriptions"
+                "descriptions",
+                "auditMode",
+                "declaredBy"
             )
 
         // data.RecordResponse's own constructor properties, minus the flattened `sections`. metadata
