@@ -4,6 +4,10 @@ updates:
   # GitHub Actions: actualizaciones fijadas por SHA
   - package-ecosystem: github-actions
     directory: /
+    # llegan por sync desde wasichai/wasichai-sync: sus versiones se suben allá, una vez para todos los repos
+    exclude-paths:
+      - .github/workflows/commits.yml
+      - .github/workflows/release-please.yml
     schedule:
       interval: weekly
     commit-message:
