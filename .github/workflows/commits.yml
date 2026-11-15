@@ -1,17 +1,24 @@
+# Llega por sync desde wasichai/wasichai-sync (files/workflows/commits.yml): se cambia allá, no aquí.
 name: Commits
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
 
 jobs:
+  # release-please lee los mensajes de los commits para elegir la versión: tienen que ser convencionales
   commitlint:
     name: Conventional commits
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,8 +33,9 @@ jobs:
   pr-title:
     name: Semantic PR title
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      # squash merges use the title as the commit, so it must be conventional too
+      # un squash merge usa el título como commit: también tiene que ser convencional
       - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
