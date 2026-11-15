@@ -8,6 +8,7 @@ updates:
     exclude-paths:
       - .github/workflows/commits.yml
       - .github/workflows/release-please.yml
+      - .github/workflows/secretos.yml
     schedule:
       interval: weekly
     commit-message:
