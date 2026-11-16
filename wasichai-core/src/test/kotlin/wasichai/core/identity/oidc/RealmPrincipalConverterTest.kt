@@ -20,12 +20,22 @@ class RealmPrincipalConverterTest {
     private val ana = RealmUser(UUID.randomUUID(), perene, "ana@perene.gob.pe", enabled = true)
     private val luis = RealmUser(UUID.randomUUID(), perene, "luis@perene.gob.pe", enabled = false)
 
+    // what the converter handed to resolve
+    private data class Resolved(
+        val subject: String,
+        val email: String?,
+        val emailVerified: Boolean,
+        val displayName: String?
+    )
+
     // the sql lives in RealmUsersTest; here only what the converter makes of the answers
     private class FakeUsers(
         private val organizations: Map<String, UUID>,
         private val bySubject: Map<String, RealmUser>,
         private val roles: Map<UUID, List<String>>
     ) : RealmUsers(mock(DatabaseClient::class.java), WasichaiSchemas("wasichai", "app_data"), Duration.ZERO) {
+        val resolved = mutableListOf<Resolved>()
+
         override suspend fun organizationIdBySlug(slug: String): UUID? = organizations[slug]
 
         override suspend fun resolve(
@@ -34,7 +44,10 @@ class RealmPrincipalConverterTest {
             email: String?,
             emailVerified: Boolean,
             displayName: String?
-        ): RealmUser? = bySubject[subject]?.takeIf { it.organizationId == organizationId }
+        ): RealmUser? {
+            resolved += Resolved(subject, email, emailVerified, displayName)
+            return bySubject[subject]?.takeIf { it.organizationId == organizationId }
+        }
 
         override suspend fun roles(userId: UUID): List<String> = roles[userId] ?: emptyList()
     }
@@ -46,7 +59,9 @@ class RealmPrincipalConverterTest {
 
     private fun realmToken(
         subject: String = "kc-ana",
-        organization: Any? = listOf("perene")
+        organization: Any? = listOf("perene"),
+        // null: no email_verified claim at all
+        emailVerified: Any? = true
     ): Jwt {
         val builder =
             Jwt
@@ -59,10 +74,10 @@ class RealmPrincipalConverterTest {
                 .issuedAt(issuedAt)
                 .expiresAt(issuedAt.plusSeconds(300))
                 .claim("email", "ana@perene.gob.pe")
-                .claim("email_verified", true)
                 .claim("name", "Ana")
                 .claim("azp", "caja")
         if (organization != null) builder.claim("organization", organization)
+        if (emailVerified != null) builder.claim("email_verified", emailVerified)
         return builder.build()
     }
 
@@ -96,6 +111,22 @@ class RealmPrincipalConverterTest {
         assertThat(translated.expiresAt).isEqualTo(jwt.expiresAt)
         assertThat(translated.getClaimAsString(JwtClaimNames.ISS)).isEqualTo(realmIssuer)
         assertThat(translated.claims).doesNotContainKeys("organization", "email_verified", "name", "azp", JwtClaimNames.AUD)
+    }
+
+    // the gate on linking by email: only a verified address may link a row (RealmUsers.resolve)
+    @Test
+    fun `email_verified reaches resolve as it is, with the email and the name`() {
+        val cases = listOf(true to true, "true" to true, false to false, "false" to false, null to false)
+
+        cases.forEach { (claim, expected) ->
+            users.resolved.clear()
+
+            convert(realmToken(emailVerified = claim))
+
+            assertThat(users.resolved)
+                .describedAs("email_verified = $claim")
+                .containsExactly(Resolved("kc-ana", "ana@perene.gob.pe", expected, "Ana"))
+        }
     }
 
     @Test
