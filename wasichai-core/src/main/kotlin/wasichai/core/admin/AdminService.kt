@@ -19,6 +19,7 @@ import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.Passwords
 import wasichai.core.identity.TokenRevocation
 import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.MetadataService
@@ -32,7 +33,7 @@ import java.util.UUID
 
 // users, roles and the rules attached to them. every entry point is MANAGE_ORGANIZATION,
 // every query is pinned to the caller's tenant. every change leaves one admin audit entry (ADR-049).
-// disabling, a new password, new roles and deleting sign the user out: their revocation marker moves (ADR-059).
+// disabling, a new password, new roles, unlinking and deleting sign the user out: their revocation marker moves (ADR-059).
 @Service
 class AdminService(
     private val db: DatabaseClient,
@@ -43,7 +44,9 @@ class AdminService(
     private val schemas: WasichaiSchemas,
     private val audit: AdminAudit,
     private val passwordPolicy: PasswordPolicy,
-    private val revocation: TokenRevocation
+    private val revocation: TokenRevocation,
+    // oidc: passwords live in the realm. a user is created without one, and one given is refused
+    private val oidc: Boolean = false
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -62,9 +65,11 @@ class AdminService(
 
     @Transactional
     suspend fun createUser(request: CreateUserRequest): AdminUserResponse {
+        // before the permission check, where @NotBlank used to answer
+        val password = Passwords.forMode(oidc, request.password, "password")
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val email = request.email.trim().lowercase()
-        requirePassword(request.password, UserInfo(email, request.displayName.trim(), admin.organizationId))
+        password?.let { requirePassword(it, UserInfo(email, request.displayName.trim(), admin.organizationId)) }
         if (findUserByEmail(admin.organizationId, email) != null) {
             throw ConflictException("User '$email' already exists")
         }
@@ -79,7 +84,7 @@ class AdminService(
             ).bind("id", id)
             .bind("organizationId", admin.organizationId)
             .bind("email", email)
-            .bind("hash", passwordEncoder.encode(request.password) as String)
+            .bindNullable("hash", password?.let { passwordEncoder.encode(it) })
             .bind("displayName", request.displayName.trim())
             .fetch()
             .rowsUpdated()
@@ -95,6 +100,11 @@ class AdminService(
         id: UUID,
         request: UpdateUserRequest
     ): AdminUserResponse {
+        if (oidc && request.password != null) throw Passwords.inRealm("password")
+        if (!oidc && request.unlink != null) {
+            throw ValidationException("Request validation failed", "unlink", "there is no identity provider to unlink from")
+        }
+        val unlink = request.unlink == true
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val before = userOrFail(admin.organizationId, id)
         // locking yourself out is never a valid administration step
@@ -109,6 +119,7 @@ class AdminService(
                 SET display_name = COALESCE(:displayName::text, display_name),
                     enabled = COALESCE(:enabled::boolean, enabled),
                     password_hash = COALESCE(:hash::text, password_hash),
+                    external_subject = CASE WHEN :unlink::boolean THEN NULL ELSE external_subject END,
                     updated_at = now()
                 WHERE id = :id AND organization_id = :organizationId
                 """.trimIndent()
@@ -117,10 +128,11 @@ class AdminService(
             .bindNullable("displayName", request.displayName?.trim()?.ifBlank { null })
             .bindNullable("enabled", request.enabled)
             .bindNullable("hash", request.password?.let { passwordEncoder.encode(it) })
+            .bind("unlink", unlink)
             .fetch()
             .rowsUpdated()
             .awaitSingle()
-        if (request.enabled == false || request.password != null) revocation.revoke(admin.organizationId, id)
+        if (request.enabled == false || request.password != null || unlink) revocation.revoke(admin.organizationId, id)
         val updated = userOrFail(admin.organizationId, id)
         audit.record(
             admin,
@@ -128,7 +140,7 @@ class AdminService(
             id,
             AdminOperation.UPDATE,
             AdminSnapshots.user(before),
-            AdminSnapshots.userUpdated(updated, passwordChanged = request.password != null)
+            AdminSnapshots.userUpdated(updated, passwordChanged = request.password != null, unlinked = unlink && before.linked)
         )
         return updated
     }
@@ -419,7 +431,7 @@ class AdminService(
         db
             .sql(
                 """
-                SELECT u.id, u.email, u.display_name, u.enabled, u.created_at,
+                SELECT u.id, u.email, u.display_name, u.enabled, u.external_subject IS NOT NULL AS linked, u.created_at,
                        string_agg(r.name, ',' ORDER BY r.name) AS role_names,
                        ARRAY(
                            SELECT ou.code
@@ -434,7 +446,7 @@ class AdminService(
                 WHERE u.organization_id = :organizationId
                   AND (:id::uuid IS NULL OR u.id = :id::uuid)
                   AND NOT EXISTS (SELECT 1 FROM ${schemas.metadata}.service_accounts sa WHERE sa.id = u.id)
-                GROUP BY u.id, u.email, u.display_name, u.enabled, u.created_at
+                GROUP BY u.id, u.email, u.display_name, u.enabled, u.external_subject, u.created_at
                 ORDER BY u.email
                 """.trimIndent()
             ).bind("organizationId", organizationId)
@@ -445,6 +457,7 @@ class AdminService(
                     email = Rows.string(row, "email"),
                     displayName = Rows.string(row, "display_name"),
                     enabled = Rows.bool(row, "enabled"),
+                    linked = Rows.bool(row, "linked"),
                     roles = Rows.stringOrNull(row, "role_names")?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     orgUnits = row.get("org_units", Array<String>::class.java)?.toList() ?: emptyList(),
                     createdAt = Rows.instantOrNull(row, "created_at")

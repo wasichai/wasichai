@@ -11,14 +11,17 @@ import java.time.Instant
 data class CreateUserRequest(
     @field:NotBlank @field:Email val email: String,
     @field:NotBlank val displayName: String,
-    @field:NotBlank val password: String,
+    // required in local mode, refused in oidc: the service decides, it knows the mode
+    val password: String? = null,
     val roles: List<String> = emptyList()
 )
 
 data class UpdateUserRequest(
     val displayName: String? = null,
     val enabled: Boolean? = null,
-    val password: String? = null
+    val password: String? = null,
+    // oidc: true forgets the realm account linked to the user; the next sign-in with the verified email links again
+    val unlink: Boolean? = null
 )
 
 data class UserRolesRequest(
@@ -67,6 +70,8 @@ data class AdminUserResponse(
     val email: String,
     val displayName: String,
     val enabled: Boolean,
+    // a realm account is linked (oidc): external_subject is set. always false in local mode
+    val linked: Boolean,
     val roles: List<String>,
     // unit codes, sorted (ADR-045)
     val orgUnits: List<String>,

@@ -1,6 +1,6 @@
 # REST API
 
-Base path `/api`. Everything except `/api/auth/login`, `/api/auth/token` and `/api/health` needs
+Base path `/api`. Everything except `/api/auth/login`, `/api/auth/token`, `/api/auth/config` and `/api/health` needs
 `Authorization: Bearer <token>`.
 
 ## Correlation id
@@ -38,6 +38,7 @@ A route of a module that is not installed answers `404` to an authenticated call
 
 ```http
 POST /api/auth/login        { "email": "...", "password": "..." }  →  { token, expiresAt, user }
+GET  /api/auth/config       public → { "mode": "local" } or { "mode": "oidc", "issuer": "...", "clientId": "..." }
 POST /api/auth/token        { "clientId": "...", "clientSecret": "..." }  →  { token, expiresAt, serviceAccount }
 POST /api/auth/logout       → 204, every token the caller holds stops working (with revocation on)
 GET  /api/auth/me
@@ -51,6 +52,15 @@ PUT  /api/auth/me/preferences   { "theme"?: "dark", "locale"?: "en" | null }  �
 
 Signing in and out ([ADR-059](../adr/0059-token-revocation-login-limits-and-password-policy.md)):
 
+- **Identity provider.** With `wasichai.security.identity=oidc` the realm signs people in and out: `POST /api/auth/login`
+  and `POST /api/auth/logout` answer `404` (validation and authentication run first, so `400`, `401` or `403` may come
+  before it), and `password` on `POST /api/users` and `PUT /api/users/{id}` and `adminPassword` on `POST
+  /api/organizations` are refused with `400`. In `local` they are required: a missing one is `400` `must not be blank`,
+  reported after other field errors. See [Authentication](../security/authentication.md).
+- **Linked users.** Every `/api/users` answer carries `linked`: `true` when a realm account is linked to the user
+  (always `false` in `local`). With `oidc`, `PUT /api/users/{id}` with `{ "unlink": true }` forgets that link, so a
+  person whose realm account was recreated is linked again on the next sign-in with the verified email; it signs the
+  user out like disabling and is audited as `unlinked`. In `local`, `unlink` (any value) is `400` on `unlink`.
 - **Logout.** `POST /api/auth/logout` takes the caller's token and answers `204`. With
   `wasichai.security.jwt.revocation=true` every token the caller was issued until then is refused from that moment
   (`401`); a new sign-in works at once. With revocation off (the default) it answers the same and the token keeps
@@ -200,7 +210,7 @@ tenant's, or a service account's backing user is `404`, as on the other user rou
 
 ```json
 {
-  "id": "…", "email": "ana@muni.pe", "displayName": "Ana", "enabled": true, "roles": ["FISCALIZADOR"],
+  "id": "…", "email": "ana@muni.pe", "displayName": "Ana", "enabled": true, "linked": false, "roles": ["FISCALIZADOR"],
   "orgUnits": ["SGFT"], "createdAt": "2026-10-06T09:00:00Z"
 }
 ```

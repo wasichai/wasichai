@@ -14,12 +14,14 @@ import wasichai.core.identity.AdminEntity
 import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.Passwords
 import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.WasichaiSchemas
+import wasichai.core.platform.bindNullable
 import java.time.Instant
 import java.util.UUID
 
@@ -46,7 +48,9 @@ class OrganizationService(
     // a deleted tenant's definitions leave the cache (ADR-066). defaulted: uncached, as before
     private val changes: MetadataChanges = MetadataChanges.uncached(),
     // the app's declared models, ensured in a tenant as it is provisioned (ADR-081). defaulted: none
-    private val declaredModels: DeclaredModels? = null
+    private val declaredModels: DeclaredModels? = null,
+    // oidc: the new administrator has no password, the realm signs them in. one given is refused
+    private val oidc: Boolean = false
 ) {
     suspend fun current(): Organization {
         val user = currentUser.require()
@@ -84,6 +88,8 @@ class OrganizationService(
     // MANAGE_TENANTS: MANAGE_ORGANIZATION as ever, unless wasichai.organizations.separate-provisioning (ADR-055)
     @Transactional
     suspend fun provision(request: CreateOrganizationRequest): Organization {
+        // before the permission check, where @NotBlank used to answer
+        val adminPassword = Passwords.forMode(oidc, request.adminPassword, "adminPassword")
         val actor = currentUser.requireWithPermission(Actions.MANAGE_TENANTS)
         val slug = request.slug.trim().lowercase()
         if (!SLUG.matches(slug)) {
@@ -95,7 +101,14 @@ class OrganizationService(
         val organizationId = UUID.randomUUID()
         val adminEmail = request.adminEmail.trim().lowercase()
         // the request's own field name, as it always was
-        PasswordPolicy.enforce(passwordPolicy, request.adminPassword, UserInfo(adminEmail, request.adminDisplayName?.trim(), organizationId), "adminPassword")
+        adminPassword?.let {
+            PasswordPolicy.enforce(
+                passwordPolicy,
+                it,
+                UserInfo(adminEmail, request.adminDisplayName?.trim(), organizationId),
+                "adminPassword"
+            )
+        }
 
         val roleId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -139,7 +152,7 @@ class OrganizationService(
             ).bind("id", userId)
             .bind("org", organizationId)
             .bind("email", request.adminEmail.trim().lowercase())
-            .bind("hash", passwordEncoder.encode(request.adminPassword) as String)
+            .bindNullable("hash", adminPassword?.let { passwordEncoder.encode(it) })
             .bind(
                 "displayName",
                 request.adminDisplayName

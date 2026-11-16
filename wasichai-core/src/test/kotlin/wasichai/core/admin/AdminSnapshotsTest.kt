@@ -14,7 +14,7 @@ class AdminSnapshotsTest {
     private val json = JsonMapper.builder().build()
 
     private val user =
-        AdminUserResponse(UUID.randomUUID().toString(), "ana@example.com", "Ana", true, listOf("EDITOR"), listOf("GERENCIA"), Instant.now())
+        AdminUserResponse(UUID.randomUUID().toString(), "ana@example.com", "Ana", true, false, listOf("EDITOR"), listOf("GERENCIA"), Instant.now())
 
     private fun role(
         permissions: List<PermissionResponse> = emptyList(),
@@ -43,6 +43,14 @@ class AdminSnapshotsTest {
 
         assertThat(changed).containsExactly(FieldChange("passwordChanged", null, true))
         assertThat(AdminSnapshots.userUpdated(user, passwordChanged = false)).doesNotContainKey("passwordChanged")
+    }
+
+    @Test
+    fun `an unlink is recorded as that, the realm's subject never`() {
+        val changed = diff(AdminSnapshots.user(user), AdminSnapshots.userUpdated(user.copy(linked = true), passwordChanged = false, unlinked = true))
+
+        assertThat(changed).containsExactly(FieldChange("unlinked", null, true))
+        assertThat(AdminSnapshots.userUpdated(user, passwordChanged = false)).doesNotContainKey("unlinked")
     }
 
     @Test

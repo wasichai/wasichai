@@ -12,13 +12,16 @@ data class User(
     val id: UUID,
     val organizationId: UUID,
     val email: String,
-    val passwordHash: String,
+    // null: signs in through the identity provider only
+    val passwordHash: String?,
     val displayName: String,
     val enabled: Boolean = true,
     val createdAt: Instant? = null,
     val updatedAt: Instant? = null,
     // revocation marker (ADR-059): a token issued before it is refused when revocation is on
-    val tokensValidAfter: Instant? = null
+    val tokensValidAfter: Instant? = null,
+    // the provider's subject, null for a local user
+    val externalSubject: String? = null
 )
 
 data class Role(
@@ -39,7 +42,7 @@ class UserRepository(
     suspend fun findByEmail(email: String): User? =
         db
             .sql(
-                "SELECT id, organization_id, email, password_hash, display_name, enabled, created_at, updated_at, tokens_valid_after " +
+                "SELECT id, organization_id, email, password_hash, display_name, enabled, created_at, updated_at, tokens_valid_after, external_subject " +
                     "FROM ${schemas.metadata}.users WHERE email = :email"
             ).bind("email", email)
             .map { row, _ ->
@@ -47,12 +50,13 @@ class UserRepository(
                     id = Rows.uuid(row, "id"),
                     organizationId = Rows.uuid(row, "organization_id"),
                     email = Rows.string(row, "email"),
-                    passwordHash = Rows.string(row, "password_hash"),
+                    passwordHash = Rows.stringOrNull(row, "password_hash"),
                     displayName = Rows.string(row, "display_name"),
                     enabled = Rows.bool(row, "enabled"),
                     createdAt = Rows.instantOrNull(row, "created_at"),
                     updatedAt = Rows.instantOrNull(row, "updated_at"),
-                    tokensValidAfter = Rows.instantOrNull(row, "tokens_valid_after")
+                    tokensValidAfter = Rows.instantOrNull(row, "tokens_valid_after"),
+                    externalSubject = Rows.stringOrNull(row, "external_subject")
                 )
             }.one()
             .awaitFirstOrNull()

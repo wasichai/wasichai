@@ -53,7 +53,9 @@ class AuthService(
     ): LoginResponse {
         val user = users.findByEmail(email) ?: throw invalidCredentials()
         // bcrypt is slow on purpose: off the event loop, or a burst of logins stalls every request
-        if (!user.enabled || !withContext(Dispatchers.Default) { passwordEncoder.matches(password, user.passwordHash) }) {
+        // no hash: a provider-only user. same answer as a wrong password, and no bcrypt run
+        val hash = user.passwordHash ?: throw invalidCredentials()
+        if (!user.enabled || !withContext(Dispatchers.Default) { passwordEncoder.matches(password, hash) }) {
             throw invalidCredentials()
         }
         val roles = roleQueries.roleNamesOf(user.id)

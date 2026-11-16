@@ -194,6 +194,45 @@ class AdminApiTest : FullAppIntegrationTest() {
     }
 
     @Test
+    fun `a local user is never linked, and unlink is refused`() {
+        val token = bearer()
+        val id = createUser(token, "${uniqueName("unlink")}@wasichai.local", "supersecret", emptyList())
+
+        client
+            .put()
+            .uri("/api/users/$id")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("displayName" to "Kept"))
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.linked")
+            .isEqualTo(false)
+
+        // nothing to unlink without an identity provider
+        client
+            .put()
+            .uri("/api/users/$id")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .bodyValue(mapOf("unlink" to true))
+            .exchange()
+            .expectStatus()
+            .isBadRequest
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("unlink")
+
+        client
+            .delete()
+            .uri("/api/users/$id")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isNoContent
+    }
+
+    @Test
     fun `replaces the action and field rules of a role`() {
         val token = bearer()
         val role = newRole(token, "Rules")

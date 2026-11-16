@@ -42,6 +42,8 @@ class CurrentUser(
         val jwt =
             authentication.principal as? Jwt
                 ?: throw UnauthorizedException("Authentication required")
+        // before sub and org: a denied realm token carries neither
+        jwt.getClaimAsString(JwtService.CLAIM_DENIED)?.let { throw ForbiddenException(it) }
         return AuthenticatedUser(
             userId = UUID.fromString(jwt.subject),
             organizationId = UUID.fromString(jwt.getClaimAsString(JwtService.CLAIM_ORGANIZATION)),
