@@ -19,7 +19,9 @@ data class CreateUserRequest(
 data class UpdateUserRequest(
     val displayName: String? = null,
     val enabled: Boolean? = null,
-    val password: String? = null
+    val password: String? = null,
+    // oidc: true forgets the realm account linked to the user; the next sign-in with the verified email links again
+    val unlink: Boolean? = null
 )
 
 data class UserRolesRequest(
@@ -68,6 +70,8 @@ data class AdminUserResponse(
     val email: String,
     val displayName: String,
     val enabled: Boolean,
+    // a realm account is linked (oidc): external_subject is set. always false in local mode
+    val linked: Boolean,
     val roles: List<String>,
     // unit codes, sorted (ADR-045)
     val orgUnits: List<String>,
