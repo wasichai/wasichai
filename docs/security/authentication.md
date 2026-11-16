@@ -315,6 +315,14 @@ API call in the middle of a session signs the user out and returns them to the l
 of only dropping the token and leaving a signed-in-looking user whose every call fails (ADR-031
 D11). A `404` on a module route means the module is not installed (ADR-031 D1).
 
+With `oidc` (ADR-084) `@wasichai/core` asks `GET /api/auth/config` at start and signs people in through the realm:
+Authorization Code with PKCE (`S256`), scope `openid organization`, back to `/auth/callback`. The session lives per tab
+in `sessionStorage`, never `localStorage`. The access token is renewed before it expires, and every renewal (the timer,
+an expired token after a reload, a `401`) shares one refresh-token grant: the realm rotates refresh tokens, so two at
+once would end the session. A `401` gets one refresh and one retry before signing out. Signing out ends the realm
+session (RP-initiated), and so every app of the domain. A person the app has not invited sees a full-page screen with
+the reason the backend gave, and a button to sign out.
+
 ## Runtime DDL safety
 
 Wasichai runs DDL from user-supplied metadata, so:
