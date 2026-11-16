@@ -494,7 +494,7 @@ class AdminService(
         return db
             .sql(
                 """
-                SELECT id, name, label, own_records_only
+                SELECT id, name, label, own_records_only, declared_by
                 FROM ${schemas.metadata}.roles
                 WHERE organization_id = :organizationId AND (:name::text IS NULL OR name = :name::text)
                 ORDER BY name
@@ -509,7 +509,8 @@ class AdminService(
                     label = Rows.string(row, "label"),
                     ownRecordsOnly = Rows.bool(row, "own_records_only"),
                     permissions = permissions[id].orEmpty(),
-                    fieldPermissions = fieldPermissions[id].orEmpty()
+                    fieldPermissions = fieldPermissions[id].orEmpty(),
+                    declaredBy = Rows.stringOrNull(row, "declared_by")
                 )
             }.all()
             .asFlow()

@@ -1,5 +1,6 @@
 package wasichai.core.admin
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import java.time.Instant
@@ -97,5 +98,7 @@ data class RoleResponse(
     val label: String,
     val ownRecordsOnly: Boolean,
     val permissions: List<PermissionResponse>,
-    val fieldPermissions: List<FieldPermissionResponse>
+    val fieldPermissions: List<FieldPermissionResponse>,
+    // the model that declares the role; absent for a role a person made
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val declaredBy: String? = null
 )

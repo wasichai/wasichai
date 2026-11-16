@@ -67,7 +67,7 @@ class ServiceAccountTokenService(
         val id: UUID,
         val organizationId: UUID,
         val name: String,
-        val secretHash: String,
+        val secretHash: String?,
         val enabled: Boolean,
         val tokensValidAfter: Instant?
     )
@@ -87,7 +87,7 @@ class ServiceAccountTokenService(
     ): ServiceTokenResponse {
         val id = runCatching { UUID.fromString(clientId.trim()) }.getOrNull()
         val account = id?.let { find(it) }
-        val matches = secretMatches(clientSecret, account?.secretHash ?: decoyHash)
+        val matches = secretMatches(clientSecret, account?.secretHash, decoyHash)
         if (account == null || !account.enabled || !matches) throw invalidCredentials()
         val roles = roleQueries.roleNamesOf(account.id)
         val issued =
@@ -110,8 +110,14 @@ class ServiceAccountTokenService(
     // off the event loop: a public endpoint that hashes on netty's threads is a cheap way to stall the server.
     private suspend fun secretMatches(
         secret: String,
-        hash: String
-    ): Boolean = withContext(Dispatchers.Default) { runCatching { passwordEncoder.matches(secret, hash) }.getOrDefault(false) }
+        hash: String?,
+        decoy: String
+    ): Boolean =
+        withContext(Dispatchers.Default) {
+            // no hash (unknown id, or a realm account): pay the check against the decoy, then mismatch
+            val matched = runCatching { passwordEncoder.matches(secret, hash ?: decoy) }.getOrDefault(false)
+            hash != null && matched
+        }
 
     // no tenant to filter by yet: the client id is the account's own id, unique across tenants
     private suspend fun find(id: UUID): Credentials? =
@@ -129,7 +135,7 @@ class ServiceAccountTokenService(
                     id = Rows.uuid(row, "id"),
                     organizationId = Rows.uuid(row, "organization_id"),
                     name = Rows.string(row, "name"),
-                    secretHash = Rows.string(row, "secret_hash"),
+                    secretHash = Rows.stringOrNull(row, "secret_hash"),
                     enabled = Rows.bool(row, "enabled"),
                     tokensValidAfter = Rows.instantOrNull(row, "tokens_valid_after")
                 )

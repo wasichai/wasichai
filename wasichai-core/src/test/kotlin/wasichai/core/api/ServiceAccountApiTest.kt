@@ -1,16 +1,31 @@
 package wasichai.core.api
 
+import kotlinx.coroutines.reactive.awaitFirstOrNull
+import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpHeaders
+import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.test.web.reactive.server.WebTestClient
+import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiIntegrationTest
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 
 // service accounts (ADR-043): a server-to-server caller of one tenant, client id + secret for a short-lived token
 class ServiceAccountApiTest : WasichaiIntegrationTest() {
+    @Autowired
+    private lateinit var db: DatabaseClient
+
+    @Autowired
+    private lateinit var schemas: WasichaiSchemas
+
     private lateinit var admin: String
     private lateinit var objectName: String
     private lateinit var role: String
@@ -420,6 +435,56 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
         val clientId: String,
         val secret: String
     )
+
+    @Test
+    fun `a realm account's id at the token endpoint is the same 401 as a wrong secret`() {
+        val id = insertAccount(secretHash = null, externalClientId = uniqueName("carga").replace('_', '-'))
+        assertThat(refusedDetail(id.toString(), "x")).isEqualTo("Invalid client credentials")
+    }
+
+    @Test
+    fun `a row with both a secret and a client id is refused by the database`() {
+        assertThatThrownBy { insertAccount(secretHash = "hash", externalClientId = "carga-perene") }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
+    }
+
+    // an account row straight through the database: the realm kind has no API to create it yet
+    private fun insertAccount(
+        secretHash: String?,
+        externalClientId: String?
+    ): UUID =
+        runBlocking {
+            val id = UUID.randomUUID()
+            val org =
+                db
+                    .sql("SELECT id FROM ${schemas.metadata}.organizations ORDER BY created_at LIMIT 1")
+                    .map { row, _ -> row.get("id", UUID::class.java)!! }
+                    .one()
+                    .awaitSingle()
+            db
+                .sql(
+                    "INSERT INTO ${schemas.metadata}.users (id, organization_id, email, password_hash, display_name, enabled) " +
+                        "VALUES (:id, :org, :email, NULL, :name, false)"
+                ).bind("id", id)
+                .bind("org", org)
+                .bind("email", "$id@service-accounts.invalid")
+                .bind("name", "realm")
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle()
+            var spec =
+                db
+                    .sql(
+                        "INSERT INTO ${schemas.metadata}.service_accounts (id, organization_id, name, secret_hash, external_client_id) " +
+                            "VALUES (:id, :org, :name, :hash, :ext)"
+                    ).bind("id", id)
+                    .bind("org", org)
+                    .bind("name", "realm-${id.toString().take(8)}")
+            spec = if (secretHash == null) spec.bindNull("hash", String::class.java) else spec.bind("hash", secretHash)
+            spec = if (externalClientId == null) spec.bindNull("ext", String::class.java) else spec.bind("ext", externalClientId)
+            spec.fetch().rowsUpdated().awaitFirstOrNull()
+            id
+        }
 
     private fun createAccount(
         name: String,
