@@ -105,7 +105,12 @@ class WasichaiSecurityAutoConfiguration {
         val decoder = NimbusReactiveJwtDecoder.withSecretKey(wasichaiJwtKey.key).macAlgorithm(MacAlgorithm.HS256).build()
         val local = if (properties.revocation) RevocationCheckingJwtDecoder(decoder, tokenRevocation) else decoder
         if (!identity.isOidc) return local
-        return IssuerRoutingJwtDecoder(realm.getObject(), local, properties.issuer)
+        val realmDecoder = realm.getObject()
+        // routing is by iss: one value for both would hand one issuer's tokens to the other's key
+        require(properties.issuer != realmDecoder.issuer) {
+            "wasichai.security.jwt.issuer must differ from wasichai.security.oidc.issuer-uri, both were ${properties.issuer}"
+        }
+        return IssuerRoutingJwtDecoder(realmDecoder, local, properties.issuer)
     }
 
     // only in oidc. the converter takes its issuer from the realm decoder: one string, so a token the

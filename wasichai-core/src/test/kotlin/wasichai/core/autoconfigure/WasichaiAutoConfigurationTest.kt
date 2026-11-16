@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.runner.ReactiveWebApplicationContex
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpHeaders
+import org.springframework.http.codec.ServerCodecConfigurer
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.r2dbc.core.DatabaseClient
@@ -253,6 +254,35 @@ class WasichaiAutoConfigurationTest {
         runner.withPropertyValues("wasichai.seed.dev=true").run { context ->
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values)
                 .containsExactlyInAnyOrder(ModuleMigration.CORE, ModuleMigration.CORE_SEED)
+        }
+    }
+
+    // oidc: the denial guard writes the app's error body, so it needs webflux's codecs
+    private val oidc =
+        runner
+            .withBean(ServerCodecConfigurer::class.java, { ServerCodecConfigurer.create() })
+            .withPropertyValues(
+                "wasichai.security.identity=oidc",
+                "wasichai.security.oidc.issuer-uri=https://auth.example.org/realms/peru",
+                "wasichai.security.oidc.client-id=caja"
+            )
+
+    @Test
+    fun `oidc boots beside the app's own issuer`() {
+        oidc.run { context ->
+            assertThat(context).hasNotFailed()
+            assertThat(context).hasSingleBean(ReactiveJwtDecoder::class.java)
+        }
+    }
+
+    // one iss for both: the router would send the app's tokens to the realm, or the realm's to the app's key
+    @Test
+    fun `oidc refuses the app's issuer equal to the realm's, naming both properties`() {
+        oidc.withPropertyValues("wasichai.security.jwt.issuer=https://auth.example.org/realms/peru").run { context ->
+            assertThat(context).hasFailed()
+            assertThat(generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }.joinToString(" | "))
+                .contains("wasichai.security.jwt.issuer")
+                .contains("wasichai.security.oidc.issuer-uri")
         }
     }
 
