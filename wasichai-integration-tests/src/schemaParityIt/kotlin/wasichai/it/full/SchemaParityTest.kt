@@ -362,6 +362,17 @@ class SchemaParityTest : FullAppIntegrationTest() {
             ).associateWith { "ADR-031 D45: Idempotency-Key on record creation" } +
             // token revocation marker (ADR-031 D44, ADR-059)
             mapOf("column users.tokens_valid_after #9 timestamp with time zone" to "ADR-031 D44: token revocation") +
+            // sign-in through the identity provider: no password needed, linked by the provider's subject
+            listOf(
+                "column users.external_subject #10 text",
+                "index users.users_org_external_subject_uq CREATE UNIQUE INDEX users_org_external_subject_uq ON META.users " +
+                    "USING btree (organization_id, external_subject) WHERE (external_subject IS NOT NULL)"
+            ).associateWith { "oidc sign-in: external subject of a user" } +
+            mapOf(
+                "column users.password_hash #4 text NOT NULL" to "oidc sign-in: a user may have no password",
+                "constraint users.users_password_hash_not_null NOT NULL password_hash" to "oidc sign-in: a user may have no password",
+                "column users.password_hash #4 text" to "oidc sign-in: a user may have no password"
+            ) +
             // delivery channels (ADR-031 D46, ADR-060): two more tables of the notifications module
             listOf(
                 "column notification_deliveries.attempts #7 integer NOT NULL DEFAULT 0",
