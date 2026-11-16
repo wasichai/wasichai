@@ -19,6 +19,7 @@ import wasichai.core.platform.SystemColumns
 import wasichai.core.platform.WasichaiAuditProperties
 import wasichai.core.platform.WasichaiDatabaseProperties
 import wasichai.core.platform.WasichaiIdempotencyProperties
+import wasichai.core.platform.WasichaiIdentityProperties
 import wasichai.core.platform.WasichaiLoginProperties
 import wasichai.core.platform.WasichaiMetadataProperties
 import wasichai.core.platform.WasichaiMigrations
@@ -38,7 +39,8 @@ import wasichai.core.platform.WasichaiWebProperties
     WasichaiOrganizationsProperties::class,
     WasichaiLoginProperties::class,
     WasichaiPasswordProperties::class,
-    WasichaiMetadataProperties::class
+    WasichaiMetadataProperties::class,
+    WasichaiIdentityProperties::class
 )
 class WasichaiPlatformAutoConfiguration {
     @Bean
@@ -54,7 +56,11 @@ class WasichaiPlatformAutoConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "wasichai.seed", name = ["dev"], havingValue = "true")
-    fun wasichaiCoreSeedMigration(): ModuleMigration = ModuleMigration.CORE_SEED
+    fun wasichaiCoreSeedMigration(identity: WasichaiIdentityProperties): ModuleMigration {
+        // the dev seed makes password users: a realm owns the people in oidc
+        require(!identity.isOidc) { "wasichai.seed.dev=true cannot be used with wasichai.security.identity=oidc" }
+        return ModuleMigration.CORE_SEED
+    }
 
     // runs at startup, before traffic: WasichaiMigrations.afterPropertiesSet() calls migrate(), so it
     // runs even if an app replaces this bean with its own instance. every module migration bean is
