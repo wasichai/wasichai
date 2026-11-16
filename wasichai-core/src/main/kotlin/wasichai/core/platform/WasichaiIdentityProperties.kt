@@ -31,6 +31,10 @@ data class WasichaiIdentityProperties(
     init {
         if (isOidc) {
             require(oidc.issuerUri.isNotBlank()) { "wasichai.security.oidc.issuer-uri is required when wasichai.security.identity=oidc" }
+            // iss match is exact: a trailing slash would 401 every token and nobody would see why
+            require(!oidc.issuerUri.endsWith("/")) {
+                "wasichai.security.oidc.issuer-uri must be the realm's issuer exactly, without a trailing slash, was ${oidc.issuerUri}"
+            }
             require(oidc.clientId.isNotBlank()) { "wasichai.security.oidc.client-id is required when wasichai.security.identity=oidc" }
         }
     }

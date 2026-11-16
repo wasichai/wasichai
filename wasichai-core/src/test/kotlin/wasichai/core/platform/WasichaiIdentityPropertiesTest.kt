@@ -22,6 +22,13 @@ class WasichaiIdentityPropertiesTest {
     }
 
     @Test
+    fun `oidc refuses an issuer with a trailing slash, local does not care`() {
+        assertThatThrownBy { WasichaiIdentityProperties(IdentityMode.OIDC, Oidc(issuerUri = "https://a/realms/x/", clientId = "caja")) }
+            .hasMessageContaining("without a trailing slash")
+        assertThat(WasichaiIdentityProperties(IdentityMode.LOCAL, Oidc(issuerUri = "https://a/realms/x/")).isOidc).isFalse()
+    }
+
+    @Test
     fun `the jwk set defaults to keycloak's path under the issuer`() {
         assertThat(Oidc(issuerUri = "https://auth.example.org/realms/peru/").jwkSetUriOrDefault())
             .isEqualTo("https://auth.example.org/realms/peru/protocol/openid-connect/certs")

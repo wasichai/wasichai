@@ -5,20 +5,27 @@ import com.nimbusds.jose.JWSHeader
 import com.nimbusds.jose.JWSSigner
 import com.nimbusds.jose.crypto.MACSigner
 import com.nimbusds.jose.crypto.RSASSASigner
+import com.nimbusds.jose.jwk.JWKSet
 import com.nimbusds.jose.jwk.RSAKey
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator
 import com.nimbusds.jwt.JWTClaimsSet
 import com.nimbusds.jwt.SignedJWT
+import com.sun.net.httpserver.HttpServer
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.BadJwtException
 import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtValidationException
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import reactor.core.publisher.Mono
 import reactor.test.StepVerifier
-import java.security.interfaces.RSAPublicKey
+import wasichai.core.platform.Oidc
+import java.net.InetSocketAddress
 import java.util.Date
+import java.util.concurrent.atomic.AtomicInteger
 import javax.crypto.spec.SecretKeySpec
 
 class IssuerRoutingJwtDecoderTest {
@@ -27,23 +34,39 @@ class IssuerRoutingJwtDecoderTest {
     private val otherRsa: RSAKey = RSAKeyGenerator(2048).generate()
     private val secret = ByteArray(32) { it.toByte() }
 
-    private val realmDecoder =
-        NimbusReactiveJwtDecoder.withPublicKey(rsa.toRSAPublicKey() as RSAPublicKey).build().also {
-            it.setJwtValidator(realmValidator(realmIssuer, "caja"))
+    // real jwks endpoint, so the production factory is what gets tested
+    private val jwksHits = AtomicInteger()
+    private val server: HttpServer =
+        HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/certs") { ex ->
+                jwksHits.incrementAndGet()
+                val body = JWKSet(rsa.toPublicJWK()).toString().toByteArray()
+                ex.responseHeaders.add("Content-Type", "application/json")
+                ex.sendResponseHeaders(200, body.size.toLong())
+                ex.responseBody.use { it.write(body) }
+            }
+            start()
         }
+    private val realmDecoder =
+        realmJwtDecoder(Oidc(issuerUri = realmIssuer, clientId = "caja", jwkSetUri = "http://127.0.0.1:${server.address.port}/certs")).decoder
+
+    @AfterEach
+    fun stop() = server.stop(0)
+
     private val localDecoder =
         NimbusReactiveJwtDecoder.withSecretKey(SecretKeySpec(secret, "HmacSHA256")).macAlgorithm(MacAlgorithm.HS256).build()
     private val router = IssuerRoutingJwtDecoder(RealmJwtDecoder(realmIssuer, realmDecoder), localDecoder, "wasichai")
 
     private fun claims(
         issuer: String,
-        aud: List<String>
+        aud: List<String>,
+        exp: Boolean = true
     ) = JWTClaimsSet
         .Builder()
         .issuer(issuer)
         .subject("user-1")
         .audience(aud)
-        .expirationTime(Date(System.currentTimeMillis() + 60_000))
+        .apply { if (exp) expirationTime(Date(System.currentTimeMillis() + 60_000)) }
         .build()
 
     private fun sign(
@@ -117,5 +140,30 @@ class IssuerRoutingJwtDecoderTest {
             .create(router.decode(sign(noIss, RSASSASigner(rsa), JWSAlgorithm.RS256)))
             .expectError(BadJwtException::class.java)
             .verify()
+    }
+
+    @Test
+    fun `no key is fetched at construction, only on the first realm token`() {
+        assertThat(jwksHits.get()).isZero()
+        StepVerifier.create(router.decode(realmToken(listOf("caja")))).expectNextCount(1).verifyComplete()
+        assertThat(jwksHits.get()).isEqualTo(1)
+    }
+
+    @Test
+    fun `an HS256 token with the realm issuer is refused`() {
+        val token = sign(claims(realmIssuer, listOf("caja")), MACSigner(secret), JWSAlgorithm.HS256)
+        StepVerifier.create(router.decode(token)).expectError(BadJwtException::class.java).verify()
+    }
+
+    @Test
+    fun `an RS256 token with the local issuer is refused`() {
+        val token = sign(claims("wasichai", listOf("wasichai")), RSASSASigner(rsa), JWSAlgorithm.RS256)
+        StepVerifier.create(router.decode(token)).expectError(BadJwtException::class.java).verify()
+    }
+
+    @Test
+    fun `a realm token without exp is refused`() {
+        val token = sign(claims(realmIssuer, listOf("caja"), exp = false), RSASSASigner(rsa), JWSAlgorithm.RS256)
+        StepVerifier.create(router.decode(token)).expectError(BadJwtException::class.java).verify()
     }
 }

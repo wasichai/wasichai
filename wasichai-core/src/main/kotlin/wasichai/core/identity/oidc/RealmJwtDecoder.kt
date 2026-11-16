@@ -18,7 +18,7 @@ class RealmJwtDecoder(
     val decoder: ReactiveJwtDecoder
 )
 
-// timestamps + iss + aud has clientId. aud check stops a token minted for another client of the realm.
+// timestamps + exp required + iss + aud has clientId. aud check stops a token minted for another client of the realm.
 fun realmValidator(
     issuer: String,
     clientId: String
@@ -31,7 +31,16 @@ fun realmValidator(
                 OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "The aud claim does not contain $clientId", null))
             }
         }
-    return DelegatingOAuth2TokenValidator(JwtValidators.createDefaultWithIssuer(issuer), audience)
+    // default timestamp check lets a token with no exp pass. a realm token must expire.
+    val expRequired =
+        OAuth2TokenValidator<Jwt> { jwt ->
+            if (jwt.expiresAt != null) {
+                OAuth2TokenValidatorResult.success()
+            } else {
+                OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "The exp claim is required", null))
+            }
+        }
+    return DelegatingOAuth2TokenValidator(JwtValidators.createDefaultWithIssuer(issuer), expRequired, audience)
 }
 
 // lazy: jwk set is fetched on first token, so boot never calls keycloak.
