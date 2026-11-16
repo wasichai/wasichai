@@ -1,5 +1,6 @@
 package wasichai.core.identity
 
+import kotlinx.coroutines.reactor.mono
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
@@ -7,6 +8,9 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.springframework.r2dbc.core.DatabaseClient
+import org.springframework.security.core.context.ReactiveSecurityContextHolder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import wasichai.core.common.Actions
 import wasichai.core.common.ForbiddenException
 import wasichai.core.platform.WasichaiSchemas
@@ -107,4 +111,25 @@ class CurrentUserTest {
                 assertThat(users.holdsTenantsGrant(person("GESTOR"))).describedAs("switch $separate").isFalse()
             }
         }
+
+    // a realm person the app turned away (RealmPrincipalConverter): the reason travels in the token, no user behind it
+    @Test
+    fun `a denied token is a 403 with its reason`() {
+        val reason = "you have no access to this app; ask its administrator"
+        val denied =
+            Jwt
+                .withTokenValue("realm-token")
+                .header("alg", "RS256")
+                .issuer("https://auth.example.org/realms/peru")
+                .claim(JwtService.CLAIM_DENIED, reason)
+                .build()
+        val users = currentUser(false)
+
+        assertThatThrownBy {
+            mono { users.require() }
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(JwtAuthenticationToken(denied, emptyList())))
+                .block()
+        }.isInstanceOf(ForbiddenException::class.java)
+            .hasMessage(reason)
+    }
 }

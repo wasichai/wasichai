@@ -77,5 +77,8 @@ class JwtService(
         const val CLAIM_EMAIL = "email"
         const val CLAIM_ROLES = "roles"
         const val CLAIM_SERVICE_ACCOUNT = "service_account"
+
+        // oidc mode: a realm person the app turns away. the reason; CurrentUser.require() answers 403 with it
+        const val CLAIM_DENIED = "wasichai_denied"
     }
 }
