@@ -121,3 +121,4 @@ supersedes it and says so in its status line.
 - [ADR-081: Models an app declares in code, ensured by the platform](0081-models-an-app-declares-in-code.md)
 - [ADR-082: A read-only field limits people, not the platform](0082-a-read-only-field-limits-people-not-the-platform.md)
 - [ADR-083: An app mounts core's record screens in its own module](0083-an-app-mounts-cores-record-screens-in-its-own-module.md)
+- [ADR-084: People sign in through the domain's identity provider; each app keeps their permissions](0084-people-sign-in-through-the-domains-identity-provider.md)
