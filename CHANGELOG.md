@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/wasichai/wasichai/compare/v2.0.0...v2.1.0) (2026-11-16)
+
+
+### Features
+
+* **core:** people sign in through the domain's Keycloak realm (oidc mode) ([#184](https://github.com/wasichai/wasichai/issues/184)) ([aa552ad](https://github.com/wasichai/wasichai/commit/aa552ad17432d9fc427260b5769bfa334c068dd7))
+
 ## [2.0.0](https://github.com/wasichai/wasichai/compare/v1.10.0...v2.0.0) (2026-11-14)
 
 
