@@ -1,6 +1,6 @@
 # ADR-084: People sign in through the domain's identity provider; each app keeps their permissions
 
-**Status**: proposed · 2026-11-16 · amends [ADR-010](0010-own-jwt.md)
+**Status**: accepted · 2026-11-16 · amends [ADR-010](0010-own-jwt.md)
 
 ## Context
 

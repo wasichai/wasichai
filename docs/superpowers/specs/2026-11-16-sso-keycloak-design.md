@@ -1,6 +1,6 @@
 # Single sign-on with Keycloak: design
 
-**Status:** proposed 2026-11-16. **Scope:** wasichai (core), wasichai-ui (`@wasichai/core`), and the platform in
+**Status:** approved 2026-11-16. **Scope:** wasichai (core), wasichai-ui (`@wasichai/core`), and the platform in
 wasichai-infrastructure (one Keycloak client per project); caja, srtm and catastro only change configuration. **ADR:**
 [ADR-084](../../adr/0084-people-sign-in-through-the-domains-identity-provider.md), which amends
 [ADR-010](../../adr/0010-own-jwt.md).
