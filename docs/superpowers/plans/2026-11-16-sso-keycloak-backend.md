@@ -113,7 +113,8 @@ properties.
 - [ ] **Step 1: Write the failing test** — `a user without a password cannot sign in locally, and gets the same answer as a wrong password`:
   insert a user with `password_hash NULL` through `db`, `POST /api/auth/login` with any password → `401`, body equal
   to the one a wrong password gets (`Invalid email or password`).
-- [ ] **Step 2: Run it, expect FAIL** (the insert fails on `NOT NULL`) — `./gradlew :wasichai-integration-tests:coreApiIt --tests '*PasswordlessUserLoginTest*'`
+- [ ] **Step 2: Run it, expect FAIL** (the insert fails on `NOT NULL`):
+  `./gradlew :wasichai-integration-tests:coreApiIt --tests '*PasswordlessUserLoginTest*'`
 - [ ] **Step 3: Implement** the migration (`ALTER TABLE ${schema}.users ALTER COLUMN password_hash DROP NOT NULL`,
   the column, the partial unique index; follow V17's placeholders) and the null check in `authenticate`, before
   BCrypt.
@@ -181,7 +182,8 @@ properties.
     and `suspend fun roles(userId: UUID): List<String>` (cached per user for `rolesCache`, same shape as
     `TokenRevocation`'s cache). `resolve` finds by `(organization_id, external_subject)`; else, when `emailVerified`,
     by `(organization_id, lower(email))` among rows with `external_subject IS NULL`, and writes the subject; then
-    updates `email`/`display_name` when the token's differ. `data class RealmUser(val id: UUID, val organizationId: UUID, val email: String, val enabled: Boolean)`.
+    updates `email`/`display_name` when the token's differ.
+    `data class RealmUser(val id: UUID, val organizationId: UUID, val email: String, val enabled: Boolean)`.
   - `class RealmPrincipalConverter(realmIssuer: String, users: RealmUsers) : Converter<Jwt, Mono<AbstractAuthenticationToken>>`
     — for a realm token returns a `JwtAuthenticationToken` over a new `Jwt` with the same token value, headers, `iat`
     and `exp`, and claims `sub` = `users.id`, `org`, `email`, `roles` (the names `JwtService` already uses); for any
