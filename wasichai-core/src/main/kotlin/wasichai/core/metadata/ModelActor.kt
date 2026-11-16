@@ -78,12 +78,14 @@ internal object ModelOwner {
 
     // the platform inside run, else the caller, who must hold MANAGE_METADATA
     suspend fun actor(currentUser: CurrentUser): ModelActor {
-        currentCoroutineContext()[ReactorContext]?.context?.getOrDefault<Run>(KEY, null)?.let {
-            return ModelActor(it.organizationId, null, it.model)
-        }
+        platform()?.let { (organizationId, model) -> return ModelActor(organizationId, null, model) }
         val user = currentUser.requireWithPermission(Actions.MANAGE_METADATA)
         return ModelActor(user.organizationId, user, null)
     }
+
+    // the run's organization and model, or null outside run. the role methods of admin ask it (ADR-085)
+    suspend fun platform(): Pair<UUID, String>? =
+        currentCoroutineContext()[ReactorContext]?.context?.getOrDefault<Run>(KEY, null)?.let { it.organizationId to it.model }
 
     fun source(model: String): String = "model:$model"
 }

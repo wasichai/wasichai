@@ -43,6 +43,7 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
 import wasichai.core.metadata.DeclaredModel
+import wasichai.core.metadata.DeclaredModelRoles
 import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.FieldTypeRegistry
 import wasichai.core.metadata.MetadataChanges
@@ -122,7 +123,7 @@ class WasichaiDataAutoConfiguration {
     ): ClusterLock = ClusterLock(db) { TransactionalOperator.create(transactionManager.getObject()) }
 
     // the app's declared models, ensured in every tenant once the app is ready and in every tenant provisioned
-    // (ADR-081). none declared: nothing runs
+    // (ADR-081). none declared: nothing runs. their roles go through admin's DeclaredRoles (ADR-085)
     @Bean
     @ConditionalOnMissingBean
     fun declaredModels(
@@ -136,7 +137,8 @@ class WasichaiDataAutoConfiguration {
         relationships: RelationshipRepository,
         actions: ObjectActionRepository,
         types: FieldTypeRegistry,
-        lock: ClusterLock
+        lock: ClusterLock,
+        roles: ObjectProvider<DeclaredModelRoles>
     ): DeclaredModels =
         DeclaredModels(
             models.orderedStream().toList(),
@@ -149,7 +151,8 @@ class WasichaiDataAutoConfiguration {
             relationships,
             actions,
             types,
-            lock
+            lock,
+            roles.getIfAvailable()
         )
 
     @Bean

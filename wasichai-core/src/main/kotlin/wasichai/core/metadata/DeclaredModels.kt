@@ -5,6 +5,8 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationListener
+import wasichai.core.common.Actions
+import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.TenantDirectory
 import java.util.UUID
@@ -17,14 +19,17 @@ import java.util.UUID
  *
  * [name] owns what the model declares: it matches `^[a-z][a-z0-9_-]{0,48}$`, every object and relationship it makes
  * carries it as `declaredBy`, and its admin entries say `model:<name>`. Objects are ensured in the order given, so a
- * `RELATION` field's target comes before it; relationships and then actions once every object is there.
+ * `RELATION` field's target comes before it; relationships and then actions once every object is there; [roles]
+ * last, since their grants name objects and actions (ADR-085).
  */
 data class DeclaredModel(
     val name: String,
     val objects: List<CreateObjectRequest>,
     val relationships: List<CreateRelationshipRequest> = emptyList(),
     // object name -> the actions declared on it (ADR-042)
-    val actions: Map<String, List<ObjectActionRequest>> = emptyMap()
+    val actions: Map<String, List<ObjectActionRequest>> = emptyMap(),
+    // the roles the app's code relies on, whole (ADR-085)
+    val roles: List<DeclaredRole> = emptyList()
 )
 
 /**
@@ -68,7 +73,9 @@ class DeclaredModels(
     private val relationships: RelationshipRepository,
     private val actions: ObjectActionRepository,
     private val types: FieldTypeRegistry,
-    private val lock: ClusterLock
+    private val lock: ClusterLock,
+    // admin's role methods, behind the port metadata owns (ADR-085). null: no AdminService, and no model may declare roles
+    private val roles: DeclaredModelRoles? = null
 ) : ApplicationListener<ApplicationReadyEvent> {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -83,6 +90,36 @@ class DeclaredModels(
             ?.let { error("two declared models are named '$it'") }
         owners("object") { model -> model.objects.map { it.name } }
         owners("relationship") { model -> model.relationships.map { it.name } }
+        models.forEach { model -> model.roles.forEach { checkRole(model.name, it) } }
+        owners("role", { it.trim().uppercase() }) { model -> model.roles.map { it.name } }
+        if (roles == null) {
+            models.firstOrNull { it.roles.isNotEmpty() }?.let {
+                error("declared model '${it.name}' declares roles, and this context has no DeclaredModelRoles (no AdminService) to ensure them")
+            }
+        }
+    }
+
+    // tenant administration is the administrator's to hand out, never the app's code (ADR-085)
+    private fun checkRole(
+        model: String,
+        role: DeclaredRole
+    ) {
+        val name = role.name.trim().uppercase()
+        require(ROLE_NAME.matches(name)) { "declared role '$name' of model '$model' must match ${ROLE_NAME.pattern}" }
+        require(name != AuthenticatedUser.ADMIN_ROLE) { "declared model '$model' cannot declare ${AuthenticatedUser.ADMIN_ROLE}: it is the tenant's own" }
+        require(role.label.isNotBlank()) { "declared role '$name' of model '$model' needs a label" }
+        role.permissions.forEach { entry ->
+            val action = entry.action.trim().uppercase()
+            require(!(entry.allowed && action in ADMINISTRATION)) { "declared role '$name' of model '$model' cannot grant $action" }
+            // a declared action lives on its object: one tenant-wide could never be held
+            require(action in Actions.BUILT_IN || !entry.objectName.isNullOrBlank()) {
+                "declared role '$name' of model '$model' grants '$action' on every object, which is no built-in action"
+            }
+            // tenant-wide by nature (ADR-055): the role methods refuse it on an object
+            require(action != Actions.MANAGE_TENANTS || entry.objectName.isNullOrBlank()) {
+                "declared role '$name' of model '$model' names an object for ${Actions.MANAGE_TENANTS}, which takes none"
+            }
+        }
     }
 
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
@@ -143,11 +180,12 @@ class DeclaredModels(
 
     private fun owners(
         kind: String,
+        normalize: (String) -> String = { it.trim().lowercase() },
         names: (DeclaredModel) -> List<String>
     ) {
         val owner = hashMapOf<String, String>()
         models.forEach { model ->
-            names(model).map { it.trim().lowercase() }.forEach { name ->
+            names(model).map(normalize).forEach { name ->
                 owner.put(name, model.name)?.let { other -> error("$kind '$name' is declared by both '$other' and '${model.name}'") }
             }
         }
@@ -166,6 +204,12 @@ class DeclaredModels(
             model.objects.forEach { ensureObject(it) }
             model.relationships.forEach { ensureRelationship(it) }
             model.actions.forEach { (objectName, declared) -> declared.forEach { ensureAction(objectName, it) } }
+            // last: their grants name the objects and actions above (ADR-085)
+            roles?.ensure(organizationId, model.name, model.roles)?.let {
+                created += it.created
+                updated += it.updated
+                incompatible += it.incompatible
+            }
             return DeclaredModelReport(model.name, organizationId, created.toList(), updated.toList(), incompatible.toList())
         }
 
@@ -375,5 +419,9 @@ class DeclaredModels(
 
     companion object {
         val NAME = Regex("^[a-z][a-z0-9_-]{0,48}$")
+
+        // AdminService's role name
+        private val ROLE_NAME = Regex("^[A-Z][A-Z0-9_]{1,48}$")
+        private val ADMINISTRATION = setOf(Actions.MANAGE_ORGANIZATION, Actions.MANAGE_TENANTS)
     }
 }

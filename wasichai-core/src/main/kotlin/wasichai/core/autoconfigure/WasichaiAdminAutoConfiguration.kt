@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.crypto.password.PasswordEncoder
 import wasichai.core.admin.AdminService
+import wasichai.core.admin.DeclaredRoles
 import wasichai.core.admin.OrgUnitController
 import wasichai.core.admin.OrgUnitService
 import wasichai.core.admin.RoleAdminController
@@ -18,7 +19,9 @@ import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.OrgUnitDirectory
 import wasichai.core.identity.PasswordPolicy
 import wasichai.core.identity.TokenRevocation
+import wasichai.core.metadata.CustomFieldRepository
 import wasichai.core.metadata.CustomObjectRepository
+import wasichai.core.metadata.DeclaredModelRoles
 import wasichai.core.metadata.DeclaredModels
 import wasichai.core.metadata.MetadataChanges
 import wasichai.core.metadata.MetadataService
@@ -48,6 +51,16 @@ class WasichaiAdminAutoConfiguration {
         revocation: TokenRevocation,
         identity: WasichaiIdentityProperties
     ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit, passwordPolicy, revocation, identity.isOidc)
+
+    // how DeclaredModels reaches the role methods above: metadata may not call admin (ADR-085)
+    @Bean
+    @ConditionalOnMissingBean
+    fun declaredModelRoles(
+        admin: AdminService,
+        objects: CustomObjectRepository,
+        fields: CustomFieldRepository,
+        actions: ObjectActionRepository
+    ): DeclaredModelRoles = DeclaredRoles(admin, objects, fields, actions)
 
     @Bean
     @ConditionalOnMissingBean
