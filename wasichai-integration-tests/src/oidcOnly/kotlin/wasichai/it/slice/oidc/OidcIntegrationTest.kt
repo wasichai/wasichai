@@ -48,6 +48,8 @@ import java.util.UUID
         "wasichai.security.oidc.issuer-uri=${OidcIntegrationTest.ISSUER}",
         "wasichai.security.oidc.client-id=${OidcIntegrationTest.CLIENT_ID}",
         "wasichai.security.oidc.roles-cache=0s",
+        // service accounts' tokens are the app's own: revoked ones must be refused beside the realm
+        "wasichai.security.jwt.revocation=true",
         "server.address=127.0.0.1"
     ]
 )

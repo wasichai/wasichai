@@ -10,9 +10,12 @@ a Keycloak realm signs people in and the app only checks its tokens. With `oidc`
 `<issuer>/protocol/openid-connect/certs` and `roles-cache` (`5s`, `0` for none) bounds how stale a person's roles can be.
 A realm token (RS256, `iss`, `aud`, timestamps checked) names exactly one organization in its `organization` claim, whose
 alias is `organizations.slug`; the person enters only with a `users` row of that organization, linked by `sub`
-(`users.external_subject`, migration V22) or, on the first sign-in, by the verified email. Roles still come from
-`user_roles`. The app's own tokens (service accounts) keep working beside the realm's; any other `iss` is a `401`. A
-person the app does not know gets a `403` with the reason, from the chain, before any endpoint. In `oidc`,
+(`users.external_subject`, migration V22) or, on the first sign-in, by the verified email (lower-cased; never a service
+account's backing row). Roles still come from `user_roles`. `/api/users` answers carry `linked`, and
+`PUT /api/users/{id}` takes `unlink: true` (oidc only, `400` in `local`) so a person whose realm account was recreated
+links again by email. `wasichai.security.jwt.issuer` equal to `issuer-uri` refuses to boot. The app's own tokens
+(service accounts) keep working beside the realm's; any other `iss` is a `401`. A person the app does not know gets a
+`403` with the reason, from the chain, before any endpoint. In `oidc`,
 `POST /api/auth/login` and `/logout` answer `404`, users and organization administrators are created without a password
 (and a password in the request is a `400`), `password_hash` may be null, and `wasichai.seed.dev=true` refuses to boot.
 [ADR-084](adr/0084-people-sign-in-through-the-domains-identity-provider.md), [authentication](security/authentication.md).

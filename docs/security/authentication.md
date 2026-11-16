@@ -109,8 +109,19 @@ other `iss` is `401`.
 **Who gets in.** The token's `organization` claim must name exactly one organization; its alias is `organizations.slug`.
 The person enters only with a `users` row of that organization: found by `users.external_subject` (the token's `sub`),
 or, on the first sign-in, by `lower(email)` when `email_verified` is `true` and the row has no `external_subject` yet,
-which is then linked (an invited person). The email follows the token only when it is verified. Roles come from
-`user_roles`, never from the realm; the app sees `sub` as `users.id`, as with a local token.
+which is then linked (an invited person). The email is compared and stored in lower case, and follows the token only
+when it is verified. A service account's backing row is never linked. Roles come from `user_roles`, never from the
+realm; the app sees `sub` as `users.id`, as with a local token.
+
+**Re-linking.** A person whose realm account was deleted and created again has a new `sub`, which no longer finds their
+row; the row is already linked, so the email does not either, and they get `403`. `GET /api/users` shows `linked`
+(`external_subject` is set). An administrator sends `PUT /api/users/{id}` with `{"unlink": true}`: the link is
+forgotten (audited as `unlinked`), the user's revocation marker moves, and the next sign-in with the verified email
+links the new `sub`. The old account's tokens then find nothing: `403`. In `local` mode `unlink` is `400`.
+
+**Switching an app from `local`.** Tokens the app issued to people before the switch stay valid until they expire,
+because the app's own issuer is still accepted for service accounts. Rotate `WASICHAI_JWT_SECRET` when switching; service
+accounts then fetch a new token. `wasichai.security.jwt.issuer` must differ from `issuer-uri`, or boot fails.
 
 **Why not.** A person who may not enter is authenticated but refused with `403`, whose `detail` says why: no
 organization in the token, several organizations, an organization this app does not have, no access (no row, or an

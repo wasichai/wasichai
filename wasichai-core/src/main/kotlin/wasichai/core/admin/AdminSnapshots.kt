@@ -12,11 +12,17 @@ internal object AdminSnapshots {
             "orgUnits" to user.orgUnits
         )
 
-    // a password is never stored, not even hashed: only that it changed
+    // a password is never stored, not even hashed: only that it changed. same for the realm's subject on an unlink
     fun userUpdated(
         user: AdminUserResponse,
-        passwordChanged: Boolean
-    ): Map<String, Any?> = if (passwordChanged) user(user) + ("passwordChanged" to true) else user(user)
+        passwordChanged: Boolean,
+        unlinked: Boolean = false
+    ): Map<String, Any?> {
+        var state = user(user)
+        if (passwordChanged) state = state + ("passwordChanged" to true)
+        if (unlinked) state = state + ("unlinked" to true)
+        return state
+    }
 
     // the grants ride along, so a deleted role's entry says what it could do
     fun role(role: RoleResponse): Map<String, Any?> =

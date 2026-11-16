@@ -57,6 +57,10 @@ Signing in and out ([ADR-059](../adr/0059-token-revocation-login-limits-and-pass
   before it), and `password` on `POST /api/users` and `PUT /api/users/{id}` and `adminPassword` on `POST
   /api/organizations` are refused with `400`. In `local` they are required: a missing one is `400` `must not be blank`,
   reported after other field errors. See [Authentication](../security/authentication.md).
+- **Linked users.** Every `/api/users` answer carries `linked`: `true` when a realm account is linked to the user
+  (always `false` in `local`). With `oidc`, `PUT /api/users/{id}` with `{ "unlink": true }` forgets that link, so a
+  person whose realm account was recreated is linked again on the next sign-in with the verified email; it signs the
+  user out like disabling and is audited as `unlinked`. In `local`, `unlink` (any value) is `400` on `unlink`.
 - **Logout.** `POST /api/auth/logout` takes the caller's token and answers `204`. With
   `wasichai.security.jwt.revocation=true` every token the caller was issued until then is refused from that moment
   (`401`); a new sign-in works at once. With revocation off (the default) it answers the same and the token keeps
@@ -206,7 +210,7 @@ tenant's, or a service account's backing user is `404`, as on the other user rou
 
 ```json
 {
-  "id": "…", "email": "ana@muni.pe", "displayName": "Ana", "enabled": true, "roles": ["FISCALIZADOR"],
+  "id": "…", "email": "ana@muni.pe", "displayName": "Ana", "enabled": true, "linked": false, "roles": ["FISCALIZADOR"],
   "orgUnits": ["SGFT"], "createdAt": "2026-10-06T09:00:00Z"
 }
 ```

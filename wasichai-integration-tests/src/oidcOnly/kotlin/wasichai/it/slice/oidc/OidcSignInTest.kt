@@ -248,16 +248,15 @@ class OidcSignInTest : OidcIntegrationTest() {
             .isNotFound
     }
 
-    @Test
-    fun `a service account of the app still gets and uses its token`() {
-        val name = uniqueName("svc").lowercase()
+    // a new account and a token of its own
+    private fun serviceAccount(admin: String): Pair<JsonNode, String> {
         val account =
             read(
                 client
                     .post()
                     .uri("/api/service-accounts")
-                    .header(HttpHeaders.AUTHORIZATION, admin())
-                    .bodyValue(mapOf("name" to name))
+                    .header(HttpHeaders.AUTHORIZATION, admin)
+                    .bodyValue(mapOf("name" to uniqueName("svc").lowercase()))
                     .exchange()
                     .expectStatus()
                     .isCreated
@@ -278,7 +277,97 @@ class OidcSignInTest : OidcIntegrationTest() {
                     .returnResult()
                     .responseBody
             ).get("token").asString()
+        return account to "Bearer $token"
+    }
 
-        assertThat(me("Bearer $token").get("serviceAccount").asString()).isEqualTo(name)
+    @Test
+    fun `a service account of the app still gets and uses its token`() {
+        val (account, token) = serviceAccount(admin())
+
+        assertThat(me(token).get("serviceAccount").asString()).isEqualTo(account.get("name").asString())
+    }
+
+    @Test
+    fun `a revoked service account token is refused beside the realm`() {
+        val admin = admin()
+        val (account, token) = serviceAccount(admin)
+        me(token)
+
+        // disabling moves the account's marker (ADR-059): the token it already holds stops at once
+        client
+            .put()
+            .uri("/api/service-accounts/${account.get("id").asString()}")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("enabled" to false))
+            .exchange()
+            .expectStatus()
+            .isOk
+
+        client
+            .get()
+            .uri("/api/auth/me")
+            .header(HttpHeaders.AUTHORIZATION, token)
+            .exchange()
+            .expectStatus()
+            .isUnauthorized
+    }
+
+    private fun listed(
+        admin: String,
+        id: UUID
+    ): JsonNode {
+        val users =
+            read(
+                client
+                    .get()
+                    .uri("/api/users")
+                    .header(HttpHeaders.AUTHORIZATION, admin)
+                    .exchange()
+                    .expectStatus()
+                    .isOk
+                    .expectBody(String::class.java)
+                    .returnResult()
+                    .responseBody
+            )
+        return (0 until users.size()).map { users.get(it) }.single { it.get("id").asString() == id.toString() }
+    }
+
+    @Test
+    fun `a person whose realm account was recreated is unlinked, then linked again by email`() {
+        val admin = admin()
+        val email = address("recreated")
+        val userId = invite(email)
+        val oldSubject = UUID.randomUUID().toString()
+        assertThat(me(realmToken(oldSubject, email)).get("userId").asString()).isEqualTo(userId.toString())
+        assertThat(listed(admin, userId).get("linked").asBoolean()).isTrue()
+
+        client
+            .put()
+            .uri("/api/users/$userId")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .bodyValue(mapOf("unlink" to true))
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.linked")
+            .isEqualTo(false)
+        assertThat(listed(admin, userId).get("linked").asBoolean()).isFalse()
+
+        // the realm's new account, same verified address: the same row
+        val newSubject = UUID.randomUUID().toString()
+        assertThat(me(realmToken(newSubject, email)).get("userId").asString()).isEqualTo(userId.toString())
+        assertThat(listed(admin, userId).get("linked").asBoolean()).isTrue()
+        // the old account no longer reaches it
+        client
+            .get()
+            .uri("/api/auth/me")
+            .header(HttpHeaders.AUTHORIZATION, realmToken(oldSubject, email))
+            .exchange()
+            .expectStatus()
+            .isForbidden
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo(notInvited)
     }
 }
