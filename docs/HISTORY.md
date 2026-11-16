@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-16 — The UI signs people in through the domain's identity provider
+
+`@wasichai/core` reads `GET /api/auth/config` at start: `local` (or an older backend without the route) keeps the login
+form; `oidc` signs people in through the domain's Keycloak realm with `oidc-client-ts` (Authorization Code with PKCE,
+scope `openid organization`, `/auth/callback`), keeps the session per tab in `sessionStorage`, renews the access token
+through one shared refresh, retries a `401` once after a refresh, and signs out at the realm. The signed-in user comes
+from `/api/auth/me`; a person the app has not invited sees the backend's reason on a full-page screen. The users screen
+in `oidc` invites without a password, shows whether each person is linked and offers «Desvincular» for an account the
+realm recreated. The API client takes a `TokenSource` (`setTokenSource`) and `fetchAuthConfig` is exported. Local mode
+is unchanged.
+
 ## 2026-11-16 — People sign in through the domain's identity provider (`oidc`)
 
 `wasichai.security.identity` is `local` (the default: passwords and tokens of the app, nothing changes) or `oidc`, where
