@@ -21,7 +21,8 @@ data class CreateOrganizationRequest(
     @field:NotBlank val name: String,
     @field:NotBlank val slug: String,
     @field:NotBlank @field:Email val adminEmail: String,
-    @field:NotBlank val adminPassword: String,
+    // required in local mode, refused in oidc: the service decides, it knows the mode
+    val adminPassword: String? = null,
     val adminDisplayName: String? = null
 )
 

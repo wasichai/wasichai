@@ -28,6 +28,7 @@ import wasichai.core.organization.OrganizationController
 import wasichai.core.organization.OrganizationRepository
 import wasichai.core.organization.OrganizationService
 import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.WasichaiIdentityProperties
 import wasichai.core.platform.WasichaiSchemas
 
 // users, service accounts, roles, permissions, organizational units and the tenant itself
@@ -44,8 +45,9 @@ class WasichaiAdminAutoConfiguration {
         schemas: WasichaiSchemas,
         audit: AdminAudit,
         passwordPolicy: PasswordPolicy,
-        revocation: TokenRevocation
-    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit, passwordPolicy, revocation)
+        revocation: TokenRevocation,
+        identity: WasichaiIdentityProperties
+    ): AdminService = AdminService(db, metadata, actions, passwordEncoder, currentUser, schemas, audit, passwordPolicy, revocation, identity.isOidc)
 
     @Bean
     @ConditionalOnMissingBean
@@ -75,9 +77,23 @@ class WasichaiAdminAutoConfiguration {
         audit: AdminAudit,
         passwordPolicy: PasswordPolicy,
         changes: MetadataChanges,
-        declaredModels: DeclaredModels
+        declaredModels: DeclaredModels,
+        identity: WasichaiIdentityProperties
     ): OrganizationService =
-        OrganizationService(organizations, objects, schema, passwordEncoder, currentUser, db, schemas, audit, passwordPolicy, changes, declaredModels)
+        OrganizationService(
+            organizations,
+            objects,
+            schema,
+            passwordEncoder,
+            currentUser,
+            db,
+            schemas,
+            audit,
+            passwordPolicy,
+            changes,
+            declaredModels,
+            identity.isOidc
+        )
 
     @Bean
     @ConditionalOnMissingBean

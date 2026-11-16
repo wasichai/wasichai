@@ -11,7 +11,8 @@ import java.time.Instant
 data class CreateUserRequest(
     @field:NotBlank @field:Email val email: String,
     @field:NotBlank val displayName: String,
-    @field:NotBlank val password: String,
+    // required in local mode, refused in oidc: the service decides, it knows the mode
+    val password: String? = null,
     val roles: List<String> = emptyList()
 )
 
