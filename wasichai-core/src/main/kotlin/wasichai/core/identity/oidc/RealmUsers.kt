@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import org.springframework.r2dbc.core.DatabaseClient
+import wasichai.core.identity.RoleQueries
 import wasichai.core.platform.Rows
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Clock
@@ -41,6 +42,9 @@ open class RealmUsers(
 
     private val cache = ConcurrentHashMap<UUID, Entry>()
 
+    // same query as the local login's roles
+    private val roleQueries = RoleQueries(db, schemas)
+
     // the realm's organization alias is the slug
     open suspend fun organizationIdBySlug(slug: String): UUID? =
         db
@@ -75,21 +79,7 @@ open class RealmUsers(
     open suspend fun roles(userId: UUID): List<String> {
         val entry = cache[userId]
         if (entry != null && Instant.now(clock).isBefore(entry.loadedAt.plus(rolesCache))) return entry.roles
-        val roles =
-            db
-                .sql(
-                    """
-                    SELECT r.name
-                    FROM ${schemas.metadata}.user_roles ur
-                    JOIN ${schemas.metadata}.roles r ON r.id = ur.role_id
-                    WHERE ur.user_id = :userId
-                    ORDER BY r.name
-                    """.trimIndent()
-                ).bind("userId", userId)
-                .map { row, _ -> Rows.string(row, "name") }
-                .all()
-                .asFlow()
-                .toList()
+        val roles = roleQueries.roleNamesOf(userId)
         remember(userId, Entry(roles, Instant.now(clock)))
         return roles
     }
