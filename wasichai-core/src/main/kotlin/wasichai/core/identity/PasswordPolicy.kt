@@ -58,3 +58,22 @@ class ConfiguredPasswordPolicy(
             if (properties.notEqualEmail && password.trim().equals(user.email.trim(), ignoreCase = true)) add("must not be the email address")
         }
 }
+
+// a password in a request, by identity mode. local: required, as @NotBlank did, same answer.
+// oidc: passwords live in the realm, any given is a 400 on the field.
+object Passwords {
+    fun forMode(
+        oidc: Boolean,
+        password: String?,
+        field: String
+    ): String? {
+        if (oidc) {
+            if (password != null) throw inRealm(field)
+            return null
+        }
+        if (password.isNullOrBlank()) throw ValidationException("Request validation failed", field, "must not be blank")
+        return password
+    }
+
+    fun inRealm(field: String): ValidationException = ValidationException("Request validation failed", field, "passwords live in the identity provider")
+}

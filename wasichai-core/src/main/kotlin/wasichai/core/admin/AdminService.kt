@@ -19,6 +19,7 @@ import wasichai.core.identity.AdminOperation
 import wasichai.core.identity.AuthenticatedUser
 import wasichai.core.identity.CurrentUser
 import wasichai.core.identity.PasswordPolicy
+import wasichai.core.identity.Passwords
 import wasichai.core.identity.TokenRevocation
 import wasichai.core.identity.UserInfo
 import wasichai.core.metadata.MetadataService
@@ -43,7 +44,9 @@ class AdminService(
     private val schemas: WasichaiSchemas,
     private val audit: AdminAudit,
     private val passwordPolicy: PasswordPolicy,
-    private val revocation: TokenRevocation
+    private val revocation: TokenRevocation,
+    // oidc: passwords live in the realm. a user is created without one, and one given is refused
+    private val oidc: Boolean = false
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -62,9 +65,11 @@ class AdminService(
 
     @Transactional
     suspend fun createUser(request: CreateUserRequest): AdminUserResponse {
+        // before the permission check, where @NotBlank used to answer
+        val password = Passwords.forMode(oidc, request.password, "password")
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val email = request.email.trim().lowercase()
-        requirePassword(request.password, UserInfo(email, request.displayName.trim(), admin.organizationId))
+        password?.let { requirePassword(it, UserInfo(email, request.displayName.trim(), admin.organizationId)) }
         if (findUserByEmail(admin.organizationId, email) != null) {
             throw ConflictException("User '$email' already exists")
         }
@@ -79,7 +84,7 @@ class AdminService(
             ).bind("id", id)
             .bind("organizationId", admin.organizationId)
             .bind("email", email)
-            .bind("hash", passwordEncoder.encode(request.password) as String)
+            .bindNullable("hash", password?.let { passwordEncoder.encode(it) })
             .bind("displayName", request.displayName.trim())
             .fetch()
             .rowsUpdated()
@@ -95,6 +100,7 @@ class AdminService(
         id: UUID,
         request: UpdateUserRequest
     ): AdminUserResponse {
+        if (oidc && request.password != null) throw Passwords.inRealm("password")
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
         val before = userOrFail(admin.organizationId, id)
         // locking yourself out is never a valid administration step

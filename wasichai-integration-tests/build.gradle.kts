@@ -43,6 +43,7 @@ val fullAppSuites =
 val sliceSuites: Map<String, List<String>> =
     mapOf(
         "coreOnly" to emptyList(),
+        "oidcOnly" to emptyList(),
         "viewsOnly" to listOf("views"),
         "formsOnly" to listOf("forms"),
         "pagesOnly" to listOf("pages"),
