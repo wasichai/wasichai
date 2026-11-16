@@ -92,8 +92,10 @@ class IssuerRoutingJwtDecoderTest {
     fun `a realm token for another client of the realm is refused`() {
         StepVerifier
             .create(router.decode(realmToken(listOf("srtm"))))
-            .expectError(BadJwtException::class.java)
-            .verify()
+            .expectErrorSatisfies {
+                assertThat(it).isInstanceOf(JwtValidationException::class.java)
+                assertThat(it.message).contains("aud").contains("caja")
+            }.verify()
     }
 
     @Test
