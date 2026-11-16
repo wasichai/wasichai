@@ -63,13 +63,20 @@ open class RealmUsers(
         emailVerified: Boolean,
         displayName: String?
     ): RealmUser? {
+        // lower case, as every other writer of users.email: the per-organization unique index is case sensitive
+        val address =
+            email
+                ?.trim()
+                ?.lowercase()
+                ?.ifBlank { null }
+                ?.takeIf { emailVerified }
         val found =
             bySubject(organizationId, subject)
-                ?: (if (emailVerified && !email.isNullOrBlank()) link(organizationId, subject, email) else null)
+                ?: address?.let { link(organizationId, subject, it) }
                 ?: return null
         var user = found.user
-        if (emailVerified && !email.isNullOrBlank() && email != user.email && updateEmail(user, email)) {
-            user = user.copy(email = email)
+        if (address != null && address != user.email && updateEmail(user, address)) {
+            user = user.copy(email = address)
         }
         if (!displayName.isNullOrBlank() && displayName != found.displayName) updateDisplayName(user, displayName)
         return user
@@ -98,7 +105,8 @@ open class RealmUsers(
             .one()
             .awaitFirstOrNull()
 
-    // two unlinked rows with the same address in another case: no guessing, not invited
+    // two unlinked rows with the same address in another case: no guessing, not invited.
+    // a service account's backing row is never a person's: never linked
     private suspend fun link(
         organizationId: UUID,
         subject: String,
@@ -107,8 +115,11 @@ open class RealmUsers(
         val candidates =
             db
                 .sql(
-                    "SELECT id FROM ${schemas.metadata}.users " +
-                        "WHERE organization_id = :organizationId AND external_subject IS NULL AND lower(email) = lower(:email)"
+                    """
+                    SELECT u.id FROM ${schemas.metadata}.users u
+                    WHERE u.organization_id = :organizationId AND u.external_subject IS NULL AND lower(u.email) = :email
+                    AND NOT EXISTS (SELECT 1 FROM ${schemas.metadata}.service_accounts s WHERE s.id = u.id)
+                    """.trimIndent()
                 ).bind("organizationId", organizationId)
                 .bind("email", email)
                 .map { row, _ -> Rows.uuid(row, "id") }
