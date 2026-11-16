@@ -25,7 +25,8 @@ The signing key is a `WasichaiJwtKey` bean, which wraps the `SecretKey` in its o
 app's unrelated `SecretKey` bean (some other encryption key, say) can never become the JWT key by
 accident. An app that wants a different key declares its own `WasichaiJwtKey` bean.
 
-Moving to OIDC later replaces the decoder and the login endpoint; the permission model does not move.
+With `wasichai.security.identity=oidc` a Keycloak realm signs people in instead (see [Signing in through the domain's
+identity provider](#signing-in-through-the-domains-identity-provider)); the permission model does not move.
 
 ## Revocation, attempt limits and password policy
 
@@ -89,6 +90,42 @@ on `password` (`adminPassword` when provisioning) of a `400`. The default, `Conf
 `wasichai.security.password.*`: `min-length` (8), `require-uppercase`, `require-lowercase`, `require-digit`,
 `require-symbol` and `not-equal-email` (all `false`). Unconfigured it is the one rule there always was, with the same
 answer. Service account secrets are generated, not chosen, and are not judged. Expiry is out of scope.
+
+## Signing in through the domain's identity provider
+
+`wasichai.security.identity` is `local` (the default, everything above) or `oidc`
+([ADR-084](../adr/0084-people-sign-in-through-the-domains-identity-provider.md)). With `oidc` the app signs nobody in:
+a Keycloak realm does, and the app checks its tokens. It needs `wasichai.security.oidc.issuer-uri`, the realm's issuer
+exactly and without a trailing slash, and `wasichai.security.oidc.client-id`, which is also the audience (`aud`) a realm
+token must carry; boot fails without them. `wasichai.security.oidc.jwk-set-uri` defaults to
+`<issuer>/protocol/openid-connect/certs`. `wasichai.security.oidc.roles-cache` (`5s`, `0` for no cache) is how long a
+person's roles are kept per user: the longest a role change takes to show.
+
+**Two issuers.** The decoder routes by `iss`. A realm token is accepted with `iss` equal to `issuer-uri`, `aud` holding
+`client-id`, signed RS256 and with valid timestamps. A token of the app itself (`wasichai.security.jwt.issuer`, HS256,
+revocation when on) keeps today's checks: that is how service accounts go on working with `POST /api/auth/token`. Any
+other `iss` is `401`.
+
+**Who gets in.** The token's `organization` claim must name exactly one organization; its alias is `organizations.slug`.
+The person enters only with a `users` row of that organization: found by `users.external_subject` (the token's `sub`),
+or, on the first sign-in, by `lower(email)` when `email_verified` is `true` and the row has no `external_subject` yet,
+which is then linked (an invited person). The email follows the token only when it is verified. Roles come from
+`user_roles`, never from the realm; the app sees `sub` as `users.id`, as with a local token.
+
+**Why not.** A person who may not enter is authenticated but refused with `403`, whose `detail` says why: no
+organization in the token, several organizations, an organization this app does not have, no access (no row, or an
+unverified email), or a disabled account. The converter marks such a token with the claim `wasichai_denied`, and the
+chain refuses it before any endpoint.
+
+**What `oidc` turns off.** `POST /api/auth/login` and `POST /api/auth/logout` answer `404` (the realm signs in and
+out); but validation and authentication run before the handler, so a call may answer `400`, `401` or `403` before its
+`404`. `POST /api/users` and `POST /api/organizations` create people without a password, and a `password` or
+`adminPassword` in the request is `400`; `users.password_hash` may be null. `POST /api/auth/token` is unchanged, and
+`GET /api/auth/config` (public) tells the UI which mode it is in.
+
+An app that declares its own `securityFilterChain` replaces core's, so it must keep the denial guard: refuse
+(`403`) a token carrying `wasichai_denied`, as core's `DeniedRealmAccess` does. Without it `CurrentUser.require()`
+refuses such a token too, so endpoints that call it stay safe, but one that does not would let a denied person in.
 
 ## Service accounts
 
@@ -253,7 +290,7 @@ rule `MANAGE_METADATA` on its object, and app code publishes as it sees fit thro
 
 Core declares one `SecurityWebFilterChain` at `@Order(0)`. Spring Boot's reactive resource-server auto-configuration
 always adds a chain of its own, whatever beans exist, so wasichai's must win on order rather than by being the only
-one. Its public paths are `/api/auth/login`, `/api/auth/token`, `/api/health`, `/actuator/health/**` and every `OPTIONS`
+one. Its public paths are `/api/auth/login`, `/api/auth/token`, `/api/auth/config`, `/api/health`, `/actuator/health/**` and every `OPTIONS`
 request.
 Everything else needs a valid token, `POST /api/auth/logout` included. Core's chain is `@ConditionalOnMissingBean`: an app that declares its own
 `SecurityWebFilterChain` bean replaces core's chain entirely, public paths and CORS included. A module that needs
@@ -281,4 +318,5 @@ Wasichai runs DDL from user-supplied metadata, so:
 ## Development seed
 
 `admin@wasichai.local` / `admin`, hashed through pgcrypto at migration time so no hash is committed.
-It exists only with `wasichai.seed.dev=true` (ADR-031 D6); remove or leave that flag unset anywhere else.
+It exists only with `wasichai.seed.dev=true` (ADR-031 D6); remove or leave that flag unset anywhere else. It makes password users, so it refuses to boot with
+`wasichai.security.identity=oidc`.
