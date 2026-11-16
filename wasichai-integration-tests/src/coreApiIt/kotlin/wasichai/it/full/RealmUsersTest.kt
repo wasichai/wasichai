@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.r2dbc.core.DatabaseClient
+import wasichai.core.identity.ServiceAccountSecrets
 import wasichai.core.identity.oidc.RealmUsers
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Duration
@@ -47,9 +48,9 @@ class RealmUsersTest : FullAppIntegrationTest() {
     private suspend fun invite(
         organizationId: UUID,
         email: String,
-        subject: String? = null
+        subject: String? = null,
+        id: UUID = UUID.randomUUID()
     ): UUID {
-        val id = UUID.randomUUID()
         val insert =
             db
                 .sql(
@@ -143,6 +144,49 @@ class RealmUsersTest : FullAppIntegrationTest() {
 
             assertThat(user).isNull()
             assertThat(row(inSatipo).subject).isNull()
+        }
+
+    @Test
+    fun `an address in another case links the invited row and stays lower case`(): Unit =
+        runBlocking {
+            val org = organization()
+            val local = uniqueName("ana").lowercase()
+            val id = invite(org, "$local@perene.gob.pe")
+            val subject = UUID.randomUUID().toString()
+
+            val user = users.resolve(org, subject, " ${local.replaceFirstChar { it.uppercase() }}@Perene.gob.pe ", true, null)!!
+
+            assertThat(user.id).isEqualTo(id)
+            assertThat(user.email).isEqualTo("$local@perene.gob.pe")
+            assertThat(row(id).email).isEqualTo("$local@perene.gob.pe")
+            assertThat(row(id).subject).isEqualTo(subject)
+            // linked: the token's case changes nothing either
+            assertThat(users.resolve(org, subject, "$local@PERENE.GOB.PE", true, null)!!.email).isEqualTo("$local@perene.gob.pe")
+            assertThat(row(id).email).isEqualTo("$local@perene.gob.pe")
+        }
+
+    @Test
+    fun `a service account's backing row is never linked by email`(): Unit =
+        runBlocking {
+            val org = organization()
+            val id = UUID.randomUUID()
+            val email = ServiceAccountSecrets.backingEmail(id)
+            invite(org, email, id = id)
+            db
+                .sql(
+                    "INSERT INTO ${schemas.metadata}.service_accounts (id, organization_id, name, secret_hash) " +
+                        "VALUES (:id, :org, :name, 'not-a-hash')"
+                ).bind("id", id)
+                .bind("org", org)
+                .bind("name", uniqueName("svc").lowercase())
+                .fetch()
+                .rowsUpdated()
+                .awaitFirstOrNull()
+
+            val user = users.resolve(org, UUID.randomUUID().toString(), email, true, "Impostor")
+
+            assertThat(user).isNull()
+            assertThat(row(id).subject).isNull()
         }
 
     @Test
