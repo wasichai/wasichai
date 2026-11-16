@@ -43,6 +43,11 @@ se escriben en `application.yml` ni en el repositorio. Los valores por defecto d
 |`wasichai.security.jwt.revocation` |`false` |Invalidar tokens al cerrar sesión, desactivar, cambiar contraseña o
 roles.
 |`wasichai.security.jwt.revocation-cache` |`5s` |Retraso máximo con que otro nodo ve una revocación.
+|`wasichai.security.identity` |`local` |Quién inicia la sesión de las personas: `local` (contraseñas y tokens propios) u `oidc` (un realm de Keycloak).
+|`wasichai.security.oidc.issuer-uri` | |Emisor del realm, sin barra final. Obligatorio con `oidc`.
+|`wasichai.security.oidc.client-id` | |Id de cliente, también la audiencia que debe traer un token del realm. Obligatorio con `oidc`.
+|`wasichai.security.oidc.jwk-set-uri` |`<issuer>/protocol/openid-connect/certs` |Dónde están las claves de firma del realm.
+|`wasichai.security.oidc.roles-cache` |`5s` |Cuánto se guardan los roles de una persona (`0` para no guardarlos).
 |`wasichai.security.login.enabled` |`false` |Limitar intentos fallidos de inicio de sesión.
 |`wasichai.security.login.max-attempts` |`5` |Por correo y dirección IP.
 |`wasichai.security.login.account-max-attempts` |`20` |Por correo, desde cualquier dirección.
