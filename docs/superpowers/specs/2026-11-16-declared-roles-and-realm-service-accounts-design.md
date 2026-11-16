@@ -143,17 +143,20 @@ wasichai:
   security:
     oidc:
       service-accounts:
-        carga-muni-ica:
+        - client-id: carga-muni-ica
           roles: [CARGA_DATOS]
-        srtm-muni-ica:
+        - client-id: srtm-catastro-muni-ica
           roles: [SRTM_LECTOR]
 ```
 
-Boot fails when a key does not match a service account's name (`^[a-z][a-z0-9_-]{1,48}$`), when a client has no role,
-or when one of its roles is `ADMIN`. The roles must exist in the organization; typically they are declared roles
-(decision A), so every tenant has them. The platform sets the map from its contract (one client per integration and
-tenant); an app changes nothing in its code. Environment variables cannot carry a `-` inside a map key, so the kit
-passes this map through `SPRING_APPLICATION_JSON`.
+A list of objects, not a map keyed by client id: Spring Boot binds an indexed list from environment variables
+(`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID=srtm-catastro-muni-ica`,
+`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_ROLES_0=SRTM_LECTOR`), while a client id with a `-` cannot be a map key
+there. Boot fails when a client id does not match a service account's name (`^[a-z][a-z0-9_-]{1,48}$`), when one
+appears twice in the list, when a client has no role, or when one of its roles is `ADMIN`. The roles must exist in the
+organization; typically they are declared roles (decision A), so every tenant has them. The platform sets the list
+from its contract (one client per integration and tenant), as plain environment variables; an app changes nothing in
+its code.
 
 **B3. The organization is the token's, as for a person.** `organizationAlias(jwt)`: exactly one alias, which is the
 organization's slug; none, several or an alias the app does not have is the same `403` a person gets. The realm puts
@@ -244,8 +247,6 @@ reverse. Every existing row is local, so the migration needs no data step.
   declares it. That is the intent for the apps' existing roles; the report lists every take-over.
 - **A role left locked** by a model that was removed whole cannot be changed by anyone. Rare; a later ADR can add a
   release for it if it happens.
-- **Configuration in a map keyed by client id** cannot be set with plain environment variables; the kit must use
-  `SPRING_APPLICATION_JSON`, and the manual says so.
 - **Not verified:** that Keycloak keeps a client's service-account `sub` across a recreation. The design does not
   depend on it (B4).
 

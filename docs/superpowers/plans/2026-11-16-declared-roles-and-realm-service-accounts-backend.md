@@ -34,8 +34,10 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
   `ModelActor.requireMayChange`. Assigning a declared role to a user or a service account is not a change.
 - A realm token is a service account's only with no `email`, a non-blank `azp` and
   `preferred_username == "service-account-" + azp.lowercase()`.
-- `wasichai.security.oidc.service-accounts.<client-id>.roles`: key matches `^[a-z][a-z0-9_-]{1,48}$`, roles non-empty,
-  upper-cased, never `ADMIN`; else boot fails with a message naming the property.
+- `wasichai.security.oidc.service-accounts` is an indexed list of `{client-id, roles}`, bound from environment
+  variables by index (`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID`, `…_0_ROLES_0`): each client id matches
+  `^[a-z][a-z0-9_-]{1,48}$` and is unique in the list, roles non-empty, upper-cased, never `ADMIN`; else boot fails
+  with a message naming `wasichai.security.oidc.service-accounts[i]`.
 - A realm account's row: `external_client_id = azp`, `name = azp`, `secret_hash` NULL; its backing user has
   `password_hash` NULL, `enabled = false`, email `<id>@service-accounts.invalid` (`ServiceAccountSecrets.backingEmail`).
 - Every refusal of a realm service-account token is a denied token (`JwtService.CLAIM_DENIED`), so a `403` with its
@@ -204,9 +206,12 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
 
 **Interfaces:**
 - Produces:
-  - `data class RealmServiceAccount(val roles: List<String> = emptyList())`; `Oidc.serviceAccounts:
-    Map<String, RealmServiceAccount> = emptyMap()`, last. `init`: each key matches `^[a-z][a-z0-9_-]{1,48}$`, roles
-    non-empty, none `ADMIN` after upper-casing; messages name `wasichai.security.oidc.service-accounts.<key>`.
+  - `data class RealmServiceAccount(val clientId: String = "", val roles: List<String> = emptyList())`;
+    `Oidc.serviceAccounts: List<RealmServiceAccount> = emptyList()`, last, and `Oidc.serviceAccountsByClientId:
+    Map<String, RealmServiceAccount>` for lookups. `init`: each `clientId` matches `^[a-z][a-z0-9_-]{1,48}$` and is
+    unique in the list, roles non-empty, none `ADMIN` after upper-casing; messages name
+    `wasichai.security.oidc.service-accounts[i]`.
+  - `RealmServiceAccounts` takes `configured: Map<String, RealmServiceAccount>` (= `serviceAccountsByClientId`).
   - `fun isServiceAccountToken(jwt: Jwt): String?` — the `azp` when the token is a service account's (Global
     Constraints rule), else null.
   - `sealed interface RealmAccountResolution { data class Found(val account: RealmAccount) ; data class Denied(val reason: String) }`;
@@ -230,8 +235,13 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
 
 ```kotlin
 // WasichaiIdentityPropertiesTest
-@Test fun `a service-account client id that is no account name is refused`()          // "Carga Ica" -> message names the key
+@Test fun `a service-account client id that is no account name is refused`()          // "Carga Ica" -> message names [0]
+@Test fun `a client id twice in the list is refused`()                                 // message names both indexes
 @Test fun `a service-account client with no role, or with ADMIN, is refused`()
+// Binder over a MapConfigurationPropertySource with SystemEnvironmentPropertySource names, as the kit sets them:
+// WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID=srtm-catastro-muni-ica, …_0_ROLES_0=SRTM_LECTOR,
+// …_0_ROLES_1=CATASTRO_LECTOR, …_1_CLIENTID=carga-muni-ica, …_1_ROLES_0=CARGA_DATOS
+@Test fun `the list binds from environment variables by index, dashes in the client id kept`()
 // RealmPrincipalConverterTest
 @Test fun `a client token of a configured client is the app's service account`()     // claims sub, org, roles, service_account
 @Test fun `a token with an email is a person's even when its username looks like a service account`()
@@ -254,7 +264,7 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
 ```
 
 - [ ] **Step 3: Write the failing end-to-end tests** (`OidcServiceAccountTest` extends `OidcIntegrationTest`; its
-  `@TestPropertySource` adds `wasichai.security.oidc.service-accounts.carga-perene.roles=CARGA_DATOS`; a
+  `@TestPropertySource` adds `wasichai.security.oidc.service-accounts[0].client-id=carga-perene` and `…[0].roles=CARGA_DATOS`; a
   `@TestConfiguration` `DeclaredModel("oidc-it", objects = emptyList(), roles = listOf(CARGA_DATOS with organization-wide
   READ, CREATE, MANAGE_METADATA))`, ensured for the test organization in `@BeforeEach`; a helper
   `clientToken(clientId, organization = listOf(ORGANIZATION), aud = listOf(CLIENT_ID))` signs RS256 with `azp`,
@@ -286,7 +296,7 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
 - Test: `wasichai-core/src/test/kotlin/wasichai/core/api/ServiceAccountApiTest.kt` (local unchanged)
 
 **Interfaces:**
-- Consumes: the row Task 4 makes; `Oidc.serviceAccounts.keys`.
+- Consumes: the row Task 4 makes; `Oidc.serviceAccountsByClientId.keys`.
 - Produces: `ServiceAccountResponse.externalClientId: String?` (`NON_NULL`, last); `secretRotatedAt` null for a realm
   account. `ServiceAccountService(…, configuredClients: Set<String> = emptySet())`: on a realm account `update` with
   `roles` → `ConflictException("Roles of a realm service account come from wasichai.security.oidc.service-accounts")`;
@@ -321,7 +331,7 @@ Flyway, JUnit 5, AssertJ, Testcontainers.
   service accounts; each with its ADR and tests, as D57)
 - Modify: `docs/HISTORY.md` (two entries dated 2026-11-xx, newest first)
 - Modify: `docs/manuals/en/reference/configuration.adoc` and `docs/manuals/es/reference/configuration.adoc`
-  (`wasichai.security.oidc.service-accounts.<client-id>.roles`, with the note on `SPRING_APPLICATION_JSON`)
+  (`wasichai.security.oidc.service-accounts[i].client-id` and `.roles`, with the environment-variable form by index)
 
 - [ ] **Step 1: Write the docs** from the Interfaces blocks above; no new behaviour.
 - [ ] **Step 2: Check** every line is at most 160 columns, `yarn format:check`, and the manuals job locally if it has

@@ -21,8 +21,10 @@ called app as audience. Verified on Keycloak 26.8.2: its client-credentials toke
 - **In `oidc` mode, a realm client can be a service account of the app.** A realm token (RS256, `iss`, `exp`, `aud`
   holding the app's client id, as ADR-084) with no `email`, an `azp`, and `preferred_username` =
   `service-account-<azp>` is a service account's; any other goes the person's way.
-- **The app lists the clients it accepts:** `wasichai.security.oidc.service-accounts.<client-id>.roles`. Boot fails
-  on a client id that is not a valid account name, a client with no role, or `ADMIN`.
+- **The app lists the clients it accepts:** an indexed list, `wasichai.security.oidc.service-accounts[i].client-id`
+  and `.roles`, which environment variables set by index (`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID`,
+  `…_0_ROLES_0`). Boot fails on a client id that is not a valid account name or appears twice, a client with no role,
+  or `ADMIN`.
 - **The organization is the token's `organization` alias**, exactly one, as for a person.
 - **A `service_accounts` row of that organization, found by client id** (`external_client_id`, V23), named like the
   client, with no secret (`secret_hash` NULL) and a backing `users` row with no password. The `sub` is not kept: a
@@ -47,7 +49,7 @@ called app as audience. Verified on Keycloak 26.8.2: its client-credentials toke
   is stored in the app.
 - Revoking a realm account is not instant: up to the realm's token lifespan, unless the row is disabled in the app.
 - The app trusts the realm's fixed `organization` mapper for a service account's tenant; the platform tests it.
-- The map keyed by client id cannot be set with plain environment variables; the kit uses `SPRING_APPLICATION_JSON`.
+- The kit sets the list with plain environment variables, one index per client.
 - A difference from the original app: an ADR-031 entry; `external_client_id`, the nullable `secret_hash` and their
   constraint and index are known schema-parity deviations.
 - Tested by `RealmPrincipalConverterTest`, `RealmServiceAccountsTest`, `OidcServiceAccountTest` and
