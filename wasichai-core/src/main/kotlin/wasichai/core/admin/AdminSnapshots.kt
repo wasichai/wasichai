@@ -24,15 +24,16 @@ internal object AdminSnapshots {
         return state
     }
 
-    // the grants ride along, so a deleted role's entry says what it could do
+    // the grants ride along, so a deleted role's entry says what it could do. declaredBy only for a declared role
+    // (ADR-085), so a person's role reads as it always did and a take-over or release shows in the diff
     fun role(role: RoleResponse): Map<String, Any?> =
-        linkedMapOf(
+        linkedMapOf<String, Any?>(
             "name" to role.name,
             "label" to role.label,
             "ownRecordsOnly" to role.ownRecordsOnly,
             "permissions" to grants(role.permissions),
             "fieldPermissions" to fieldRules(role.fieldPermissions)
-        )
+        ).also { if (role.declaredBy != null) it["declaredBy"] = role.declaredBy }
 
     // one key per grant, not one list: the audit diff then names only the grants that changed
     fun permissions(role: RoleResponse): Map<String, Any?> = linkedMapOf<String, Any?>("role" to role.name) + grants(role.permissions)

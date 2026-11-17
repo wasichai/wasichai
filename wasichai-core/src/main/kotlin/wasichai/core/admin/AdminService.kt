@@ -191,7 +191,7 @@ class AdminService(
     @Transactional
     suspend fun createRole(request: CreateRoleRequest): RoleResponse {
         val actor = roleActor()
-        val name = request.name.trim().uppercase()
+        val name = RoleGrants.name(request.name)
         if (!ROLE_NAME.matches(name)) {
             throw ValidationException("Invalid role name '$name'", "name", "must match ^[A-Z][A-Z0-9_]{1,48}$")
         }
@@ -207,7 +207,7 @@ class AdminService(
             ).bind("id", UUID.randomUUID())
             .bind("organizationId", actor.organizationId)
             .bind("name", name)
-            .bind("label", request.label.trim())
+            .bind("label", RoleGrants.label(request.label))
             .bind("ownRecordsOnly", request.ownRecordsOnly)
             // the platform's role is its model's; a person's is nobody's
             .bindNullable("declaredBy", actor.model)
@@ -229,6 +229,7 @@ class AdminService(
         val actor = roleActor()
         val role = roleIdOrFail(actor.organizationId, name)
         val before = roleOrFail(actor.organizationId, name.trim().uppercase())
+        actor.requireMayChange(before.declaredBy, "Role '${before.name}'")
         db
             .sql(
                 """
@@ -257,12 +258,13 @@ class AdminService(
     @Transactional
     suspend fun deleteRole(name: String) {
         val admin = currentUser.requireWithPermission(Actions.MANAGE_ORGANIZATION)
-        val normalized = name.trim().uppercase()
+        val normalized = RoleGrants.name(name)
         if (normalized == AuthenticatedUser.ADMIN_ROLE) {
             throw ConflictException("The ADMIN role administers the tenant and cannot be deleted")
         }
         val id = roleIdOrFail(admin.organizationId, normalized)
         val before = roleOrFail(admin.organizationId, normalized)
+        ModelActor(admin.organizationId, admin, null).requireMayChange(before.declaredBy, "Role '$normalized'")
         db
             .sql("DELETE FROM ${schemas.metadata}.roles WHERE id = :id")
             .bind("id", id)
@@ -281,20 +283,19 @@ class AdminService(
         request: RolePermissionsRequest
     ): RoleResponse {
         val actor = roleActor()
-        val normalized = name.trim().uppercase()
+        val normalized = RoleGrants.name(name)
         val roleId = roleIdOrFail(actor.organizationId, normalized)
         val before = roleOrFail(actor.organizationId, normalized)
+        actor.requireMayChange(before.declaredBy, "Role '$normalized'")
         val objects = ObjectLookup(actor.organizationId)
 
+        // RoleGrants: the same pass DeclaredRoles compares with
         val resolved =
-            request.permissions
+            RoleGrants
+                .grants(request.permissions)
                 .map { entry ->
-                    val action = entry.action.trim().uppercase()
-                    val objectName =
-                        entry.objectName
-                            ?.trim()
-                            ?.lowercase()
-                            ?.ifBlank { null }
+                    val action = entry.action
+                    val objectName = entry.objectName
                     // the action is judged before the object, as it always was
                     if (action !in Actions.BUILT_IN && !objects.declares(objectName, action)) {
                         throw ValidationException(
@@ -309,7 +310,7 @@ class AdminService(
                     }
                     val objectId = objectName?.let { objects.require(it).obj.id }
                     Triple(objectId, action, entry.allowed)
-                }.distinctBy { it.first to it.second }
+                }
 
         // only a holder hands MANAGE_TENANTS on or takes it away, whatever the switch: else any tenant's
         // administrator could grant it to itself (ADR-055). the platform never grants it (DeclaredModels refuses
@@ -374,17 +375,19 @@ class AdminService(
         wholeSet: Boolean
     ): RoleResponse {
         val actor = roleActor()
-        val normalized = name.trim().uppercase()
+        val normalized = RoleGrants.name(name)
         val roleId = roleIdOrFail(actor.organizationId, normalized)
         val before = roleOrFail(actor.organizationId, normalized)
+        actor.requireMayChange(before.declaredBy, "Role '$normalized'")
         val objects = ObjectLookup(actor.organizationId)
 
         val touchedObjects = mutableSetOf<UUID>()
         val rows =
-            request.fields.map { entry ->
-                val objectName = entry.objectName.trim().lowercase()
+            // RoleGrants: the same pass DeclaredRoles compares with
+            RoleGrants.rules(request.fields).map { entry ->
+                val objectName = entry.objectName
                 val definition = objects.require(objectName)
-                val fieldName = entry.fieldName.trim().lowercase()
+                val fieldName = entry.fieldName
                 val field =
                     definition.fields.firstOrNull { it.name == fieldName }
                         ?: throw ValidationException(
@@ -418,7 +421,7 @@ class AdminService(
                 .awaitSingle()
         }
 
-        rows.distinctBy { it.first }.forEach { (fieldId, read, write) ->
+        rows.forEach { (fieldId, read, write) ->
             db
                 .sql(
                     """
@@ -428,8 +431,7 @@ class AdminService(
                 ).bind("roleId", roleId)
                 .bind("fieldId", fieldId)
                 .bind("canRead", read)
-                // cannot write what you cannot read: a blind overwrite is not an edit
-                .bind("canWrite", write && read)
+                .bind("canWrite", write)
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()
@@ -479,8 +481,15 @@ class AdminService(
                 .toList()
                 .sortedBy { it.second }
         released.forEach { (id, name) ->
-            val role = AdminSnapshots.role(roleOrFail(organizationId, name))
-            audit.recordPlatform(organizationId, AdminEntity.ROLE, id, AdminOperation.UPDATE, role + ("declaredBy" to model), role + ("declaredBy" to null))
+            val after = roleOrFail(organizationId, name)
+            audit.recordPlatform(
+                organizationId,
+                AdminEntity.ROLE,
+                id,
+                AdminOperation.UPDATE,
+                AdminSnapshots.role(after.copy(declaredBy = model)),
+                AdminSnapshots.role(after)
+            )
         }
         // what this request remembered of the roles is wrong now (ADR-066)
         if (released.isNotEmpty()) RequestMemo.clear()

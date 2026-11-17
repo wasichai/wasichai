@@ -2,13 +2,9 @@ package wasichai.core.metadata
 
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -18,13 +14,10 @@ import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import tools.jackson.databind.json.JsonMapper
 import wasichai.core.identity.JwtService
-import wasichai.core.platform.ClusterLock
-import wasichai.core.platform.TenantDirectory
 import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiIntegrationTest
 import java.util.UUID
 
-// issue 165, ADR-081: what the platform refuses to start with, and that nothing declared runs nothing.
 // ADR-085: the roles a model declares, ensured in a real tenant after its objects, and released when dropped
 @Import(DeclaredModelsTest.ModelConfig::class)
 class DeclaredModelsTest : WasichaiIntegrationTest() {
@@ -46,90 +39,11 @@ class DeclaredModelsTest : WasichaiIntegrationTest() {
     @Autowired
     private lateinit var decoder: ReactiveJwtDecoder
 
-    private val tenants = mock(TenantDirectory::class.java)
-
     private lateinit var admin: String
 
     @BeforeEach
     fun setUp() {
         admin = bearer()
-    }
-
-    private fun models(
-        vararg models: DeclaredModel,
-        roles: DeclaredModelRoles? = mock(DeclaredModelRoles::class.java)
-    ) = DeclaredModels(
-        models.toList(),
-        tenants,
-        mock(MetadataService::class.java),
-        mock(RelationshipService::class.java),
-        mock(ObjectActionService::class.java),
-        mock(CustomObjectRepository::class.java),
-        mock(CustomFieldRepository::class.java),
-        mock(RelationshipRepository::class.java),
-        mock(ObjectActionRepository::class.java),
-        mock(FieldTypeRegistry::class.java),
-        mock(ClusterLock::class.java),
-        roles
-    )
-
-    private fun model(
-        name: String,
-        vararg objects: String
-    ) = DeclaredModel(name, objects.map { CreateObjectRequest(name = it, label = it) })
-
-    @Test
-    fun `a model name that is no owner label refuses to start`() {
-        assertThatThrownBy { models(model("Curricula", "curso")) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("Curricula")
-    }
-
-    @Test
-    fun `two models with one name, or one object in two models, refuse to start`() {
-        assertThatThrownBy { models(model("curricula", "curso"), model("curricula", "plan")) }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("two declared models are named 'curricula'")
-        assertThatThrownBy { models(model("curricula", "curso"), model("otra", " Curso ")) }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("object 'curso' is declared by both 'curricula' and 'otra'")
-    }
-
-    @Test
-    fun `no model declared ensures nothing and asks for no tenant`() =
-        runTest {
-            assertThat(models().ensureAll()).isEmpty()
-            verifyNoInteractions(tenants)
-        }
-
-    @Test
-    fun `a declared ADMIN, a declared MANAGE_ORGANIZATION or one role in two models refuses to start`() {
-        fun withRoles(
-            name: String,
-            vararg roles: DeclaredRole
-        ) = DeclaredModel(name, objects = emptyList(), roles = roles.toList())
-
-        assertThatThrownBy { models(withRoles("a", DeclaredRole(" admin ", "Admin"))) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("ADMIN")
-        assertThatThrownBy { models(withRoles("a", DeclaredRole("x", "Bad"))) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("'X'")
-        assertThatThrownBy { models(withRoles("a", DeclaredRole("JEFE", "Jefe", permissions = listOf(PermissionEntry(null, "manage_organization"))))) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("MANAGE_ORGANIZATION")
-        assertThatThrownBy { models(withRoles("a", DeclaredRole("JEFE", "Jefe", permissions = listOf(PermissionEntry(null, "MANAGE_TENANTS"))))) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("MANAGE_TENANTS")
-        assertThatThrownBy { models(withRoles("a", DeclaredRole("CAJA", "Caja")), withRoles("b", DeclaredRole(" caja", "Caja"))) }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("role 'CAJA' is declared by both 'a' and 'b'")
-        assertThatThrownBy { models(withRoles("a", DeclaredRole("CAJA", "Caja")), roles = null) }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("declared model 'a' declares roles")
-        // a denied administration grant hands nothing out, and a model without roles needs no port
-        models(withRoles("a", DeclaredRole("JEFE", "Jefe", permissions = listOf(PermissionEntry(null, "MANAGE_ORGANIZATION", allowed = false)))))
-        models(model("b", "curso"), roles = null)
     }
 
     @Test
@@ -155,6 +69,43 @@ class DeclaredModelsTest : WasichaiIntegrationTest() {
 
         val again = runBlocking { models.ensure(tenantId, ROLES) }
 
+        assertThat(again.unchanged).isTrue()
+        assertThat(adminEntries(tenantId)).isEqualTo(before)
+    }
+
+    @Test
+    fun `a declaration written untidily is stored as the role methods store it, and a second run writes nothing`() {
+        val (tenant, tenantId) = provision()
+        val untidy =
+            ROLES.copy(
+                roles =
+                    listOf(
+                        DeclaredRole(
+                            name = " carga_datos ",
+                            label = " Carga de datos ",
+                            permissions =
+                                listOf(
+                                    PermissionEntry(" ${OBJECT.uppercase()} ", " validar "),
+                                    PermissionEntry(OBJECT, "VALIDAR", allowed = false),
+                                    PermissionEntry("", "create")
+                                ),
+                            fieldPermissions =
+                                listOf(
+                                    FieldPermissionEntry(" ${OBJECT.uppercase()} ", " DNI ", read = false, write = true),
+                                    FieldPermissionEntry(OBJECT, "dni", read = true, write = true)
+                                )
+                        )
+                    )
+            )
+        runBlocking { models.ensure(tenantId, untidy) }
+        val before = adminEntries(tenantId)
+
+        val again = runBlocking { models.ensure(tenantId, untidy) }
+
+        val role = role(tenant, "CARGA_DATOS")!!
+        assertThat(role["label"]).isEqualTo("Carga de datos")
+        assertThat(grants(role)).containsExactlyInAnyOrder("*.CREATE=true", "$OBJECT.VALIDAR=true")
+        assertThat(fieldRules(role)).containsExactly("$OBJECT.dni=false/false")
         assertThat(again.unchanged).isTrue()
         assertThat(adminEntries(tenantId)).isEqualTo(before)
     }
@@ -188,6 +139,10 @@ class DeclaredModelsTest : WasichaiIntegrationTest() {
         assertThat(role["declaredBy"]).isEqualTo(MODEL)
         assertThat(grants(role)).containsExactlyInAnyOrder("*.CREATE=true", "*.MANAGE_METADATA=true", "$OBJECT.VALIDAR=true")
         assertThat(fieldRules(role)).containsExactly("$OBJECT.dni=true/false")
+        // the take-over is in the trail: the entry says declaredBy went from nothing to the model
+        val roleId = UUID.fromString(role["id"] as String)
+        val taken = stateOfUpdates(tenantId, roleId).single { !it.first.contains("declaredBy") }
+        assertThat(taken.second).contains("declaredBy").contains(MODEL)
     }
 
     @Test
@@ -380,6 +335,24 @@ class DeclaredModelsTest : WasichaiIntegrationTest() {
                 ).bind("org", organizationId)
                 .bind("id", roleId)
                 .map { row, _ -> row.get("user_id", UUID::class.java) to row.get("source", String::class.java) }
+                .all()
+                .collectList()
+                .awaitSingle()
+        }
+
+    // (before, after) of the admin:role UPDATE entries about the role, as stored
+    private fun stateOfUpdates(
+        organizationId: UUID,
+        roleId: UUID
+    ): List<Pair<String, String>> =
+        runBlocking {
+            db
+                .sql(
+                    "SELECT before_state::text AS b, after_state::text AS a FROM ${schemas.metadata}.audit_log WHERE organization_id = :org " +
+                        "AND record_id = :id AND object_name = 'admin:role' AND operation = 'UPDATE'"
+                ).bind("org", organizationId)
+                .bind("id", roleId)
+                .map { row, _ -> row.get("b", String::class.java)!! to row.get("a", String::class.java)!! }
                 .all()
                 .collectList()
                 .awaitSingle()

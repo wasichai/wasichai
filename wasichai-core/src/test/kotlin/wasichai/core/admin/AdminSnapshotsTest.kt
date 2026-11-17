@@ -130,4 +130,15 @@ class AdminSnapshotsTest {
         assertThat(state).containsOnlyKeys("name", "label", "ownRecordsOnly", "permissions", "fieldPermissions")
         assertThat(state["permissions"]).isEqualTo(mapOf("predio.READ" to true))
     }
+
+    @Test
+    fun `a role carries declaredBy only when declared, so a take-over or a release shows in the diff`() {
+        val mine = role()
+        val declared = mine.copy(declaredBy = "padron")
+
+        assertThat(AdminSnapshots.role(mine)).doesNotContainKey("declaredBy")
+        assertThat(AdminSnapshots.role(declared)).containsEntry("declaredBy", "padron")
+        assertThat(diff(AdminSnapshots.role(mine), AdminSnapshots.role(declared))).containsExactly(FieldChange("declaredBy", null, "padron"))
+        assertThat(diff(AdminSnapshots.role(declared), AdminSnapshots.role(mine))).containsExactly(FieldChange("declaredBy", "padron", null))
+    }
 }

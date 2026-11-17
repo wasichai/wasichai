@@ -63,7 +63,7 @@ class DeclaredRoles(
         suspend fun objectId(name: String): UUID? = found.getOrPut(name) { objects.findByName(organizationId, name)?.id }
 
         val missing = mutableListOf<String>()
-        role.permissions.forEach { (objectName, action) ->
+        role.permissions.forEach { (objectName, action, _) ->
             if (objectName == null) return@forEach
             val id = objectId(objectName)
             when {
@@ -71,7 +71,7 @@ class DeclaredRoles(
                 action !in Actions.BUILT_IN && !actions.exists(organizationId, id, action) -> missing += "action $objectName.$action"
             }
         }
-        role.fieldPermissions.forEach { (objectName, fieldName) ->
+        role.fieldPermissions.forEach { (objectName, fieldName, _, _) ->
             val id = objectId(objectName)
             when {
                 id == null -> missing += "object $objectName"
@@ -93,8 +93,8 @@ class DeclaredRoles(
         role: Declared,
         model: String
     ): Boolean {
-        val grants = existing.permissions.map { Grant(it.objectName, it.action, it.allowed) }.toSet()
-        val rules = existing.fieldPermissions.map { Rule(it.objectName, it.fieldName, it.read, it.write) }.toSet()
+        val grants = existing.permissions.map { PermissionEntry(it.objectName, it.action, it.allowed) }.toSet()
+        val rules = existing.fieldPermissions.map { FieldPermissionEntry(it.objectName, it.fieldName, it.read, it.write) }.toSet()
         // a person's role becomes the model's even when it already reads as declared
         val details = existing.declaredBy != model || existing.label != role.label || existing.ownRecordsOnly != role.ownRecordsOnly
         val permissions = grants != role.permissions.toSet()
@@ -105,47 +105,18 @@ class DeclaredRoles(
         return details || permissions || fieldPermissions
     }
 
-    private data class Grant(
-        val objectName: String?,
-        val action: String,
-        val allowed: Boolean
-    )
-
-    private data class Rule(
-        val objectName: String,
-        val fieldName: String,
-        val read: Boolean,
-        val write: Boolean
-    )
-
-    // the declaration as the role methods store it: names trimmed and cased, the first entry of a repeated grant
-    // kept, and no write without read
+    // the declaration as the role methods store it (RoleGrants, which they use too)
     private class Declared(
         declared: DeclaredRole
     ) {
-        val name = declared.name.trim().uppercase()
-        val label = declared.label.trim()
+        val name = RoleGrants.name(declared.name)
+        val label = RoleGrants.label(declared.label)
         val ownRecordsOnly = declared.ownRecordsOnly
-        val permissions =
-            declared.permissions
-                .map {
-                    Grant(
-                        it.objectName
-                            ?.trim()
-                            ?.lowercase()
-                            ?.ifBlank { null },
-                        it.action.trim().uppercase(),
-                        it.allowed
-                    )
-                }.distinctBy { it.objectName to it.action }
-        val fieldPermissions =
-            declared.fieldPermissions
-                .map { Rule(it.objectName.trim().lowercase(), it.fieldName.trim().lowercase(), it.read, it.write && it.read) }
-                .distinctBy { it.objectName to it.fieldName }
+        val permissions = RoleGrants.grants(declared.permissions)
+        val fieldPermissions = RoleGrants.rules(declared.fieldPermissions)
 
-        fun permissionsRequest() = RolePermissionsRequest(permissions.map { PermissionEntry(it.objectName, it.action, it.allowed) })
+        fun permissionsRequest() = RolePermissionsRequest(permissions)
 
-        fun fieldPermissionsRequest() =
-            RoleFieldPermissionsRequest(fieldPermissions.map { FieldPermissionEntry(it.objectName, it.fieldName, it.read, it.write) })
+        fun fieldPermissionsRequest() = RoleFieldPermissionsRequest(fieldPermissions)
     }
 }
