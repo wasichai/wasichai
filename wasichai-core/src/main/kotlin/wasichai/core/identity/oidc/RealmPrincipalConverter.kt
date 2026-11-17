@@ -33,9 +33,11 @@ fun organizationAlias(jwt: Jwt): Result<String> {
 // realm token -> the app's own claims, so CurrentUser reads it like a local one: sub = users.id, org, email, roles
 // (roles from user_roles, never the realm's). no access: still authenticated, wasichai_denied = reason, no sub/org,
 // no authorities; CurrentUser.require() answers 403 with it. any other issuer: as today, untouched.
+// a realm client's token (isServiceAccountToken) is the app's service account instead, with service_account (ADR-086)
 class RealmPrincipalConverter(
     private val realmIssuer: String,
-    private val users: RealmUsers
+    private val users: RealmUsers,
+    private val accounts: RealmServiceAccounts
 ) : Converter<Jwt, Mono<AbstractAuthenticationToken>> {
     private val passThrough = ReactiveJwtAuthenticationConverter()
 
@@ -47,6 +49,12 @@ class RealmPrincipalConverter(
     private suspend fun translate(jwt: Jwt): AbstractAuthenticationToken {
         val alias = organizationAlias(jwt).getOrElse { return denied(jwt, it.message!!) }
         val organizationId = users.organizationIdBySlug(alias) ?: return denied(jwt, "organization $alias is not in this app")
+        isServiceAccountToken(jwt)?.let { clientId ->
+            return when (val resolution = accounts.resolve(organizationId, clientId)) {
+                is RealmAccountResolution.Found -> serviceAccount(jwt, resolution.account)
+                is RealmAccountResolution.Denied -> denied(jwt, resolution.reason)
+            }
+        }
         val user =
             jwt.subject?.let { subject ->
                 users.resolve(
@@ -65,6 +73,22 @@ class RealmPrincipalConverter(
                 .claim(JwtService.CLAIM_ORGANIZATION, user.organizationId.toString())
                 .claim(JwtService.CLAIM_EMAIL, user.email)
                 .claim(JwtService.CLAIM_ROLES, roles)
+                .build()
+        return JwtAuthenticationToken(translated, emptyList())
+    }
+
+    // ADR-043 as for a local account's token: never ADMIN, never MANAGE_ORGANIZATION, whatever its roles grant
+    private fun serviceAccount(
+        jwt: Jwt,
+        account: RealmAccount
+    ): AbstractAuthenticationToken {
+        val translated =
+            base(jwt)
+                .subject(account.id.toString())
+                .claim(JwtService.CLAIM_ORGANIZATION, account.organizationId.toString())
+                .claim(JwtService.CLAIM_EMAIL, account.email)
+                .claim(JwtService.CLAIM_ROLES, account.roles)
+                .claim(JwtService.CLAIM_SERVICE_ACCOUNT, account.name)
                 .build()
         return JwtAuthenticationToken(translated, emptyList())
     }
