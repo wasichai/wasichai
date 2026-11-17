@@ -13,7 +13,12 @@ backing user, keeps its roles as configured and carries `service_account` as ADR
 reason; a wrong audience is a `401`. The administration lists it with `externalClientId` and read-only (`409` on roles,
 rotating and, while configured, deleting); `POST /api/auth/token` with its id is `401`. A disabled account is cut off
 within `roles-cache`. ADR-086, ADR-031 D60. Unlike the spec, the transaction operator is taken lazily and only enabled
-accounts are cached.
+accounts are cached. With `identity: oidc` and nothing configured, a Keycloak client-credentials token still gets `403`,
+now with the reason `client <azp> is not a service account of this app` instead of `you have no access to this app; ask
+its administrator`.
+
+**Upgrade.** During a rolling deploy, a 2.1.0 pod given a realm account's id at `POST /api/auth/token` answers `500`
+(its secret hash is null) once a new pod has created a realm row; transient.
 
 ## 2026-11-16 — An app declares its roles in code
 

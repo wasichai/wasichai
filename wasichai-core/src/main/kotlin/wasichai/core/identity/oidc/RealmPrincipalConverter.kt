@@ -33,7 +33,7 @@ fun organizationAlias(jwt: Jwt): Result<String> {
 // realm token -> the app's own claims, so CurrentUser reads it like a local one: sub = users.id, org, email, roles
 // (roles from user_roles, never the realm's). no access: still authenticated, wasichai_denied = reason, no sub/org,
 // no authorities; CurrentUser.require() answers 403 with it. any other issuer: as today, untouched.
-// a realm client's token (isServiceAccountToken) is the app's service account instead, with service_account (ADR-086)
+// a realm client's token (serviceAccountClientId) is the app's service account instead, with service_account (ADR-086)
 class RealmPrincipalConverter(
     private val realmIssuer: String,
     private val users: RealmUsers,
@@ -49,7 +49,7 @@ class RealmPrincipalConverter(
     private suspend fun translate(jwt: Jwt): AbstractAuthenticationToken {
         val alias = organizationAlias(jwt).getOrElse { return denied(jwt, it.message!!) }
         val organizationId = users.organizationIdBySlug(alias) ?: return denied(jwt, "organization $alias is not in this app")
-        isServiceAccountToken(jwt)?.let { clientId ->
+        serviceAccountClientId(jwt)?.let { clientId ->
             return when (val resolution = accounts.resolve(organizationId, clientId)) {
                 is RealmAccountResolution.Found -> serviceAccount(jwt, resolution.account)
                 is RealmAccountResolution.Denied -> denied(jwt, resolution.reason)

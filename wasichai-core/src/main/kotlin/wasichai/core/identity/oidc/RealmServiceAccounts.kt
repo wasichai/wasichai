@@ -31,11 +31,17 @@ private const val SERVICE_ACCOUNT_USERNAME = "service-account-"
 
 // keycloak's client-credentials token: no email, an azp, and its username service-account-<azp in lower case>.
 // answers the azp; null = a person's token, whatever else it carries (ADR-086)
-fun isServiceAccountToken(jwt: Jwt): String? {
+fun serviceAccountClientId(jwt: Jwt): String? {
     if (jwt.claims[JwtService.CLAIM_EMAIL] != null) return null
     val azp = jwt.getClaimAsString(AZP_CLAIM)?.takeIf { it.isNotBlank() } ?: return null
     return azp.takeIf { jwt.getClaimAsString(USERNAME_CLAIM) == SERVICE_ACCOUNT_USERNAME + azp.lowercase() }
 }
+
+// roles are a set: the database orders names by its collation, Kotlin by code point, and an order is no difference
+internal fun sameRoles(
+    held: Collection<String>,
+    wanted: Collection<String>
+): Boolean = held.toSet() == wanted.toSet()
 
 // the app's account behind a realm client, in one organization. email: its backing user's
 data class RealmAccount(
@@ -104,7 +110,7 @@ open class RealmServiceAccounts(
         }
         val row = byClientId(organizationId, clientId)
         val resolution =
-            if (row != null && rolesOf(organizationId, row.id) == roles.sorted()) {
+            if (row != null && sameRoles(rolesOf(organizationId, row.id), roles)) {
                 answer(organizationId, row, roles.sorted())
             } else {
                 write(organizationId, clientId, roleIds)
@@ -145,7 +151,7 @@ open class RealmServiceAccounts(
                             }
                     val wanted = roleIds.keys.sorted()
                     val held = rolesOf(organizationId, row.id)
-                    if (held != wanted) {
+                    if (!sameRoles(held, wanted)) {
                         replaceRoles(organizationId, row.id, roleIds.values)
                         audit.recordPlatform(
                             organizationId,
@@ -265,7 +271,7 @@ open class RealmServiceAccounts(
             .one()
             .awaitFirstOrNull()
 
-    // sorted names, the order a comparison and the token use
+    // names in code-point order, whatever the database collation: what the audit snapshot and the token carry
     private suspend fun rolesOf(
         organizationId: UUID,
         id: UUID
@@ -284,6 +290,7 @@ open class RealmServiceAccounts(
             .all()
             .asFlow()
             .toList()
+            .sorted()
 
     private suspend fun replaceRoles(
         organizationId: UUID,

@@ -291,6 +291,22 @@ class RealmServiceAccountsTest : FullAppIntegrationTest() {
             assertThat(entries(org, id)).hasSize(2)
         }
 
+    // names that a collation ignoring "_" orders against code points: the second resolve after the cache is no write
+    @Test
+    fun `roles that sort differently by collation are compared as a set`(): Unit =
+        runBlocking {
+            val org = organization("SRTM_LECTOR", "SRTMX")
+            val both = accounts(RealmServiceAccount(clientId, listOf("SRTMX", "SRTM_LECTOR")))
+            val id = found(both.resolve(org, clientId)).account.id
+
+            val again = found(both.resolve(org, clientId)).account
+
+            assertThat(again.id).isEqualTo(id)
+            assertThat(again.roles).containsExactly("SRTMX", "SRTM_LECTOR")
+            assertThat(entries(org, id)).containsExactly("CREATE realm:$clientId platform=true")
+            assertThat(rolesOf(id)).containsExactlyInAnyOrder("SRTM_LECTOR", "SRTMX")
+        }
+
     @Test
     fun `a local account with the client's name is not adopted`(): Unit =
         runBlocking {

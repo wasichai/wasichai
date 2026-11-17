@@ -401,8 +401,11 @@ class AdminService(
 
         if (wholeSet) {
             db
-                .sql("DELETE FROM ${schemas.metadata}.field_permissions WHERE role_id = :roleId")
-                .bind("roleId", roleId)
+                .sql(
+                    "DELETE FROM ${schemas.metadata}.field_permissions WHERE role_id = :roleId " +
+                        "AND role_id IN (SELECT id FROM ${schemas.metadata}.roles WHERE organization_id = :organizationId)"
+                ).bind("roleId", roleId)
+                .bind("organizationId", actor.organizationId)
                 .fetch()
                 .rowsUpdated()
                 .awaitSingle()

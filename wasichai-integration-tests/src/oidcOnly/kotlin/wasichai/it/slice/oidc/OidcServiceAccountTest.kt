@@ -1,6 +1,7 @@
 package wasichai.it.slice.oidc
 
 import com.nimbusds.jwt.JWTClaimsSet
+import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -226,9 +227,53 @@ class OidcServiceAccountTest : OidcIntegrationTest() {
 
         assertThat(status(HttpMethod.PUT, "/api/service-accounts/$id", admin, mapOf("roles" to listOf("ADMIN")))).isEqualTo(409)
         assertThat(status(HttpMethod.POST, "/api/service-accounts/$id/secret", admin)).isEqualTo(409)
+        client
+            .post()
+            .uri("/api/service-accounts/$id/secret")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.detail")
+            .isEqualTo("A realm service account has no secret here: rotate it in the identity provider")
         assertThat(status(HttpMethod.DELETE, "/api/service-accounts/$id", admin)).isEqualTo(409)
         // nothing changed
         assertThat(listed(admin).get("id").asString()).isEqualTo(id)
+    }
+
+    // a realm row whose client is no longer configured is only a row: deleting it is allowed
+    @Test
+    fun `a realm account whose client is no longer configured can be deleted`() {
+        val admin = admin()
+        val org = organizationId()
+        val id = UUID.randomUUID()
+        val gone = uniqueName("gone-")
+        runBlocking {
+            db
+                .sql(
+                    "INSERT INTO wasichai.users (id, organization_id, email, password_hash, display_name, enabled) " +
+                        "VALUES (:id, :org, :email, NULL, :name, false)"
+                ).bind("id", id)
+                .bind("org", org)
+                .bind("email", "$id@service-accounts.invalid")
+                .bind("name", gone)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle()
+            db
+                .sql(
+                    "INSERT INTO wasichai.service_accounts (id, organization_id, name, secret_hash, external_client_id) " +
+                        "VALUES (:id, :org, :name, NULL, :name)"
+                ).bind("id", id)
+                .bind("org", org)
+                .bind("name", gone)
+                .fetch()
+                .rowsUpdated()
+                .awaitSingle()
+        }
+
+        assertThat(status(HttpMethod.DELETE, "/api/service-accounts/$id", admin)).isEqualTo(204)
     }
 
     @Test

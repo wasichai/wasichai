@@ -282,13 +282,13 @@ class RealmPrincipalConverterTest {
 
     @Test
     fun `the rule reads azp, the username in lower case and the absence of email`() {
-        assertThat(isServiceAccountToken(clientToken())).isEqualTo("carga-perene")
+        assertThat(serviceAccountClientId(clientToken())).isEqualTo("carga-perene")
         // keycloak lower-cases the username, never the client id
-        assertThat(isServiceAccountToken(clientToken(azp = "Carga", username = "service-account-carga"))).isEqualTo("Carga")
-        assertThat(isServiceAccountToken(clientToken(azp = "Carga", username = "service-account-Carga"))).isNull()
-        assertThat(isServiceAccountToken(clientToken(email = ""))).isNull()
-        assertThat(isServiceAccountToken(clientToken(azp = " ", username = "service-account- "))).isNull()
-        assertThat(isServiceAccountToken(realmToken())).isNull()
+        assertThat(serviceAccountClientId(clientToken(azp = "Carga", username = "service-account-carga"))).isEqualTo("Carga")
+        assertThat(serviceAccountClientId(clientToken(azp = "Carga", username = "service-account-Carga"))).isNull()
+        assertThat(serviceAccountClientId(clientToken(email = ""))).isNull()
+        assertThat(serviceAccountClientId(clientToken(azp = " ", username = "service-account- "))).isNull()
+        assertThat(serviceAccountClientId(realmToken())).isNull()
     }
 
     @Test
