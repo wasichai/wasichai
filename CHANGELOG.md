@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/wasichai/wasichai/compare/v2.1.0...v2.2.0) (2026-11-17)
+
+
+### Features
+
+* **core:** roles an app declares, and realm clients as its service accounts ([#189](https://github.com/wasichai/wasichai/issues/189)) ([cd4d799](https://github.com/wasichai/wasichai/commit/cd4d799c64b0f97f468ad079663a1221149a9886))
+
 ## [2.1.0](https://github.com/wasichai/wasichai/compare/v2.0.0...v2.1.0) (2026-11-16)
 
 
