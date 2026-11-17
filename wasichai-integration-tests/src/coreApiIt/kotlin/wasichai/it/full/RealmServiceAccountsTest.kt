@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.transaction.ReactiveTransactionManager
 import org.springframework.transaction.reactive.TransactionalOperator
+import org.springframework.transaction.reactive.executeAndAwait
 import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.ServiceAccountSecrets
 import wasichai.core.identity.oidc.RealmAccountResolution
@@ -343,5 +345,62 @@ class RealmServiceAccountsTest : FullAppIntegrationTest() {
                 carga.resolve(org, "rentas-perene")
             ).isEqualTo(RealmAccountResolution.Denied("client rentas-perene is not a service account of this app"))
             assertThat(accountRows(org)).isEmpty()
+        }
+
+    // a local account made at the same instant, after the check: the unique name says no, a denial and never a 500
+    @Test
+    fun `a local account made at the same instant is a denial, not an error`(): Unit =
+        runBlocking {
+            val org = organization("CARGA_DATOS")
+            val operator = TransactionalOperator.create(transactionManager)
+
+            val resolution =
+                coroutineScope {
+                    val pending = async(Dispatchers.IO) { carga.resolve(org, clientId) }
+                    // uncommitted: the resolve does not see it, its insert waits on it and then fails on the name
+                    operator.executeAndAwait {
+                        localAccount(org, clientId)
+                        delay(1500)
+                    }
+                    pending.await()
+                }
+
+            assertThat(resolution).isEqualTo(RealmAccountResolution.Denied("a local service account of this organization is already named $clientId"))
+            assertThat(accountRows(org).map { it.externalClientId }).containsExactly(null)
+        }
+
+    // a role deleted after the check and before the write is not reported as held
+    @Test
+    fun `the answer carries the roles read after the write`(): Unit =
+        runBlocking {
+            val org = organization("CARGA_DATOS", "OTRO")
+            val both = accounts(RealmServiceAccount(clientId, listOf("CARGA_DATOS", "OTRO")))
+            val operator = TransactionalOperator.create(transactionManager)
+
+            val resolution =
+                coroutineScope {
+                    val pending =
+                        async(Dispatchers.IO) {
+                            // the role check passes, then the lock holds it back
+                            delay(300)
+                            both.resolve(org, clientId)
+                        }
+                    operator.executeAndAwait {
+                        lock.withXactLock("wasichai:realm-service-account:$org:$clientId") {
+                            delay(1500)
+                            db
+                                .sql("DELETE FROM ${schemas.metadata}.roles WHERE organization_id = :org AND name = 'OTRO'")
+                                .bind("org", org)
+                                .fetch()
+                                .rowsUpdated()
+                                .awaitSingle()
+                        }
+                    }
+                    pending.await()
+                }
+
+            val account = found(resolution).account
+            assertThat(account.roles).containsExactly("CARGA_DATOS")
+            assertThat(rolesOf(account.id)).containsExactly("CARGA_DATOS")
         }
 }

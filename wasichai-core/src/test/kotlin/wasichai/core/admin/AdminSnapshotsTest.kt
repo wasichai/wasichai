@@ -65,6 +65,15 @@ class AdminSnapshotsTest {
     }
 
     @Test
+    fun `a realm service account's snapshot names its client, a local one's does not change`() {
+        val local = ServiceAccountResponse(UUID.randomUUID().toString(), "x", "rentas", true, listOf("SYNC"), Instant.now(), null)
+        val realm = local.copy(name = "carga-perene", externalClientId = "carga-perene")
+
+        assertThat(AdminSnapshots.serviceAccount(local)).containsOnlyKeys("name", "enabled", "roles")
+        assertThat(AdminSnapshots.serviceAccount(realm)).containsEntry("externalClientId", "carga-perene")
+    }
+
+    @Test
     fun `replacing a permission set records both sets and the diff names only the grants that changed`() {
         val before =
             role(

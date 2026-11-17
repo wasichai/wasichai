@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.transaction.reactive.TransactionalOperator
@@ -119,15 +120,26 @@ open class RealmServiceAccounts(
         clientId: String,
         roleIds: Map<String, UUID>
     ): RealmAccountResolution =
+        try {
+            writeInTransaction(organizationId, clientId, roleIds)
+        } catch (e: DuplicateKeyException) {
+            // a local account made at this instant, after the check: the same denial. any other duplicate is a bug
+            if (e.message?.contains(NAME_UNIQUE) != true) throw e
+            RealmAccountResolution.Denied(namedLocally(clientId))
+        }
+
+    private suspend fun writeInTransaction(
+        organizationId: UUID,
+        clientId: String,
+        roleIds: Map<String, UUID>
+    ): RealmAccountResolution =
         ChangeOrigin.within("realm:$clientId") {
             transactions.executeAndAwait {
                 lock.withXactLock("wasichai:realm-service-account:$organizationId:$clientId") {
                     val row =
                         byClientId(organizationId, clientId)
                             ?: if (localNamed(organizationId, clientId)) {
-                                return@withXactLock RealmAccountResolution.Denied(
-                                    "a local service account of this organization is already named $clientId"
-                                )
+                                return@withXactLock RealmAccountResolution.Denied(namedLocally(clientId))
                             } else {
                                 create(organizationId, clientId, roleIds)
                             }
@@ -144,10 +156,13 @@ open class RealmServiceAccounts(
                             snapshot(row, wanted)
                         )
                     }
-                    answer(organizationId, row, wanted)
+                    // what the database holds now: a role deleted meanwhile is not reported
+                    answer(organizationId, row, rolesOf(organizationId, row.id))
                 }
             }
         }
+
+    private fun namedLocally(clientId: String) = "a local service account of this organization is already named $clientId"
 
     private fun answer(
         organizationId: UUID,
@@ -200,11 +215,11 @@ open class RealmServiceAccounts(
         return row
     }
 
-    // AdminSnapshots.serviceAccount's shape: name, enabled, roles. never a secret
+    // AdminSnapshots.serviceAccount's shape: name, enabled, roles, and the client id of a realm account. never a secret
     private fun snapshot(
         row: Row,
         roles: List<String>
-    ): Map<String, Any?> = linkedMapOf("name" to row.name, "enabled" to row.enabled, "roles" to roles)
+    ): Map<String, Any?> = linkedMapOf("name" to row.name, "enabled" to row.enabled, "roles" to roles, "externalClientId" to row.name)
 
     private suspend fun byClientId(
         organizationId: UUID,
@@ -319,5 +334,6 @@ open class RealmServiceAccounts(
 
     private companion object {
         const val SWEEP_AT = 10_000
+        const val NAME_UNIQUE = "service_accounts_name_unique_per_org"
     }
 }

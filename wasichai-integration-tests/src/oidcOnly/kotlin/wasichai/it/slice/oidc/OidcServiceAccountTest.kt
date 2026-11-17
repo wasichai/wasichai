@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.test.context.TestPropertySource
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
@@ -166,6 +167,86 @@ class OidcServiceAccountTest : OidcIntegrationTest() {
 
         assertThat(me.get("userId").asString()).isEqualTo(userId.toString())
         assertThat(me.has("serviceAccount")).isFalse()
+    }
+
+    private fun admin(): String {
+        val email = address("admin")
+        invite(email)
+        return realmToken(UUID.randomUUID().toString(), email)
+    }
+
+    // the realm account's row, as the administration lists it: the first token makes it
+    private fun listed(adminToken: String): JsonNode {
+        me(clientToken(CARGA))
+        val all =
+            read(
+                client
+                    .get()
+                    .uri("/api/service-accounts")
+                    .header(HttpHeaders.AUTHORIZATION, adminToken)
+                    .exchange()
+                    .expectStatus()
+                    .isOk
+                    .expectBody(String::class.java)
+                    .returnResult()
+                    .responseBody
+            )
+        return (0 until all.size()).map { all.get(it) }.single { it.get("name").asString() == CARGA }
+    }
+
+    private fun status(
+        method: HttpMethod,
+        uri: String,
+        adminToken: String,
+        body: Any? = null
+    ): Int {
+        val spec = client.method(method).uri(uri).header(HttpHeaders.AUTHORIZATION, adminToken)
+        return (if (body != null) spec.bodyValue(body) else spec)
+            .exchange()
+            .returnResult(String::class.java)
+            .status
+            .value()
+    }
+
+    @Test
+    fun `a realm account is listed with its client id and no secret date`() {
+        val account = listed(admin())
+
+        assertThat(account.get("externalClientId").asString()).isEqualTo(CARGA)
+        assertThat(account.get("enabled").asBoolean()).isTrue()
+        assertThat(account.get("roles").let { roles -> (0 until roles.size()).map { roles.get(it).asString() } }).containsExactly(CARGA_DATOS)
+        assertThat(account.has("secretRotatedAt") && !account.get("secretRotatedAt").isNull).isFalse()
+        assertThat(account.has("clientSecret")).isFalse()
+    }
+
+    @Test
+    fun `its roles, its secret and its deletion are refused while configured`() {
+        val admin = admin()
+        val id = listed(admin).get("id").asString()
+
+        assertThat(status(HttpMethod.PUT, "/api/service-accounts/$id", admin, mapOf("roles" to listOf("ADMIN")))).isEqualTo(409)
+        assertThat(status(HttpMethod.POST, "/api/service-accounts/$id/secret", admin)).isEqualTo(409)
+        assertThat(status(HttpMethod.DELETE, "/api/service-accounts/$id", admin)).isEqualTo(409)
+        // nothing changed
+        assertThat(listed(admin).get("id").asString()).isEqualTo(id)
+    }
+
+    @Test
+    fun `an administrator disables it and its next token is 403`() {
+        val admin = admin()
+        val id = listed(admin).get("id").asString()
+
+        assertThat(status(HttpMethod.PUT, "/api/service-accounts/$id", admin, mapOf("enabled" to false))).isEqualTo(200)
+
+        client
+            .get()
+            .uri("/api/auth/me")
+            .header(HttpHeaders.AUTHORIZATION, clientToken(CARGA))
+            .exchange()
+            .expectStatus()
+            .isForbidden
+        assertThat(status(HttpMethod.PUT, "/api/service-accounts/$id", admin, mapOf("enabled" to true))).isEqualTo(200)
+        me(clientToken(CARGA))
     }
 
     companion object {

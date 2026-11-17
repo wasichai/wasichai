@@ -147,6 +147,22 @@ class ServiceAccountApiTest : WasichaiIntegrationTest() {
     }
 
     @Test
+    fun `a local account's answer has no externalClientId`() {
+        val created = createAccount(uniqueName("rentas"), listOf(role))
+
+        client
+            .get()
+            .uri("/api/service-accounts/${created.id}")
+            .header(HttpHeaders.AUTHORIZATION, admin)
+            .exchange()
+            .expectStatus()
+            .isOk
+            .expectBody()
+            .jsonPath("$.externalClientId")
+            .doesNotHaveJsonPath()
+    }
+
+    @Test
     fun `the secret is shown once and never again`() {
         val created = createAccount(uniqueName("rentas"), listOf(role))
         assertThat(created.secret).hasSizeGreaterThanOrEqualTo(43)

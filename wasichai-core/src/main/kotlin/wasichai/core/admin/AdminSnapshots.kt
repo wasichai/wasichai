@@ -50,11 +50,11 @@ internal object AdminSnapshots {
 
     // never clientSecret: the response carries it on create and rotate, the trail never does
     fun serviceAccount(account: ServiceAccountResponse): Map<String, Any?> =
-        linkedMapOf(
+        linkedMapOf<String, Any?>(
             "name" to account.name,
             "enabled" to account.enabled,
             "roles" to account.roles
-        )
+        ).also { state -> account.externalClientId?.let { state["externalClientId"] = it } }
 
     fun orgUnit(unit: OrgUnitResponse): Map<String, Any?> =
         linkedMapOf(

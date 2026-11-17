@@ -120,8 +120,9 @@ class WasichaiAdminAutoConfiguration {
         currentUser: CurrentUser,
         schemas: WasichaiSchemas,
         audit: AdminAudit,
-        revocation: TokenRevocation
-    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas, audit, revocation)
+        revocation: TokenRevocation,
+        identity: WasichaiIdentityProperties
+    ): ServiceAccountService = ServiceAccountService(db, passwordEncoder, currentUser, schemas, audit, revocation, identity.oidc.serviceAccountsByClientId.keys)
 
     @Bean
     @ConditionalOnMissingBean

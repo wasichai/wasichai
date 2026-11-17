@@ -58,7 +58,9 @@ data class ServiceAccountResponse(
     val roles: List<String>,
     val createdAt: Instant?,
     val secretRotatedAt: Instant?,
-    @field:JsonInclude(JsonInclude.Include.NON_NULL) val clientSecret: String? = null
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val clientSecret: String? = null,
+    // a realm account's client id (ADR-086); absent for a local one
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val externalClientId: String? = null
 )
 
 // service accounts of the caller's tenant (ADR-043). MANAGE_ORGANIZATION, which a service account never passes.
@@ -71,7 +73,9 @@ class ServiceAccountService(
     private val currentUser: CurrentUser,
     private val schemas: WasichaiSchemas,
     private val audit: AdminAudit,
-    private val revocation: TokenRevocation
+    private val revocation: TokenRevocation,
+    // the realm clients the app lists: their accounts are read-only here while listed (ADR-086)
+    private val configuredClients: Set<String> = emptySet()
 ) {
     private val roles = RoleAssignments(db, schemas)
 
@@ -131,6 +135,9 @@ class ServiceAccountService(
     ): ServiceAccountResponse {
         val admin = requireAdmin()
         val before = accountOrFail(admin.organizationId, id)
+        if (before.externalClientId != null && request.roles != null) {
+            throw ConflictException("Roles of a realm service account come from wasichai.security.oidc.service-accounts")
+        }
         val roleIds = request.roles?.let { resolveRoles(admin.organizationId, it) }
         if (request.enabled != null) {
             db
@@ -161,6 +168,9 @@ class ServiceAccountService(
     suspend fun rotateSecret(id: UUID): ServiceAccountResponse {
         val admin = requireAdmin()
         val before = accountOrFail(admin.organizationId, id)
+        if (before.externalClientId != null) {
+            throw ConflictException("A realm service account has no secret here: rotate it in the identity provider")
+        }
         val secret = ServiceAccountSecrets.generate()
         db
             .sql(
@@ -193,6 +203,9 @@ class ServiceAccountService(
     suspend fun delete(id: UUID) {
         val admin = requireAdmin()
         val before = accountOrFail(admin.organizationId, id)
+        before.externalClientId?.takeIf { it in configuredClients }?.let {
+            throw ConflictException("Client $it is still configured: it would come back on its next token")
+        }
         db
             .sql(
                 """
@@ -218,20 +231,21 @@ class ServiceAccountService(
         db
             .sql(
                 """
-                SELECT sa.id, sa.name, sa.enabled, sa.created_at, sa.secret_rotated_at,
+                SELECT sa.id, sa.name, sa.enabled, sa.created_at, sa.secret_rotated_at, sa.external_client_id,
                        string_agg(r.name, ',' ORDER BY r.name) AS role_names
                 FROM ${schemas.metadata}.service_accounts sa
                 LEFT JOIN ${schemas.metadata}.user_roles ur ON ur.user_id = sa.id
                 LEFT JOIN ${schemas.metadata}.roles r ON r.id = ur.role_id
                 WHERE sa.organization_id = :organizationId
                   AND (:id::uuid IS NULL OR sa.id = :id::uuid)
-                GROUP BY sa.id, sa.name, sa.enabled, sa.created_at, sa.secret_rotated_at
+                GROUP BY sa.id, sa.name, sa.enabled, sa.created_at, sa.secret_rotated_at, sa.external_client_id
                 ORDER BY sa.name
                 """.trimIndent()
             ).bind("organizationId", organizationId)
             .bindNullable("id", id)
             .map { row, _ ->
                 val accountId = Rows.uuid(row, "id").toString()
+                val externalClientId = Rows.stringOrNull(row, "external_client_id")
                 ServiceAccountResponse(
                     id = accountId,
                     clientId = accountId,
@@ -239,7 +253,9 @@ class ServiceAccountService(
                     enabled = Rows.bool(row, "enabled"),
                     roles = Rows.stringOrNull(row, "role_names")?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     createdAt = Rows.instantOrNull(row, "created_at"),
-                    secretRotatedAt = Rows.instantOrNull(row, "secret_rotated_at")
+                    // the column defaults to now(): a realm account has no secret, so no date
+                    secretRotatedAt = if (externalClientId == null) Rows.instantOrNull(row, "secret_rotated_at") else null,
+                    externalClientId = externalClientId
                 )
             }.all()
             .asFlow()
