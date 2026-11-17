@@ -65,6 +65,15 @@ class AdminSnapshotsTest {
     }
 
     @Test
+    fun `a realm service account's snapshot names its client, a local one's does not change`() {
+        val local = ServiceAccountResponse(UUID.randomUUID().toString(), "x", "rentas", true, listOf("SYNC"), Instant.now(), null)
+        val realm = local.copy(name = "carga-perene", externalClientId = "carga-perene")
+
+        assertThat(AdminSnapshots.serviceAccount(local)).containsOnlyKeys("name", "enabled", "roles")
+        assertThat(AdminSnapshots.serviceAccount(realm)).containsEntry("externalClientId", "carga-perene")
+    }
+
+    @Test
     fun `replacing a permission set records both sets and the diff names only the grants that changed`() {
         val before =
             role(
@@ -129,5 +138,16 @@ class AdminSnapshotsTest {
 
         assertThat(state).containsOnlyKeys("name", "label", "ownRecordsOnly", "permissions", "fieldPermissions")
         assertThat(state["permissions"]).isEqualTo(mapOf("predio.READ" to true))
+    }
+
+    @Test
+    fun `a role carries declaredBy only when declared, so a take-over or a release shows in the diff`() {
+        val mine = role()
+        val declared = mine.copy(declaredBy = "padron")
+
+        assertThat(AdminSnapshots.role(mine)).doesNotContainKey("declaredBy")
+        assertThat(AdminSnapshots.role(declared)).containsEntry("declaredBy", "padron")
+        assertThat(diff(AdminSnapshots.role(mine), AdminSnapshots.role(declared))).containsExactly(FieldChange("declaredBy", null, "padron"))
+        assertThat(diff(AdminSnapshots.role(declared), AdminSnapshots.role(mine))).containsExactly(FieldChange("declaredBy", "padron", null))
     }
 }

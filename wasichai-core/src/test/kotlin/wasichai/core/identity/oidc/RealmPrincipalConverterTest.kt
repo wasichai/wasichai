@@ -7,7 +7,11 @@ import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtClaimNames
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+import org.springframework.transaction.reactive.TransactionalOperator
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.JwtService
+import wasichai.core.platform.ClusterLock
+import wasichai.core.platform.RealmServiceAccount
 import wasichai.core.platform.WasichaiSchemas
 import java.time.Duration
 import java.time.Instant
@@ -52,8 +56,39 @@ class RealmPrincipalConverterTest {
         override suspend fun roles(userId: UUID): List<String> = roles[userId] ?: emptyList()
     }
 
+    // the sql lives in RealmServiceAccountsTest; here the configured clients and what resolve answers
+    private class FakeAccounts(
+        configured: Map<String, RealmServiceAccount>,
+        private val answers: Map<Pair<UUID, String>, RealmAccountResolution>
+    ) : RealmServiceAccounts(
+            mock(DatabaseClient::class.java),
+            WasichaiSchemas("wasichai", "app_data"),
+            configured,
+            mock(ClusterLock::class.java),
+            mock(AdminAudit::class.java),
+            { mock(TransactionalOperator::class.java) },
+            Duration.ZERO
+        ) {
+        val resolved = mutableListOf<Pair<UUID, String>>()
+
+        override suspend fun resolve(
+            organizationId: UUID,
+            clientId: String
+        ): RealmAccountResolution {
+            resolved += organizationId to clientId
+            return answers[organizationId to clientId] ?: RealmAccountResolution.Denied("client $clientId is not a service account of this app")
+        }
+    }
+
+    private val carga = RealmAccount(UUID.randomUUID(), perene, "carga-perene", "x@service-accounts.invalid", listOf("CARGA_DATOS"))
+
     private val users = FakeUsers(mapOf("perene" to perene), mapOf("kc-ana" to ana, "kc-luis" to luis), mapOf(ana.id to listOf("CAJERO")))
-    private val converter = RealmPrincipalConverter(realmIssuer, users)
+    private val accounts =
+        FakeAccounts(
+            mapOf("carga-perene" to RealmServiceAccount("carga-perene", listOf("CARGA_DATOS"))),
+            mapOf((perene to "carga-perene") to RealmAccountResolution.Found(carga))
+        )
+    private val converter = RealmPrincipalConverter(realmIssuer, users, accounts)
 
     private val issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS)
 
@@ -180,5 +215,92 @@ class RealmPrincipalConverterTest {
                 .build()
 
         assertThat(convert(local).token).isSameAs(local)
+    }
+
+    // keycloak's client-credentials token: azp, service-account-<client>, no email
+    private fun clientToken(
+        azp: String = "carga-perene",
+        username: String = "service-account-$azp",
+        organization: Any? = listOf("perene"),
+        email: String? = null
+    ): Jwt {
+        val builder =
+            Jwt
+                .withTokenValue("client-token")
+                .header("alg", "RS256")
+                .issuer(realmIssuer)
+                .subject("kc-sa-${UUID.randomUUID()}")
+                .audience(listOf("caja"))
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plusSeconds(300))
+                .claim("azp", azp)
+                .claim("preferred_username", username)
+        if (organization != null) builder.claim("organization", organization)
+        if (email != null) builder.claim("email", email)
+        return builder.build()
+    }
+
+    @Test
+    fun `a client token of a configured client is the app's service account`() {
+        val translated = convert(clientToken()).token
+
+        assertThat(translated.subject).isEqualTo(carga.id.toString())
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_ORGANIZATION)).isEqualTo(perene.toString())
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_EMAIL)).isEqualTo(carga.email)
+        assertThat(translated.getClaimAsStringList(JwtService.CLAIM_ROLES)).containsExactly("CARGA_DATOS")
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_SERVICE_ACCOUNT)).isEqualTo("carga-perene")
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_DENIED)).isNull()
+        assertThat(translated.claims).doesNotContainKeys("organization", "azp", "preferred_username", JwtClaimNames.AUD)
+        assertThat(accounts.resolved).containsExactly(perene to "carga-perene")
+        assertThat(users.resolved).isEmpty()
+    }
+
+    @Test
+    fun `a token with an email is a person's even when its username looks like a service account`() {
+        val translated = convert(clientToken(email = "ana@perene.gob.pe")).token
+
+        // the person's path: resolved by subject, not invited, so denied as a person
+        assertThat(accounts.resolved).isEmpty()
+        assertThat(users.resolved).hasSize(1)
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_SERVICE_ACCOUNT)).isNull()
+        assertThat(translated.getClaimAsString(JwtService.CLAIM_DENIED)).isEqualTo("you have no access to this app; ask its administrator")
+    }
+
+    @Test
+    fun `a username that does not match azp is a person's`() {
+        listOf(clientToken(azp = "x", username = "service-account-y"), clientToken(azp = "carga-perene", username = "carga-perene")).forEach { jwt ->
+            accounts.resolved.clear()
+            users.resolved.clear()
+
+            val translated = convert(jwt).token
+
+            assertThat(accounts.resolved).isEmpty()
+            assertThat(users.resolved).hasSize(1)
+            assertThat(translated.getClaimAsString(JwtService.CLAIM_SERVICE_ACCOUNT)).isNull()
+        }
+    }
+
+    @Test
+    fun `the rule reads azp, the username in lower case and the absence of email`() {
+        assertThat(serviceAccountClientId(clientToken())).isEqualTo("carga-perene")
+        // keycloak lower-cases the username, never the client id
+        assertThat(serviceAccountClientId(clientToken(azp = "Carga", username = "service-account-carga"))).isEqualTo("Carga")
+        assertThat(serviceAccountClientId(clientToken(azp = "Carga", username = "service-account-Carga"))).isNull()
+        assertThat(serviceAccountClientId(clientToken(email = ""))).isNull()
+        assertThat(serviceAccountClientId(clientToken(azp = " ", username = "service-account- "))).isNull()
+        assertThat(serviceAccountClientId(realmToken())).isNull()
+    }
+
+    @Test
+    fun `a client the app does not list is a denial that says so`() {
+        assertThat(denial(clientToken(azp = "rentas-perene"))).isEqualTo("client rentas-perene is not a service account of this app")
+        assertThat(users.resolved).isEmpty()
+    }
+
+    @Test
+    fun `a client token with no organization is the same denial a person gets`() {
+        assertThat(denial(clientToken(organization = null))).isEqualTo("no organization in the token: sign in to one")
+        assertThat(denial(clientToken(organization = listOf("satipo")))).isEqualTo("organization satipo is not in this app")
+        assertThat(accounts.resolved).isEmpty()
     }
 }

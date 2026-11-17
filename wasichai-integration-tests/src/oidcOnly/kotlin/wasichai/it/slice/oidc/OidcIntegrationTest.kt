@@ -103,6 +103,11 @@ abstract class OidcIntegrationTest {
                 .claim("email_verified", emailVerified)
                 .claim("organization", organization)
                 .build()
+        return signed(claims)
+    }
+
+    // signed with the test realm's key, as a bearer header
+    protected fun signed(claims: JWTClaimsSet): String {
         val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test").build(), claims)
         jwt.sign(RSASSASigner(KEYS.private as RSAPrivateKey))
         return "Bearer ${jwt.serialize()}"

@@ -49,6 +49,12 @@ called app as audience. Verified on Keycloak 26.8.2: its client-credentials toke
   is stored in the app.
 - Revoking a realm account is not instant: up to the realm's token lifespan, unless the row is disabled in the app.
 - The app trusts the realm's fixed `organization` mapper for a service account's tenant; the platform tests it.
+- The service-account rule rests on `preferred_username == "service-account-" + azp` with no `email`. A realm person
+  with no email and that exact username signing in through a configured client would be taken for the account; only
+  realm administrators can create such a user. Keycloak's `client_id` claim or the absence of `sid` are possible extra
+  discriminators if this is revisited.
+- A disabled realm account is cut off within `wasichai.security.oidc.roles-cache` (`5s` by default); disabling the
+  Keycloak client cuts token issuance.
 - The kit sets the list with plain environment variables, one index per client.
 - A difference from the original app: an ADR-031 entry; `external_client_id`, the nullable `secret_hash` and their
   constraint and index are known schema-parity deviations.

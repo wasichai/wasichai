@@ -47,6 +47,10 @@ Secrets are supplied by the runtime environment (secret manager, protected CI va
 |`wasichai.security.oidc.client-id` | |Client id, also the audience a realm token must carry. Required with `oidc`.
 |`wasichai.security.oidc.jwk-set-uri` |`<issuer>/protocol/openid-connect/certs` |Where the realm's signing keys are.
 |`wasichai.security.oidc.roles-cache` |`5s` |How long a person's roles are cached (`0` for none).
+|`wasichai.security.oidc.service-accounts[i].client-id` | |Realm client accepted as a service account of the app (`oidc` only); one entry per client,
+unique, `^[a-z][a-z0-9_-]{1,48}$`. As an environment variable, by index: `WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID`.
+|`wasichai.security.oidc.service-accounts[i].roles` | |Roles of that account (not empty, never `ADMIN`). Environment variable:
+`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_ROLES_0`.
 |`wasichai.security.login.enabled` |`false` |Limit failed sign-in attempts.
 |`wasichai.security.login.max-attempts` |`5` |Per email and IP address.
 |`wasichai.security.login.account-max-attempts` |`20` |Per email, from any address.

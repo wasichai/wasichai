@@ -138,6 +138,18 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "index service_accounts.service_accounts_pkey CREATE UNIQUE INDEX service_accounts_pkey ON META.service_accounts USING btree (id)",
                 "table service_accounts"
             ).associateWith { "ADR-031 D27: service accounts" } +
+            // roles an app declares, and service accounts of the identity provider's realm (ADR-031 D59, D60)
+            listOf(
+                "column roles.declared_by #7 text",
+                "constraint roles.roles_declared_by_valid CHECK ((declared_by ~ '^[a-z][a-z0-9_-]{0,48}\$'::text))"
+            ).associateWith { "ADR-031 D59: roles a model declares" } +
+            listOf(
+                "column service_accounts.external_client_id #8 text",
+                "column service_accounts.secret_hash #4 text",
+                "constraint service_accounts.service_accounts_one_credential CHECK (((secret_hash IS NULL) <> (external_client_id IS NULL)))",
+                "index service_accounts.service_accounts_org_external_client_uq CREATE UNIQUE INDEX service_accounts_org_external_client_uq " +
+                    "ON META.service_accounts USING btree (organization_id, external_client_id) WHERE (external_client_id IS NOT NULL)"
+            ).associateWith { "ADR-031 D60: service accounts of the realm, no secret of ours" } +
             // organizational units (ADR-031 D31, ADR-045): two new core tables
             listOf(
                 "column org_units.code #4 text NOT NULL",

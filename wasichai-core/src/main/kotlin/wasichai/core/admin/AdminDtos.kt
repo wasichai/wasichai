@@ -1,7 +1,10 @@
 package wasichai.core.admin
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import wasichai.core.metadata.FieldPermissionEntry
+import wasichai.core.metadata.PermissionEntry
 import java.time.Instant
 
 // ---------------------------------------------------------------------------
@@ -39,22 +42,9 @@ data class UpdateRoleRequest(
     val ownRecordsOnly: Boolean? = null
 )
 
-// objectName null = every object of the organization
-data class PermissionEntry(
-    val objectName: String? = null,
-    @field:NotBlank val action: String,
-    val allowed: Boolean = true
-)
-
+// PermissionEntry: wasichai.core.metadata, where a declared role takes it too (ADR-085)
 data class RolePermissionsRequest(
     val permissions: List<PermissionEntry> = emptyList()
-)
-
-data class FieldPermissionEntry(
-    @field:NotBlank val objectName: String,
-    @field:NotBlank val fieldName: String,
-    val read: Boolean = true,
-    val write: Boolean = true
 )
 
 data class RoleFieldPermissionsRequest(
@@ -97,5 +87,7 @@ data class RoleResponse(
     val label: String,
     val ownRecordsOnly: Boolean,
     val permissions: List<PermissionResponse>,
-    val fieldPermissions: List<FieldPermissionResponse>
+    val fieldPermissions: List<FieldPermissionResponse>,
+    // the model that declares the role; absent for a role a person made
+    @field:JsonInclude(JsonInclude.Include.NON_NULL) val declaredBy: String? = null
 )

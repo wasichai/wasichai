@@ -19,6 +19,8 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.web.server.SecurityWebFilterChain
+import org.springframework.transaction.ReactiveTransactionManager
+import org.springframework.transaction.reactive.TransactionalOperator
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
@@ -26,6 +28,7 @@ import wasichai.core.audit.AuditPage
 import wasichai.core.common.GlobalExceptionHandler
 import wasichai.core.data.IdempotencyKeys
 import wasichai.core.identity.AccessPolicy
+import wasichai.core.identity.AdminAudit
 import wasichai.core.identity.AuthConfigController
 import wasichai.core.identity.AuthController
 import wasichai.core.identity.AuthService
@@ -54,8 +57,10 @@ import wasichai.core.identity.oidc.DeniedRealmAccess
 import wasichai.core.identity.oidc.IssuerRoutingJwtDecoder
 import wasichai.core.identity.oidc.RealmJwtDecoder
 import wasichai.core.identity.oidc.RealmPrincipalConverter
+import wasichai.core.identity.oidc.RealmServiceAccounts
 import wasichai.core.identity.oidc.RealmUsers
 import wasichai.core.identity.oidc.realmJwtDecoder
+import wasichai.core.platform.ClusterLock
 import wasichai.core.platform.JwtProperties
 import wasichai.core.platform.WasichaiIdentityProperties
 import wasichai.core.platform.WasichaiLoginProperties
@@ -130,12 +135,34 @@ class WasichaiSecurityAutoConfiguration {
             identity: WasichaiIdentityProperties
         ): RealmUsers = RealmUsers(db, schemas, identity.oidc.rolesCache)
 
+        // the clients the app takes as its service accounts (ADR-086); found results cached as long as a person's roles
+        @Bean
+        @ConditionalOnMissingBean
+        fun realmServiceAccounts(
+            db: DatabaseClient,
+            schemas: WasichaiSchemas,
+            identity: WasichaiIdentityProperties,
+            lock: ClusterLock,
+            audit: AdminAudit,
+            transactionManager: ObjectProvider<ReactiveTransactionManager>
+        ): RealmServiceAccounts =
+            RealmServiceAccounts(
+                db,
+                schemas,
+                identity.oidc.serviceAccountsByClientId,
+                lock,
+                audit,
+                { TransactionalOperator.create(transactionManager.getObject()) },
+                identity.oidc.rolesCache
+            )
+
         @Bean
         @ConditionalOnMissingBean
         fun realmPrincipalConverter(
             realm: RealmJwtDecoder,
-            users: RealmUsers
-        ): RealmPrincipalConverter = RealmPrincipalConverter(realm.issuer, users)
+            users: RealmUsers,
+            accounts: RealmServiceAccounts
+        ): RealmPrincipalConverter = RealmPrincipalConverter(realm.issuer, users, accounts)
 
         @Bean
         @ConditionalOnMissingBean

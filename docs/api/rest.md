@@ -145,6 +145,14 @@ tenant (`409` otherwise) and never changes. A role the tenant does not have is `
 account never administers the tenant, and a service account's token is refused (`403`) on every
 `MANAGE_ORGANIZATION` route, whatever its roles grant.
 
+**Realm accounts** ([ADR-086](../adr/0086-service-accounts-signed-by-the-domains-identity-provider.md)). With
+`identity=oidc`, a client listed in `wasichai.security.oidc.service-accounts` becomes an account on its first token, and
+its answers carry `"externalClientId": "<client id>"` (left out for a local account). It has no secret: `secretRotatedAt`
+is null. It is read-only here: `PUT` takes only `enabled`, and `409` on `roles` (`Roles of a realm service account come
+from wasichai.security.oidc.service-accounts`); rotating is `409` (`A realm service account has no secret here: rotate it
+in the identity provider`); `DELETE` is `409` while the client is still listed (`Client <id> is still configured: it would
+come back on its next token`). `POST /api/auth/token` with its id is `401 Invalid client credentials`.
+
 `POST /api/auth/token` is public. A known, enabled account with the right secret gets a JWT carrying its roles, its
 organization and `service_account: "<name>"`, for `wasichai.security.jwt.service-account-ttl` (15 minutes by
 default); the client asks again when it runs out. Anything else, an unknown or malformed id, a wrong secret, a
@@ -155,6 +163,13 @@ deleting stops new tokens at once; a token already issued lives until it expires
 The account is backed by a user row with the same id, so its writes are recorded under that id like anyone's:
 `created_by`, `updated_by` and the audit log. That user is not listed by `GET /api/users`, cannot sign in, and is
 `404` to the user routes.
+
+## Roles
+
+A role an app declares in its model ([ADR-085](../adr/0085-roles-an-app-declares-in-code.md)) is ensured in every
+tenant and answers `"declaredBy": "<model>"` (left out for a person's role). `PUT` and `DELETE` on it, and setting its
+permissions or field permissions, are `409`: `Role 'X' is declared by '<model>': only the app that declares it changes
+it`, for `ADMIN` too. Assigning it to a user or a service account is not a change and works as for any role.
 
 ## Organizational units
 
