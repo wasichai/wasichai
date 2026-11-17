@@ -4,7 +4,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class SameRolesTest {
-    // a collation that ignores "_" lists SRTMX before SRTM_LECTOR; code points the other way. neither is a difference
+    // code points list SRTMX before SRTM_LECTOR ("X" < "_"); a collation that ignores "_" the other way. neither is a difference
     @Test
     fun `an order is no difference`() {
         assertThat(sameRoles(listOf("SRTMX", "SRTM_LECTOR"), listOf("SRTM_LECTOR", "SRTMX"))).isTrue()
