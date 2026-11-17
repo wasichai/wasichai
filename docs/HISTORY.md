@@ -2,6 +2,32 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-16 — A realm client is the app's service account
+
+With `identity=oidc`, `wasichai.security.oidc.service-accounts` lists the realm clients the app accepts, each with its
+roles (`...SERVICEACCOUNTS_0_CLIENTID`, `..._0_ROLES_0` from the environment; boot fails on a bad or repeated client id,
+no role or `ADMIN`). A client-credentials token with no `email`, an `azp` and `preferred_username` equal to
+`service-account-<azp>` is that client's account: on its first token, under a cluster lock, the app creates the
+`service_accounts` row of the token's organization (`external_client_id`, `secret_hash` NULL, migration V23) and its
+backing user, keeps its roles as configured and carries `service_account` as ADR-043. Every refusal is a `403` with a
+reason; a wrong audience is a `401`. The administration lists it with `externalClientId` and read-only (`409` on roles,
+rotating and, while configured, deleting); `POST /api/auth/token` with its id is `401`. A disabled account is cut off
+within `roles-cache`. ADR-086, ADR-031 D60. Unlike the spec, the transaction operator is taken lazily and only enabled
+accounts are cached.
+
+## 2026-11-16 — An app declares its roles in code
+
+`DeclaredModel.roles` (`DeclaredRole`) is ensured in every tenant at startup and on provisioning, after the model's
+objects, relationships and actions and in the same run; the declaration is the whole role, a person's role of that name
+is taken over, a grant the tenant cannot hold leaves that role as it was and is reported, and a role removed from the
+code is released. A name is `^[A-Z][A-Z0-9_]{1,48}$`, never `ADMIN`, never granting `MANAGE_ORGANIZATION` or
+`MANAGE_TENANTS`, in one model only, or the context does not start. `roles.declared_by` (V23) locks it: a person's
+`PUT`, `DELETE`, permissions or field permissions on it is a `409`; assigning it is not a change. `RoleResponse` carries
+`declaredBy`. ADR-085, ADR-031 D59.
+
+**Upgrade.** `PermissionEntry` and `FieldPermissionEntry` moved from `wasichai.core.admin` to `wasichai.core.metadata`
+(source break for Kotlin or Java code importing them; no known consumer); the JSON is unchanged.
+
 ## 2026-11-16 — The UI signs people in through the domain's identity provider
 
 `@wasichai/core` reads `GET /api/auth/config` at start: `local` (or an older backend without the route) keeps the login

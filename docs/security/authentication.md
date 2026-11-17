@@ -110,7 +110,8 @@ other `iss` is `401`.
 The person enters only with a `users` row of that organization: found by `users.external_subject` (the token's `sub`),
 or, on the first sign-in, by `lower(email)` when `email_verified` is `true` and the row has no `external_subject` yet,
 which is then linked (an invited person). The email is compared and stored in lower case, and follows the token only
-when it is verified. A service account's backing row is never linked. Roles come from `user_roles`, never from the
+when it is verified. A service account's backing row is never linked. A realm client can itself be a service account of the app: see
+[Signed by the domain's identity provider](#signed-by-the-domains-identity-provider). Roles come from `user_roles`, never from the
 realm; the app sees `sub` as `users.id`, as with a local token.
 
 **Re-linking.** A person whose realm account was deleted and created again has a new `sub`, which no longer finds their
@@ -179,6 +180,61 @@ the request a caller could fill with another system's key.
   256-bit secret is hopeless; with `wasichai.security.login.enabled=true` attempts are limited per client id (see
   [Sign-in attempt limits](#sign-in-attempt-limits)). Without it, or against floods from many ids, an app exposed to
   the internet still puts rate limiting in front of it (a gateway or proxy).
+
+### Signed by the domain's identity provider
+
+([ADR-086](../adr/0086-service-accounts-signed-by-the-domains-identity-provider.md).) With `identity=oidc`, a
+confidential client of the realm can be a service account of the app, with no secret stored here. Its client-credentials
+token is a realm token (RS256, `iss`, `exp`, `aud` holding the app's `client-id`) with a fixed `organization` claim, and
+it is the account's, not a person's, only when all three hold: **no `email` claim at all**, a non-blank `azp` (the
+client id), and `preferred_username` equal to `service-account-` plus `azp` in lower case. Any other realm token goes
+the person's way.
+
+The app accepts only the clients it lists, an indexed list in its configuration:
+
+```yaml
+wasichai:
+  security:
+    oidc:
+      service-accounts:
+        - client-id: srtm-integracion
+          roles: [SRTM_LECTOR]
+        - client-id: carga-datos
+          roles: [CARGA_DATOS]
+```
+
+From environment variables, by index: `WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID` and
+`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_ROLES_0`. A client id matches `^[a-z][a-z0-9_-]{1,48}$` and appears once; roles
+are not empty, are upper-cased and are never `ADMIN`. Otherwise boot fails with a message naming
+`wasichai.security.oidc.service-accounts[i]`. Nothing listed, or `identity=local`, changes nothing.
+
+**The row.** On the first token of a listed client, under a cluster lock, the app creates in the token's organization a
+`service_accounts` row found by client id (`external_client_id` = `azp`, `name` = `azp`, `secret_hash` NULL) and its
+backing user (no password, disabled, `<id>@service-accounts.invalid`). The `sub` is not kept, so a client the realm
+recreated finds the same row. The roles come from the configuration and are written to the row when they differ. The
+token then carries `service_account` like a local one, so everything under [Service accounts](#service-accounts)
+holds: never `ADMIN`, never `MANAGE_ORGANIZATION` or `MANAGE_TENANTS`. Declared roles
+([ADR-085](../adr/0085-roles-an-app-declares-in-code.md)) are how the listed roles exist in every tenant.
+
+**Every refusal is a `403` with its reason**, from the chain, before any endpoint (a wrong audience stays `401`):
+
+| Reason (`detail`)                                                   | Cause                                          |
+| ------------------------------------------------------------------- | ---------------------------------------------- |
+| `client <id> is not a service account of this app`                  | the client is not in `service-accounts`        |
+| `role <R> of client <id> is not in this organization`               | a configured role is missing; nothing written  |
+| `service account <id> is disabled in this app`                      | the row is disabled                            |
+| `a local service account of this organization is already named <id>` | a local account holds the name; not adopted    |
+| the person's reasons (no organization, several, unknown)            | the `organization` claim, as for a person      |
+
+**Revocation.** A disabled realm account is cut off within `wasichai.security.oidc.roles-cache` (`5s` by default;
+only enabled accounts are cached). Disabling the client in Keycloak stops new tokens; one already issued lasts the
+realm's access-token lifespan. `POST /api/auth/token` with a realm account's id is `401 Invalid client credentials`.
+In the administration the account is read-only: see [REST API](../api/rest.md#service-accounts).
+
+**Limit of the rule.** It rests on `preferred_username == "service-account-" + azp` and no `email`. A realm person with
+no email and exactly that username, signing in through a listed client, would be taken for the account. Only a realm
+administrator can create such a user. If this is revisited, Keycloak's `client_id` claim or the absence of `sid` are
+possible extra discriminators.
 
 ## Tenancy
 

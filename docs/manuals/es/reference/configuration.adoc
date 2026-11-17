@@ -48,6 +48,10 @@ roles.
 |`wasichai.security.oidc.client-id` | |Id de cliente, también la audiencia que debe traer un token del realm. Obligatorio con `oidc`.
 |`wasichai.security.oidc.jwk-set-uri` |`<issuer>/protocol/openid-connect/certs` |Dónde están las claves de firma del realm.
 |`wasichai.security.oidc.roles-cache` |`5s` |Cuánto se guardan los roles de una persona (`0` para no guardarlos).
+|`wasichai.security.oidc.service-accounts[i].client-id` | |Cliente del realm aceptado como cuenta de servicio de la app (solo `oidc`); una entrada por
+cliente, sin repetir, `^[a-z][a-z0-9_-]{1,48}$`. Como variable de entorno, por índice: `WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_CLIENTID`.
+|`wasichai.security.oidc.service-accounts[i].roles` | |Roles de esa cuenta (no vacío, nunca `ADMIN`). Variable de entorno:
+`WASICHAI_SECURITY_OIDC_SERVICEACCOUNTS_0_ROLES_0`.
 |`wasichai.security.login.enabled` |`false` |Limitar intentos fallidos de inicio de sesión.
 |`wasichai.security.login.max-attempts` |`5` |Por correo y dirección IP.
 |`wasichai.security.login.account-max-attempts` |`20` |Por correo, desde cualquier dirección.

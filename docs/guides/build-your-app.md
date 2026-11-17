@@ -577,6 +577,34 @@ The platform writes the `editable: false` fields that people only read
 ([ADR-082](../adr/0082-a-read-only-field-limits-people-not-the-platform.md)), and values may be the Kotlin types the
 columns store: a `UUID` for a `RELATION`, a `LocalDate`, an `Instant`.
 
+### Roles in the model
+
+The same model declares the roles your app and its integrations rely on, so every tenant has them
+([ADR-085](../adr/0085-roles-an-app-declares-in-code.md)):
+
+```kotlin
+DeclaredModel(
+    name = "catalogo",
+    objects = listOf(/* … */),
+    roles =
+        listOf(
+            DeclaredRole(
+                name = "CARGA_DATOS",
+                label = "Carga de datos",
+                permissions = listOf(PermissionEntry(objectName = "curso", action = "CREATE", allowed = true))
+            )
+        )
+)
+```
+
+A name is `^[A-Z][A-Z0-9_]{1,48}$`, never `ADMIN`, and one role belongs to one model; a declared role never grants
+`MANAGE_ORGANIZATION` or `MANAGE_TENANTS`. The declaration is the whole role: a person's role under that name is taken
+over, a grant the tenant cannot hold (a missing object, field or action) leaves that role as it was and is reported, and
+a role you remove from the code is released, not deleted. People get a `409` changing it, but still assign it to users
+and to service accounts, including the realm's (`wasichai.security.oidc.service-accounts`,
+[authentication](../security/authentication.md#signed-by-the-domains-identity-provider)).
+`PermissionEntry` and `FieldPermissionEntry` now live in `wasichai.core.metadata`.
+
 ## Who reads which records
 
 `READ` on an object opens every record of it, and `own_records_only` narrows that to the caller's own. When several

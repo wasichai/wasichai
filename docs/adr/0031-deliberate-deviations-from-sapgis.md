@@ -526,6 +526,16 @@ These are the only intended differences. Anything else that behaves differently 
   ([ADR-083](0083-an-app-mounts-cores-record-screens-in-its-own-module.md),
   [wasichai-ui#183](https://github.com/wasichai/wasichai-ui/issues/183)). Tested by `RecordListPage.test.tsx` and
   `module.test.tsx` of `@wasichai/views`.
+- **D59. Roles an app declares are ensured by the platform and locked.** The original's roles were made by people only.
+  Now a `DeclaredModel`'s roles are ensured in every tenant after its objects, with `model:<name>` as the admin entries'
+  source, and a person's change to one is a `409` ([ADR-085](0085-roles-an-app-declares-in-code.md)).
+  `roles.declared_by` is a known schema-parity deviation. Tested by `DeclaredModelsTest`, `DeclaredRolesApiTest` and
+  `SchemaParityTest`.
+- **D60. A realm client can be a service account, with no secret.** The original's service accounts all had a local
+  secret. Now, with `oidc`, a configured realm client is an account found by `external_client_id`, with
+  `secret_hash` NULL, created on its first token ([ADR-086](0086-service-accounts-signed-by-the-domains-identity-provider.md)).
+  `external_client_id`, the nullable `secret_hash` and their constraint and index are known schema-parity deviations.
+  Tested by `RealmPrincipalConverterTest`, `RealmServiceAccountsTest`, `OidcServiceAccountTest` and `SchemaParityTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its
