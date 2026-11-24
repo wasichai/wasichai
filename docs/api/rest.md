@@ -28,7 +28,7 @@ installed (its starter is on the classpath and `wasichai.<module>.enabled` is no
 | documents | `/api/documents/{id}`, `/api/objects/{object}/{document-types,records/{id}/documents}/**` | [documents.md](../modules/documents.md) |
 | notifications | `/api/{,auth/me/}notifications/**`, `/api/{,objects/{object}/}notification-rules/**` | [notifications.md](../modules/notifications.md) |
 | gis | `/api/gis/{layers,map-views}/**`, `/api/gis/services`, `/api/gis/objects/{object}/{features,map-views,style-classes}/**` | [gis.md](../modules/gis.md) |
-| agent | `/api/agent/status`, `/api/agent/ask` | [agent.md](../modules/agent.md) |
+| agent | `/api/agent/status`, `/api/agent/ask`, `/api/agent/conversations`, `/api/agent/settings` | [agent.md](../modules/agent.md) |
 | files | `/api/objects/{object}/files/{field}`, `/api/objects/{object}/records/{id}/files/{field}` | [files.md](../modules/files.md) |
 
 A route of a module that is not installed answers `404` to an authenticated caller and `401` without a token, never
@@ -2049,8 +2049,15 @@ object or rule is `404`.
 Module: wasichai-agent.
 
 ```http
-GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-5-5" }
+GET  /api/agent/status    { "enabled": true, "model": "claude-haiku-5-5", "models": ["claude-haiku-5-5"] }
 POST /api/agent/ask       { "question": "…" }  ->  { answer, steps, truncated, usage? }
+GET  /api/agent/conversations                 ->  [{ id, title, createdAt, updatedAt }]   (the caller's, newest first, 100)
+POST /api/agent/conversations   { "title"? }  ->  201 { id, title, createdAt, updatedAt }
+GET  /api/agent/conversations/{id}            ->  { conversation, messages: [{ id, role, content, steps, truncated, usage?, model?, createdAt }] }
+PATCH /api/agent/conversations/{id} { "title" }      DELETE /api/agent/conversations/{id}  ->  204 (archived)
+POST /api/agent/conversations/{id}/messages { "question": "…" }  ->  { question, answer }   (owner only: 404 otherwise)
+GET  /api/agent/settings                      ->  { model, selected, defaultModel, models }
+PUT  /api/agent/settings  { "model": "…" | null }   (400 outside models)
 ```
 
 ```json

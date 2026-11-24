@@ -40,12 +40,17 @@ data class AgentAnswer(
     // true when the run stopped before the model had an answer
     val truncated: Boolean,
     // what the run spent, when the platform reported it (ADR-056)
-    val usage: AgentUsage? = null
+    val usage: AgentUsage? = null,
+    // the model the run was asked to use: the caller's pick or the app's default (ADR-087)
+    val model: String? = null
 )
 
 data class AgentStatus(
     val enabled: Boolean,
-    val model: String
+    // the model this caller's questions go to
+    val model: String,
+    // what the caller may pick from, the default first (ADR-087)
+    val models: List<String> = emptyList()
 )
 
 // the model is a downstream like geoserver: its outage is a 503, never our 500
@@ -83,16 +88,23 @@ class AgentService(
     private val policy: AgentAccessPolicy = AgentAccessPolicy.ALLOW_ALL,
     private val resultFilters: List<AgentResultFilter> = emptyList(),
     private val answerFilters: List<AgentAnswerFilter> = emptyList(),
-    private val listeners: List<AgentRunListener> = emptyList()
+    private val listeners: List<AgentRunListener> = emptyList(),
+    // the app's rules and the caller's model pick (ADR-087). none: the assistant as it always was.
+    private val instructions: List<AgentInstructions> = emptyList(),
+    private val settings: AgentSettingsService? = null
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     // per caller: a server with a model may still have the assistant off for this organization
     suspend fun status(): AgentStatus {
-        if (!properties.available) return AgentStatus(false, properties.model)
-        val allowed = policy.check(currentUser.require()) == AgentAccess.Allowed
-        return AgentStatus(allowed, properties.model)
+        if (!properties.available) return AgentStatus(false, properties.model, properties.allowedModels)
+        val user = currentUser.require()
+        val allowed = policy.check(user) == AgentAccess.Allowed
+        return AgentStatus(allowed, modelFor(user), properties.allowedModels)
     }
+
+    // the caller's pick when it is still allowed, else the app's default
+    private suspend fun modelFor(user: AuthenticatedUser): String = settings?.effectiveModel(user) ?: properties.model
 
     // a tenant-wide READ check would lock out anyone granted READ on single objects, who is exactly
     // the person an assistant helps. reading anything is enough: each tool still enforces its own
@@ -106,7 +118,13 @@ class AgentService(
         return user
     }
 
-    suspend fun ask(question: String?): AgentAnswer {
+    suspend fun ask(question: String?): AgentAnswer = ask(question, emptyList())
+
+    /** A question with the conversation so far, oldest first (ADR-087). Same checks as a plain [ask]. */
+    suspend fun ask(
+        question: String?,
+        history: List<AgentTurn>
+    ): AgentAnswer {
         val user = requireSomethingToRead()
         val text =
             question?.trim().orEmpty().ifEmpty {
@@ -118,14 +136,16 @@ class AgentService(
         val access = policy.check(user)
         if (access is AgentAccess.Denied) throw AgentDeniedException(access.reason)
 
-        val run = AgentRun(text, caller(), user, resultFilters)
+        val model = modelFor(user)
+        val rules = instructions.mapNotNull { it.instructions(user)?.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
+        val run = AgentRun(text, caller(), user, resultFilters, model, rules, history)
         val answer =
             try {
                 // the platform blocks the calling thread until the run is done. never on the event loop.
                 val process = withContext(Dispatchers.IO) { start(agentPlatform, run) }
                 // a broken filter wins over whatever the run made of it
                 run.failure?.let { throw closed(it) }
-                restored(answerOf(process, run), user).copy(usage = usageOf(run))
+                restored(answerOf(process, run), user).copy(usage = usageOf(run), model = model)
             } catch (ex: CancellationException) {
                 throw ex
             } catch (ex: Exception) {

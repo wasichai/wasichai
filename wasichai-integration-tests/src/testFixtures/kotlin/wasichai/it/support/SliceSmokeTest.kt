@@ -61,8 +61,7 @@ abstract class SliceSmokeTest : WasichaiIntegrationTest() {
                     .awaitFirstOrNull()
                     .orEmpty()
             }
-        // agent has no tables
-        val expected = listOf("flyway_history_core", "flyway_history_core_seed") + (installed - "agent").map { "flyway_history_$it" }
+        val expected = listOf("flyway_history_core", "flyway_history_core_seed") + installed.map { "flyway_history_$it" }
         assertThat(histories).containsExactlyInAnyOrderElementsOf(expected)
     }
 

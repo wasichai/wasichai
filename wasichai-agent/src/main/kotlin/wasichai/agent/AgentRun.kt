@@ -9,6 +9,12 @@ import wasichai.core.identity.AuthenticatedUser
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
 
+/** One earlier exchange of a conversation, as the model is reminded of it. */
+data class AgentTurn(
+    val question: String,
+    val answer: String
+)
+
 /**
  * One question, one run.
  *
@@ -29,7 +35,13 @@ class AgentRun(
     private val caller: CoroutineContext,
     // the same caller, resolved once: what the filters are told
     val user: AuthenticatedUser,
-    private val filters: List<AgentResultFilter> = emptyList()
+    private val filters: List<AgentResultFilter> = emptyList(),
+    // what this caller runs on: their pick, or the app's default (ADR-087)
+    val model: String? = null,
+    // the app's AgentInstructions, already resolved as the caller; blank adds nothing
+    val instructions: String = "",
+    // the conversation so far, oldest first: text only, never earlier tool results (ADR-087)
+    val history: List<AgentTurn> = emptyList()
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val recorded = CopyOnWriteArrayList<AgentStep>()

@@ -2,6 +2,17 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-24 — The assistant remembers, takes an app's tools and a model per user
+
+`wasichai-agent` migrates its own tables (V1: `agent_conversations`, `agent_messages`, `agent_user_settings`).
+`GET/POST /api/agent/conversations`, `GET/PATCH/DELETE /api/agent/conversations/{id}` and
+`POST /api/agent/conversations/{id}/messages` keep each user's conversations, owner only (`404` otherwise); a question in
+a conversation is asked with the last `wasichai.agent.history-turns` (10) answered exchanges, text only. An app adds
+read-only tools with `AgentToolContributor` (through `AgentToolScope.call`: as the caller, filtered, recorded) and rules
+with `AgentInstructions`. `wasichai.agent.models` lists the models a user may pick with `GET/PUT /api/agent/settings`;
+`status` now reports the caller's model and `models`. `/ask` is unchanged. In wasichai-ui, `@wasichai/agent`'s page lists
+the user's conversations (`?c=<id>`), asks in the open one and offers a `ModelPicker`; the hooks are exported. ADR-087.
+
 ## 2026-11-16 — A realm client is the app's service account
 
 With `identity=oidc`, `wasichai.security.oidc.service-accounts` lists the realm clients the app accepts, each with its
