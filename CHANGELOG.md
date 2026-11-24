@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/wasichai/wasichai/compare/v2.2.0...v2.3.0) (2026-11-24)
+
+
+### Features
+
+* **agent:** conversations per user, an app's own tools and a model per user ([#193](https://github.com/wasichai/wasichai/issues/193)) ([63bec1b](https://github.com/wasichai/wasichai/commit/63bec1b5df663d36311e36d5313f65e24d361972))
+
 ## [2.2.0](https://github.com/wasichai/wasichai/compare/v2.1.0...v2.2.0) (2026-11-17)
 
 
