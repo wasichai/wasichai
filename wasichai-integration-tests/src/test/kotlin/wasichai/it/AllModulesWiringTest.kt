@@ -74,7 +74,7 @@ class AllModulesWiringTest {
         runner.run { context ->
             assertThat(context).hasNotFailed()
             assertThat(context.getBeansOfType(ModuleMigration::class.java).values.map { it.name })
-                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "notifications", "files")
+                .containsExactlyInAnyOrder("core", "views", "forms", "pages", "workflow", "automation", "documents", "gis", "agent", "notifications", "files")
             assertThat(context.getBean(FieldTypeRegistry::class.java).types).contains(GEOMETRY, FILE, IMAGE)
             assertThat(context.getBean(SystemColumns::class.java).names).contains("workflow_state")
             assertThat(context.getBean(WorkflowStates::class.java)).isInstanceOf(WorkflowStatesAdapter::class.java)
@@ -159,9 +159,18 @@ class AllModulesWiringTest {
                 "PUT /api/pages/{name}"
             )
 
-        // routes the original never had: notifications (ADR-031 D32, D46), files (D47), map views (D51). org units are core's, not here
+        // routes the original never had: notifications (ADR-031 D32, D46), files (D47), map views (D51), the assistant's
+        // conversations and settings (D61). org units are core's, not here
         val ADDED_MODULE_ROUTES =
             listOf(
+                "GET /api/agent/conversations",
+                "POST /api/agent/conversations",
+                "GET /api/agent/conversations/{id}",
+                "PATCH /api/agent/conversations/{id}",
+                "DELETE /api/agent/conversations/{id}",
+                "POST /api/agent/conversations/{id}/messages",
+                "GET /api/agent/settings",
+                "PUT /api/agent/settings",
                 "DELETE /api/notifications/{id}",
                 "DELETE /api/objects/{object}/notification-rules/{name}",
                 "GET /api/auth/me/notification-preferences",
