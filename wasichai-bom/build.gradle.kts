@@ -18,6 +18,8 @@ dependencies {
     api(platform(libs.jackson2.bom))
     api(platform(libs.jackson3.bom))
     api(platform(libs.spring.boot.bom))
+    // wasichai-agent's floor over embabel's spring ai (see springAi in the catalog)
+    api(platform(libs.spring.ai.bom))
     constraints {
         api(libs.scram.client)
         api(libs.scram.common)

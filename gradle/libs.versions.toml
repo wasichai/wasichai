@@ -14,11 +14,14 @@ awsSdk = "2.59.3"
 jackson2 = "2.23.0"
 jackson3 = "3.3.0"
 scram = "3.4"
+# embabel 1.5.4 brings spring ai 2.0.1: CVE-2026-59338, -59339, -59344 and -59345, fixed in 2.0.3. drop once embabel catches up
+springAi = "2.0.3"
 # ktlint's own classpath brings logback 1.3.15; lifted to the boot line
 logback = "1.5.38"
 
 [libraries]
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
 spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
 spring-boot-starter-data-r2dbc = { module = "org.springframework.boot:spring-boot-starter-data-r2dbc" }
