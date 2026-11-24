@@ -113,7 +113,15 @@ object ModuleRoutes {
             "agent" to
                 listOf(
                     "GET /api/agent/status",
-                    "POST /api/agent/ask"
+                    "POST /api/agent/ask",
+                    "GET /api/agent/conversations",
+                    "POST /api/agent/conversations",
+                    "GET /api/agent/conversations/{id}",
+                    "PATCH /api/agent/conversations/{id}",
+                    "DELETE /api/agent/conversations/{id}",
+                    "POST /api/agent/conversations/{id}/messages",
+                    "GET /api/agent/settings",
+                    "PUT /api/agent/settings"
                 ),
             "files" to
                 listOf(

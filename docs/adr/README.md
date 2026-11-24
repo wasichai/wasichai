@@ -124,3 +124,4 @@ supersedes it and says so in its status line.
 - [ADR-084: People sign in through the domain's identity provider; each app keeps their permissions](0084-people-sign-in-through-the-domains-identity-provider.md)
 - [ADR-085: Roles an app declares in code, ensured and locked like its model](0085-roles-an-app-declares-in-code.md)
 - [ADR-086: Service accounts signed by the domain's identity provider](0086-service-accounts-signed-by-the-domains-identity-provider.md)
+- [ADR-087: The assistant's conversations, an app's own tools and a model per user](0087-assistant-conversations-app-tools-and-model-per-user.md)

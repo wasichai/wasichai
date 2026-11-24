@@ -96,3 +96,31 @@ class AgentFilterException :
 class AgentDeniedException(
     reason: String
 ) : WasichaiException(HttpStatus.FORBIDDEN, reason)
+
+// what an app may add to the assistant (ADR-087): its own read-only tools and its own rules.
+
+/**
+ * An app's own tools. Called once per question with the [AgentToolScope] of that question; returns
+ * tool objects whose methods carry Embabel's `@LlmTool`, handed to the model next to the platform's.
+ * Every bean runs, in `@Order`. Each tool method must go through [AgentToolScope.call], so it runs as
+ * the caller, its step is shown and the app's filters see its result. Read-only, like the platform's
+ * own tools (ADR-014): a write would need the confirmation step the UI does not have.
+ */
+fun interface AgentToolContributor {
+    fun tools(scope: AgentToolScope): List<Any>
+}
+
+/**
+ * An app's own rules for the model, added after the platform's system prompt: its vocabulary, its
+ * scope, how to read its numbers. Every bean runs, in `@Order`, as the caller, before the run starts.
+ * Blank or null adds nothing.
+ */
+fun interface AgentInstructions {
+    suspend fun instructions(caller: AuthenticatedUser): String?
+}
+
+/** What an app tool hands back: the payload the model sees as JSON, and one line for the step log. */
+data class AgentToolReply(
+    val payload: Any,
+    val summary: String
+)

@@ -3,19 +3,36 @@ package wasichai.agent
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.annotation.ImportCandidates
 import org.springframework.core.annotation.Order
+import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.test.util.ReflectionTestUtils
 import wasichai.agent.autoconfigure.WasichaiAgentAutoConfiguration
 import wasichai.core.identity.AuthenticatedUser
+import wasichai.core.platform.WasichaiSchemas
 import wasichai.test.WasichaiContextRunner
 import java.util.UUID
 
 class WasichaiAgentAutoConfigurationTest {
     // no embabel auto-config here: exactly the no-key case, where the gate keeps it out
-    private val runner = WasichaiContextRunner.core().withConfiguration(AutoConfigurations.of(WasichaiAgentAutoConfiguration::class.java))
+    private val runner =
+        WasichaiContextRunner
+            .core()
+            .withConfiguration(AutoConfigurations.of(WasichaiAgentAutoConfiguration::class.java))
+            // no database here: nobody has picked a model
+            .withBean(AgentSettingsService::class.java, { AgentSettingsService(NoPicks, AgentProperties(apiKey = "k")) })
+
+    private object NoPicks : AgentSettingsRepository(mock(DatabaseClient::class.java), WasichaiSchemas("wasichai", "wasichai_data")) {
+        override suspend fun model(userId: UUID): String? = null
+
+        override suspend fun save(
+            userId: UUID,
+            model: String?
+        ) = Unit
+    }
 
     @Test
     fun `the agent wires without embabel's platform and says it is unavailable`() {

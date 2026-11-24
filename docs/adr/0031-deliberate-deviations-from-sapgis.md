@@ -536,6 +536,12 @@ These are the only intended differences. Anything else that behaves differently 
   `secret_hash` NULL, created on its first token ([ADR-086](0086-service-accounts-signed-by-the-domains-identity-provider.md)).
   `external_client_id`, the nullable `secret_hash` and their constraint and index are known schema-parity deviations.
   Tested by `RealmPrincipalConverterTest`, `RealmServiceAccountsTest`, `OidcServiceAccountTest` and `SchemaParityTest`.
+- **D61. The assistant remembers.** The original's assistant answered one question at a time and kept nothing. Now a
+  user's conversations are kept (`agent_conversations`, `agent_messages`), a question in one is asked with the earlier
+  exchanges, an app adds its own read-only tools and rules, and each user may pick a model from the app's list
+  (`agent_user_settings`) ([ADR-087](0087-assistant-conversations-app-tools-and-model-per-user.md)). `/api/agent/ask` is
+  unchanged. The three tables are known schema-parity deviations. Tested by `AgentAppExtensionsTest`,
+  `AgentConversationApiTest` and `SchemaParityTest`.
 
 **Kept on purpose, although they look like candidates.** Sections such as geometries stay out of audit diffs and
 automation payloads ([ADR-019](0019-a-geometry-is-a-field.md)). `RecordService` still opens no transaction of its

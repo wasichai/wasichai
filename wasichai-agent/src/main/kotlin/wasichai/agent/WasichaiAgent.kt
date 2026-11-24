@@ -4,7 +4,11 @@ import com.embabel.agent.api.annotation.AchievesGoal
 import com.embabel.agent.api.annotation.Action
 import com.embabel.agent.api.annotation.Agent
 import com.embabel.agent.api.common.OperationContext
+import com.embabel.chat.AssistantMessage
+import com.embabel.chat.Message
+import com.embabel.chat.UserMessage
 import com.embabel.common.ai.model.LlmOptions
+import tools.jackson.databind.ObjectMapper
 
 /** What the run puts on the blackboard when it is done. Reaching it is the goal. */
 data class AgentReply(
@@ -27,7 +31,10 @@ data class AgentReply(
 )
 class WasichaiAgent(
     private val properties: AgentProperties,
-    private val tools: AgentTools
+    private val tools: AgentTools,
+    // the app's own tools and the mapper their replies are written with (ADR-087)
+    private val contributors: List<AgentToolContributor> = emptyList(),
+    private val json: ObjectMapper? = null
 ) {
     @Action
     @AchievesGoal(
@@ -48,18 +55,37 @@ class WasichaiAgent(
         run.requireOpen()
         val text =
             try {
-                context
-                    .ai()
-                    .withLlm(LlmOptions.withModel(properties.model).withMaxTokens(properties.tokenCap.toInt()))
-                    .withSystemPrompt(SYSTEM_PROMPT)
-                    .withToolObject(AgentToolbox(tools, run))
-                    .generateText(run.question)
+                val runner =
+                    context
+                        .ai()
+                        .withLlm(LlmOptions.withModel(run.model ?: properties.model).withMaxTokens(properties.tokenCap.toInt()))
+                        .withSystemPrompt(systemPrompt(run))
+                        .withToolObjects(toolObjects(run))
+                // no history: the single question, exactly as before. with one: the earlier turns, then this one.
+                if (run.history.isEmpty()) {
+                    runner.generateText(run.question)
+                } else {
+                    runner.respond(messages(run)).content
+                }
             } finally {
                 // a filter broke inside the tool loop: whatever came back or was thrown, the run ends here
                 run.requireOpen()
             }
         return AgentReply(text.trim().ifEmpty { "I could not put an answer together for that." })
     }
+
+    private fun systemPrompt(run: AgentRun): String = if (run.instructions.isBlank()) SYSTEM_PROMPT else SYSTEM_PROMPT + "\n\n" + run.instructions.trim()
+
+    private fun toolObjects(run: AgentRun): List<Any> {
+        val own = AgentToolbox(tools, run)
+        if (contributors.isEmpty()) return listOf(own)
+        val mapper = json ?: error("an AgentToolContributor needs the ObjectMapper")
+        val scope = AgentToolScope(run, mapper)
+        return listOf(own) + contributors.flatMap { it.tools(scope) }
+    }
+
+    private fun messages(run: AgentRun): List<Message> =
+        run.history.flatMap { listOf(UserMessage(it.question), AssistantMessage(it.answer)) } + UserMessage(run.question)
 
     companion object {
         val SYSTEM_PROMPT =

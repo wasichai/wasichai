@@ -35,6 +35,17 @@ REST routes:
 |---|---|
 | GET | `/api/agent/status` |
 | POST | `/api/agent/ask` |
+| GET, POST | `/api/agent/conversations` |
+| GET, PATCH, DELETE | `/api/agent/conversations/{id}` |
+| POST | `/api/agent/conversations/{id}/messages` |
+| GET, PUT | `/api/agent/settings` |
+
+`/ask` answers one question and remembers nothing. A **conversation** ([ADR-087](../adr/0087-assistant-conversations-app-tools-and-model-per-user.md))
+belongs to the user who created it (anyone else gets `404`); `POST …/messages` with `{question}` asks with the last
+`history-turns` answered exchanges, text only, and answers `{question, answer}`, both stored messages (the answer with
+its `steps`, `usage`, `model` and `truncated`). The first question titles it; `PATCH {title}` renames it; `DELETE`
+archives it. `GET /settings` answers `{model, selected, defaultModel, models}`; `PUT {model}` picks one of `models`
+(`400` otherwise, null clears it).
 
 Frontend routes and slots:
 
@@ -53,6 +64,8 @@ Frontend routes and slots:
 | `wasichai.agent.model` | `claude-haiku-5-5` | the model name passed to Embabel |
 | `wasichai.agent.max-tokens` | `16000` | clamped to 1024–64000 before it reaches the model |
 | `wasichai.agent.max-iterations` | `8` | clamped to 1–16; how many actions one run may take before the platform stops it |
+| `wasichai.agent.models` | *(empty)* | models a user may pick besides `model`; each must be in Embabel's catalogue |
+| `wasichai.agent.history-turns` | `10` | clamped to 0–50; earlier exchanges sent with a question in a conversation |
 
 Env form: `WASICHAI_AGENT_ENABLED`, `WASICHAI_AGENT_API_KEY`, `WASICHAI_AGENT_MODEL`, `WASICHAI_AGENT_MAX_TOKENS`,
 `WASICHAI_AGENT_MAX_ITERATIONS`.
@@ -117,13 +130,36 @@ fun aiLog(log: MyAiLog) =
     AgentRunListener { caller, question, answer, usage, error -> log.record(caller, question, answer, usage, error) }
 ```
 
-**Overridable beans:** `agentTools`, `wasichaiAgent`, `agentAccessPolicy`, `agentService`, `agentController`
-(`WasichaiAgentAutoConfiguration`) and `workflowRecordTransitions` (`WasichaiAgentWorkflowAutoConfiguration`) — all
+**Defines, for what an app adds** ([ADR-087](../adr/0087-assistant-conversations-app-tools-and-model-per-user.md)):
+
+| Bean | Called | Default |
+|---|---|---|
+| `AgentToolContributor` — `tools(scope)`: tool objects with `@LlmTool` methods | once per question | none |
+| `AgentInstructions` — `instructions(caller)`: text appended to the system prompt | once per question, as the caller | none |
+
+An app tool must do its work inside `scope.call(name, input) { AgentToolReply(payload, summary) }`: that runs it as
+the caller, turns a `WasichaiException` into `{"error"}` for the model, passes the result through the
+`AgentResultFilter`s and records the step. Read-only, like the platform's tools.
+
+```kotlin
+class TaxTools(private val scope: AgentToolScope, private val gaps: GapService) {
+    @LlmTool(name = "tax_gap", description = "The tax gap of one fiscal year")
+    fun taxGap(@LlmTool.Param(description = "Fiscal year") year: Int): String =
+        scope.call("tax_gap", mapOf("year" to year)) { AgentToolReply(gaps.panel(year), "gap of $year") }
+}
+
+@Bean
+fun taxTools(gaps: GapService) = AgentToolContributor { scope -> listOf(TaxTools(scope, gaps)) }
+```
+
+**Overridable beans:** `agentTools`, `wasichaiAgent`, `agentAccessPolicy`, `agentService`, `agentController`,
+`agentSettingsService`, `agentConversationService`, `agentConversationController` (`WasichaiAgentAutoConfiguration`) and `workflowRecordTransitions` (`WasichaiAgentWorkflowAutoConfiguration`) — all
 `@ConditionalOnMissingBean`, so an app can replace any of them.
 
 ## Database
 
-None.
+Migrations in `db/wasichai/agent` (history table `flyway_history_agent`): `agent_conversations`, `agent_messages` and
+`agent_user_settings` (V1). Conversations go with their user and organization (FK cascade).
 
 ## Frontend package
 
@@ -151,6 +187,9 @@ reported token counts, and an app's policy, filters and listeners can change wha
 `wasichai-agent` is provider-neutral — it depends only on `embabel-agent-starter` — and
 `wasichai-spring-boot-starter-agent` adds Anthropic as the default provider. An app can exclude it and depend on
 another Embabel provider starter instead.
+
+[ADR-031](../adr/0031-deliberate-deviations-from-sapgis.md) D61: the assistant keeps each user's conversations, asks
+with the earlier exchanges, takes an app's tools and rules, and lets each user pick a model from the app's list.
 
 ## Known limitations
 

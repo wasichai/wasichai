@@ -189,6 +189,66 @@ class SchemaParityTest : FullAppIntegrationTest() {
                 "table org_units",
                 "table user_org_units"
             ).associateWith { "ADR-031 D31: organizational units" } +
+            // the assistant's conversations and model picks (ADR-031 D61, ADR-087): the agent module's tables
+            listOf(
+                "column agent_conversations.archived_at #7 timestamp with time zone",
+                "column agent_conversations.created_at #5 timestamp with time zone NOT NULL DEFAULT now()",
+                "column agent_conversations.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column agent_conversations.organization_id #2 uuid NOT NULL",
+                "column agent_conversations.title #4 text",
+                "column agent_conversations.updated_at #6 timestamp with time zone NOT NULL DEFAULT now()",
+                "column agent_conversations.user_id #3 uuid NOT NULL",
+                "column agent_messages.content #5 text NOT NULL",
+                "column agent_messages.conversation_id #2 uuid NOT NULL",
+                "column agent_messages.created_at #10 timestamp with time zone NOT NULL DEFAULT clock_timestamp()",
+                "column agent_messages.id #1 uuid NOT NULL DEFAULT gen_random_uuid()",
+                "column agent_messages.model #8 text",
+                "column agent_messages.organization_id #3 uuid NOT NULL",
+                "column agent_messages.role #4 text NOT NULL",
+                "column agent_messages.steps #6 jsonb",
+                "column agent_messages.truncated #9 boolean NOT NULL DEFAULT false",
+                "column agent_messages.usage #7 jsonb",
+                "column agent_user_settings.model #2 text",
+                "column agent_user_settings.updated_at #3 timestamp with time zone NOT NULL DEFAULT now()",
+                "column agent_user_settings.user_id #1 uuid NOT NULL",
+                "constraint agent_conversations.agent_conversations_created_at_not_null NOT NULL created_at",
+                "constraint agent_conversations.agent_conversations_id_not_null NOT NULL id",
+                "constraint agent_conversations.agent_conversations_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES " +
+                    "META.organizations(id) ON DELETE CASCADE",
+                "constraint agent_conversations.agent_conversations_organization_id_not_null NOT NULL organization_id",
+                "constraint agent_conversations.agent_conversations_pkey PRIMARY KEY (id)",
+                "constraint agent_conversations.agent_conversations_updated_at_not_null NOT NULL updated_at",
+                "constraint agent_conversations.agent_conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint agent_conversations.agent_conversations_user_id_not_null NOT NULL user_id",
+                "constraint agent_messages.agent_messages_content_not_null NOT NULL content",
+                "constraint agent_messages.agent_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES " +
+                    "META.agent_conversations(id) ON DELETE CASCADE",
+                "constraint agent_messages.agent_messages_conversation_id_not_null NOT NULL conversation_id",
+                "constraint agent_messages.agent_messages_created_at_not_null NOT NULL created_at",
+                "constraint agent_messages.agent_messages_id_not_null NOT NULL id",
+                "constraint agent_messages.agent_messages_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES " +
+                    "META.organizations(id) ON DELETE CASCADE",
+                "constraint agent_messages.agent_messages_organization_id_not_null NOT NULL organization_id",
+                "constraint agent_messages.agent_messages_pkey PRIMARY KEY (id)",
+                "constraint agent_messages.agent_messages_role_not_null NOT NULL role",
+                "constraint agent_messages.agent_messages_role_valid CHECK ((role = ANY (ARRAY['USER'::text, 'ASSISTANT'::text])))",
+                "constraint agent_messages.agent_messages_truncated_not_null NOT NULL truncated",
+                "constraint agent_user_settings.agent_user_settings_pkey PRIMARY KEY (user_id)",
+                "constraint agent_user_settings.agent_user_settings_updated_at_not_null NOT NULL updated_at",
+                "constraint agent_user_settings.agent_user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES META.users(id) ON DELETE CASCADE",
+                "constraint agent_user_settings.agent_user_settings_user_id_not_null NOT NULL user_id",
+                "index agent_conversations.agent_conversations_owner_idx CREATE INDEX agent_conversations_owner_idx ON " +
+                    "META.agent_conversations USING btree (organization_id, user_id, updated_at DESC) WHERE (archived_at IS NULL)",
+                "index agent_conversations.agent_conversations_pkey CREATE UNIQUE INDEX agent_conversations_pkey ON META.agent_conversations USING btree (id)",
+                "index agent_messages.agent_messages_conversation_idx CREATE INDEX agent_messages_conversation_idx ON " +
+                    "META.agent_messages USING btree (conversation_id, created_at)",
+                "index agent_messages.agent_messages_pkey CREATE UNIQUE INDEX agent_messages_pkey ON META.agent_messages USING btree (id)",
+                "index agent_user_settings.agent_user_settings_pkey CREATE UNIQUE INDEX agent_user_settings_pkey ON " +
+                    "META.agent_user_settings USING btree (user_id)",
+                "table agent_conversations",
+                "table agent_messages",
+                "table agent_user_settings"
+            ).associateWith { "ADR-031 D61: the assistant remembers" } +
             // notifications (ADR-031 D32, ADR-046): the module's tables
             listOf(
                 "column notification_receipts.dismissed_at #4 timestamp with time zone",
