@@ -20,9 +20,11 @@ dependencies {
     api(platform(libs.spring.boot.bom))
     // wasichai-agent's floor over embabel's spring ai (see springAi in the catalog)
     api(platform(libs.spring.ai.bom))
+    api(platform(libs.opentelemetry.bom))
     constraints {
         api(libs.scram.client)
         api(libs.scram.common)
+        api(libs.guava)
         rootProject.subprojects
             .filter { it.name.startsWith("wasichai-") && it.name !in unpublished }
             .forEach { api(project(it.path)) }

@@ -14,6 +14,9 @@ dependencies {
     api(libs.embabel.agent.starter)
     // the floor over the spring ai that embabel brings (springAi in the catalog): a security fix, not a feature
     api(platform(libs.spring.ai.bom))
+    // the same kind of floor over embabel's guava and opentelemetry (guava and opentelemetry in the catalog)
+    api(platform(libs.opentelemetry.bom))
+    constraints { api(libs.guava) }
     // available_transitions asks workflow when an app has it: compileOnly, guarded by @ConditionalOnClass
     compileOnly(project(":wasichai-workflow"))
 
