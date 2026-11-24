@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/wasichai/wasichai/compare/v2.3.0...v2.3.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** Spring Boot 4.1.3 y Spring AI 2.0.3 (CVE de Spring del 2026-11-19) ([#196](https://github.com/wasichai/wasichai/issues/196)) ([7f89945](https://github.com/wasichai/wasichai/commit/7f89945444c905ecf721b67b65faf32a2252a177))
+
 ## [2.3.0](https://github.com/wasichai/wasichai/compare/v2.2.0...v2.3.0) (2026-11-24)
 
 
