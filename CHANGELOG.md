@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.2](https://github.com/wasichai/wasichai/compare/v2.3.1...v2.3.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** pisos de guava 33.7.2 y opentelemetry 1.67.0 sobre los de embabel ([#198](https://github.com/wasichai/wasichai/issues/198)) ([f204436](https://github.com/wasichai/wasichai/commit/f204436afaf626a86ab54ea146e66b795fbc68cf))
+
 ## [2.3.1](https://github.com/wasichai/wasichai/compare/v2.3.0...v2.3.1) (2026-11-24)
 
 
