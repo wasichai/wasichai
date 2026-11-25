@@ -2,6 +2,13 @@
 
 Newest first. Architectural reasoning lives in `docs/adr/`; this file records what shipped.
 
+## 2026-11-25 — Spring Boot 4.2.0
+
+Boot `4.1.3` → `4.2.0`, which brings Spring Framework `7.1.0`, Spring Security `7.2.0`, Reactor `2026.0.0` and
+Kotlin `2.4.21` (already ours). The logback floor on the `ktlint*` tool classpath follows Boot's line to `1.6.6`. Boot
+`4.2.0` still manages Jackson `2.21.8` / `3.1.8`, so the Jackson, SCRAM and embabel floors stay. No API or behaviour
+change.
+
 ## 2026-11-24 — The assistant remembers, takes an app's tools and a model per user
 
 `wasichai-agent` migrates its own tables (V1: `agent_conversations`, `agent_messages`, `agent_user_settings`).
