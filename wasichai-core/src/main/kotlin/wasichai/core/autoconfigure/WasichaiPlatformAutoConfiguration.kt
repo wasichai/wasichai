@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import wasichai.core.common.GlobalExceptionHandler
 import wasichai.core.common.HealthController
+import wasichai.core.common.ProblemInstance
 import wasichai.core.metadata.ObjectSchemaManager
 import wasichai.core.platform.CorrelationIdWebFilter
 import wasichai.core.platform.JwtProperties
@@ -81,6 +82,10 @@ class WasichaiPlatformAutoConfiguration {
         web: WasichaiWebProperties,
         schema: ObjectProvider<ObjectSchemaManager>
     ): GlobalExceptionHandler = GlobalExceptionHandler(web.problemBaseUri) { schema.getIfAvailable()?.uniqueFields(it).orEmpty() }
+
+    // a problem body says which path failed (instance), whatever handler returned it
+    @Bean
+    fun wasichaiProblemInstance(): ProblemInstance.Registration = ProblemInstance.Registration()
 
     // X-Correlation-Id on every request and response, ahead of the security chain (ADR-050)
     @Bean
