@@ -5,7 +5,7 @@ relationships, forms, views, pages, workflows, automations, documents and permis
 into a working application at runtime: real PostgreSQL tables, a REST API, dynamic forms and tables, detail pages.
 GIS (PostGIS geometry fields, maps, GeoServer) is one optional module among others.
 
-This repository holds the backend (Kotlin, Spring Boot 4.1 WebFlux) and all documentation. The React packages live in
+This repository holds the backend (Kotlin, Spring Boot 4.2 WebFlux) and all documentation. The React packages live in
 [wasichai-ui](https://github.com/wasichai/wasichai-ui).
 Origin: [wasichai was chawpi until 2026-09-26](docs/chawpi-origin.md).
 

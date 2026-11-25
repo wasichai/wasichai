@@ -7,7 +7,7 @@ The sample apps are sibling repositories (`../simple-sample`, `../documents-samp
 
 ## Non-negotiable stack
 
-- **Backend**: Kotlin 2.4.20, Spring Boot 4.1 **WebFlux** (reactive), Gradle 9.7.1 (Kotlin DSL, version catalog,
+- **Backend**: Kotlin 2.4.20, Spring Boot 4.2 **WebFlux** (reactive), Gradle 9.7.1 (Kotlin DSL, version catalog,
   convention plugins in `build-logic`), JDK 25
 - **Database**: PostgreSQL 18 (+ PostGIS only with `wasichai-gis`, + pgvector optional)
 - **GIS module**: GeoServer (WMS/WFS/WMTS)

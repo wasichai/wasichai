@@ -8,7 +8,7 @@ the `@wasichai/*` packages behind those starters. Wasichai ships nothing runnabl
 ```
                  React app (WasichaiApp + registered modules)
                               │  REST /api + GeoJSON
-              Spring Boot 4.1 WebFlux app (wasichai starters: core + chosen modules)
+              Spring Boot 4.2 WebFlux app (wasichai starters: core + chosen modules)
                               │  R2DBC (reactive)
                     PostgreSQL 18 (+ PostGIS only with wasichai-gis)
                               │
