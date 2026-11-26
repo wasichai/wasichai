@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.3](https://github.com/wasichai/wasichai/compare/v2.3.2...v2.3.3) (2026-11-25)
+
+
+### Bug Fixes
+
+* **core:** instance en los problem+json de los handlers con Spring Framework 7.1 ([#202](https://github.com/wasichai/wasichai/issues/202)) ([5bc3d7a](https://github.com/wasichai/wasichai/commit/5bc3d7ad177775c6b94bb8c45c33f4fce6078174))
+* **deps:** Spring Boot 4.2.0 ([#200](https://github.com/wasichai/wasichai/issues/200)) ([59da67e](https://github.com/wasichai/wasichai/commit/59da67ed754c121b132a44b70d0193e8e9180f57))
+
 ## [2.3.2](https://github.com/wasichai/wasichai/compare/v2.3.1...v2.3.2) (2026-11-24)
 
 
