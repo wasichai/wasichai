@@ -4,22 +4,22 @@ kotlin = "2.4.21"
 springBoot = "4.2.0"
 ktlint = "14.2.0"
 ktlintTool = "1.7.1"
-postgresqlJdbc = "42.7.14"
-flyway = "13.12.2"
+postgresqlJdbc = "42.7.15"
+flyway = "13.13.0"
 testcontainers = "2.0.5"
 embabel = "1.5.4"
 # wasichai-files' S3-compatible store: optional, an app that uses it adds the s3 artifact itself
-awsSdk = "2.59.3"
+awsSdk = "2.59.9"
 # security floors over the spring boot bom: boot 4.2.0 still ships vulnerable patch versions. drop each once boot catches up.
 jackson2 = "2.23.0"
 jackson3 = "3.3.0"
 scram = "3.4"
 # embabel 1.5.4 brings spring ai 2.0.1: CVE-2026-59338, -59339, -59344 and -59345, fixed in 2.0.3. drop once embabel catches up
-springAi = "2.0.3"
+springAi = "2.1.0"
 # embabel (through jinjava) brings guava 33.3.1: CVE-2026-102554, fixed in 33.7.2
-guava = "33.7.2-jre"
+guava = "33.8.0-jre"
 # embabel brings opentelemetry 1.62.0: CVE-2026-118259, fixed in 1.67.0
-opentelemetry = "1.67.0"
+opentelemetry = "1.68.0"
 # ktlint's own classpath brings logback 1.3.15; lifted to the boot line
 logback = "1.6.6"
 
